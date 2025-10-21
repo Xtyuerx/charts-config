@@ -1,8 +1,7 @@
 export type ChartType = 'bar' | 'line' | 'pie'
-
 export interface ChartConfig {
   title: string
-  color: string
+  colors: string[]
   showLegend: boolean
   xTitle?: string
   yTitle?: string
@@ -48,4 +47,9 @@ export interface ChartSpec {
   axis?: Record<string, unknown> | boolean
   tooltip?: Record<string, unknown> | boolean
   children?: ChartSpec[]
+}
+
+export interface ColumnDef {
+  prop: string
+  label?: string
 }

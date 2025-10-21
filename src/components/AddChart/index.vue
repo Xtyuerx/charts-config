@@ -51,8 +51,29 @@
               <el-form-item prop="title" label="标题">
                 <el-input v-model="chartConfig.title" placeholder="请输入图表标题" />
               </el-form-item>
-              <el-form-item prop="color" label="颜色">
-                <el-color-picker v-model="chartConfig.color" show-alpha />
+              <el-form-item label="颜色主题">
+                <el-select
+                  v-model="chartConfig.colors"
+                  placeholder="请选择主题颜色"
+                  style="width: 100%"
+                >
+                  <el-option
+                    v-for="theme in COLOR_THEMES"
+                    :key="theme.name"
+                    :label="theme.name"
+                    :value="theme.colors"
+                  >
+                    <div class="color-option">
+                      <div
+                        v-for="c in theme.colors"
+                        :key="c"
+                        class="color-swatch"
+                        :style="{ backgroundColor: c }"
+                      />
+                      <span class="theme-name">{{ theme.name }}</span>
+                    </div>
+                  </el-option>
+                </el-select>
               </el-form-item>
               <el-form-item prop="showLegend" label="显示图例">
                 <el-switch v-model="chartConfig.showLegend" />
@@ -91,10 +112,10 @@ import type { FormInstance, FormRules } from 'element-plus'
 import type {
   ChartConfig,
   ChartTypeItem,
-  ChartDataItem,
   ChartType,
   CheckedChartType,
   CheckedChartTypeItem,
+  ColumnDef,
 } from './types'
 
 // ========================== 类型定义 ==========================
@@ -104,8 +125,8 @@ type ChartTypeItemMap = Record<ChartType, ChartTypeItem<ChartTypeIcon>>
 interface Props {
   visible: boolean // 是否显示弹窗
   current?: ChartType // 当前选中的图表类型
-  tableData?: unknown[]
-  columns?: { prop: string; label?: string }[]
+  tableData: Record<string, unknown>[]
+  columns: ColumnDef[]
   xField?: string // 横轴字段
   yField?: string // 纵轴字段
 }
@@ -114,7 +135,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   visible: false,
   current: 'bar',
-  data: () => [],
+  tableData: () => [],
   xField: 'genre',
   yField: 'sold',
 })
@@ -143,10 +164,18 @@ const CHART_TYPES: ChartTypeItem<ChartTypeIcon>[] = [
   { name: 'pie', label: '饼图', icon: PieChart },
 ]
 
+const COLOR_THEMES = [
+  { name: '经典蓝绿黄红', colors: ['#1890ff', '#13c2c2', '#2fc25b', '#facc14', '#f04864'] },
+  { name: '多彩鲜艳', colors: ['#722ed1', '#eb2f96', '#fa8c16', '#13c2c2', '#52c41a'] },
+  { name: 'AntV 默认', colors: ['#5B8FF9', '#5AD8A6', '#5D7092', '#F6BD16', '#E8684A'] },
+  { name: '森系绿灰', colors: ['#344E41', '#3A5A40', '#588157', '#A3B18A', '#DAD7CD'] },
+  { name: '暖色沙漠', colors: ['#264653', '#2A9D8F', '#E9C46A', '#F4A261', '#E76F51'] },
+]
+
 // 默认配置
 const DEFAULT_CONFIG: ChartConfig = {
   title: '示例图表',
-  color: '#1890ff',
+  colors: COLOR_THEMES[0]?.colors || [],
   showLegend: true,
   xTitle: '分类',
   yTitle: '数量',
@@ -211,10 +240,10 @@ const rules = reactive<FormRules<ChartConfig>>({
     message: '请输入图表标题',
     trigger: 'blur',
   },
-  color: {
+  colors: {
     required: true,
-    message: '请输入图表颜色',
-    trigger: 'blur',
+    message: '请选择图表颜色',
+    trigger: 'change',
   },
   showLegend: {
     required: true,
@@ -233,24 +262,35 @@ const rules = reactive<FormRules<ChartConfig>>({
   },
 })
 
-// 初始化组件状态
-const initComponentState = () => {
-  // 重置为默认配置
-  chartConfig.value = { ...DEFAULT_CONFIG }
-
-  // 设置当前图表类型
-  chartType.value = props.current || 'bar'
-
-  // 设置默认选中的具体图表类型
-  const firstType = CURRENT_CHART_MAP[chartType.value][0] || { name: 'bar_group' }
-  checkedCartType.value = firstType.name
-
-  // 重置标签页
-  activeTab.value = 'basic'
-}
-
 const chartRef = ref<HTMLDivElement>()
 let chartInstance: Chart | null = null
+/* -------------------- 从表格生成字段候选 -------------------- */
+const columns = computed<ColumnDef[]>(() => props.columns || [])
+const tableData = computed<Props['tableData']>(() => props.tableData || [])
+
+// 试探性判断数值列（尽量只保留能被解析为数字的字段）
+const numericColumns = computed(() => {
+  const cols = columns.value || []
+  if (!tableData.value.length) return cols
+  return cols.filter((c) => {
+    // 检查前 10 条是否为数字
+    const sample = tableData.value
+      .slice(0, 10)
+      .map((r) => r[c.prop])
+      .filter((v) => v !== undefined && v !== null)
+    if (!sample.length) return false
+    return sample.every((v) => !Number.isNaN(Number(v)))
+  })
+})
+
+const yFields = ref<{ prop: string; label?: string }[]>(
+  props.yField
+    ? [{ prop: props.yField, label: '' }]
+    : numericColumns.value[0]
+      ? [{ prop: numericColumns.value[0].prop, label: '' }]
+      : [],
+)
+const selectedXField = ref<string>(props.xField || columns.value[0]?.prop || '')
 
 // ---------------------- 双向绑定 ----------------------
 const dialogVisible = computed({
@@ -262,17 +302,275 @@ const dialogVisible = computed({
 const xField = computed(() => props.xField || 'x')
 const yField = computed(() => props.yField || 'y')
 
-// ========================== 渲染逻辑 ==========================
+// 将“宽表”转换为长表，为多纵字段分组显示 (series/value)
+function wideToLong(
+  data: Props['tableData'],
+  xField: string,
+  yFieldsList: { prop: string; label?: string }[],
+) {
+  const long: Props['tableData'] = []
+  for (const row of data) {
+    for (const y of yFieldsList) {
+      const value = Number(row?.[y.prop])
+      // 过滤非数值条目
+      if (Number.isNaN(value)) continue
+      long.push({
+        [xField]: row[xField],
+        series: y.label || y.prop,
+        value,
+        __raw: row,
+      })
+    }
+  }
+  return long
+}
+
+// 单系列数据：确保 color 字段存在
+function ensureColorField(data: Props['tableData'], colorField: string) {
+  if (!data.length) return data
+  if (!Object.prototype.hasOwnProperty.call(data[0], colorField)) {
+    return data.map((d) => ({ ...d, [colorField]: '__series__' }))
+  }
+  return data
+}
+
+// ========== 细粒度渲染映射表 ==========
+
+function detectColorField(data: Props['tableData']): string {
+  if (!data.length) return '__default'
+  const first = data[0]
+  const candidates = Object.keys(first || {}).filter(
+    (k) => k !== xField.value && k !== yField.value,
+  )
+  return candidates[0] || '__default'
+}
+function prepareData(data: Props['tableData']): Props['tableData'] {
+  const colorKey = detectColorField(data)
+  if (colorKey === '__default') {
+    return data.map((d) => ({ ...d, __default: '系列A' })) // 确保有 series 分组
+  }
+  return data
+}
+
+const RENDER_MAP: Record<
+  CheckedChartType,
+  (opts: {
+    data: Props['tableData']
+    xField: string
+    yFieldsList: { prop: string; label?: string }[]
+  }) => G2Spec
+> = {
+  bar_group: ({ data, xField, yFieldsList }) => {
+    // 多纵字段 -> long format，并 color=series
+    if (yFieldsList.length > 1) {
+      const long = wideToLong(data, xField, yFieldsList)
+      return {
+        type: 'interval',
+        data: long,
+        encode: { x: xField, y: 'value', color: 'series' },
+        adjust: [{ type: 'dodge', marginRatio: 0.2 }],
+      }
+    }
+    // 单纵字段 -> 直接使用 y field prop
+    const yProp = yFieldsList[0]?.prop || 'value'
+    return {
+      type: 'interval',
+      data: ensureColorField(data, '__series__'),
+      encode: { x: xField, y: yProp, color: '__series__' },
+    }
+  },
+  bar_stacked: ({ data, xField, yFieldsList }) => {
+    // 将宽表转换后 stack
+    if (yFieldsList.length > 1) {
+      const long = wideToLong(data, xField, yFieldsList)
+      return {
+        type: 'interval',
+        data: long,
+        encode: { x: xField, y: 'value', color: 'series' },
+        transform: [{ type: 'stackY' }],
+      }
+    }
+    const yProp = yFieldsList[0]?.prop || 'value'
+    return {
+      type: 'interval',
+      data: data,
+      encode: { x: xField, y: yProp, color: detectColorField(data) },
+      transform: [{ type: 'stackY' }],
+    }
+  },
+  bar_percent: ({ data, xField, yFieldsList }) => {
+    if (yFieldsList.length > 1) {
+      const long = wideToLong(data, xField, yFieldsList)
+      return {
+        type: 'interval',
+        data: long,
+        encode: { x: xField, y: 'value', color: 'series' },
+        transform: [{ type: 'stackY', y: 'y1' }],
+      }
+    }
+    const yProp = yFieldsList[0]?.prop || 'value'
+    return {
+      type: 'interval',
+      data,
+      encode: { x: xField, y: yProp, color: detectColorField(data) },
+      transform: [{ type: 'stackY', y: 'y1' }],
+    }
+  },
+
+  line: ({ data }) => ({
+    type: 'line',
+    data,
+    encode: {
+      x: xField.value,
+      y: yField.value,
+      color: detectColorField(data),
+    },
+    style: { lineWidth: 2 },
+    interaction: { tooltip: true },
+  }),
+  line_smooth: ({ data }) => ({
+    type: 'line',
+    data,
+    encode: {
+      x: xField.value,
+      y: yField.value,
+      color: detectColorField(data),
+    },
+    style: { lineWidth: 2, shape: 'smooth' },
+    interaction: { tooltip: true },
+  }),
+
+  pie: ({ data, xField, yFieldsList }) => {
+    // 仅支持单一 y 字段或已转换的 long 格式
+    if (yFieldsList.length > 1) {
+      const long = wideToLong(data, xField, yFieldsList)
+      return {
+        type: 'interval',
+        coordinate: { type: 'theta', radius: 0.8, innerRadius: 0 },
+        data: long,
+        transform: [{ type: 'stackY' }],
+        encode: { y: 'value', color: 'series' },
+      }
+    }
+    const yProp = yFieldsList[0]?.prop || 'value'
+    return {
+      type: 'interval',
+      coordinate: { type: 'theta', radius: 0.8, innerRadius: 0 },
+      data,
+      transform: [{ type: 'stackY' }],
+      encode: { y: yProp, color: detectColorField(data) },
+    }
+  },
+
+  pie_donut: ({ data, xField, yFieldsList }) => {
+    if (yFieldsList.length > 1) {
+      const long = wideToLong(data, xField, yFieldsList)
+      return {
+        type: 'interval',
+        coordinate: { type: 'theta', radius: 0.8, innerRadius: 0.5 },
+        data: long,
+        transform: [{ type: 'stackY' }],
+        encode: { y: 'value', color: 'series' },
+      }
+    }
+    const yProp = yFieldsList[0]?.prop || 'value'
+    return {
+      type: 'interval',
+      coordinate: { type: 'theta', radius: 0.8, innerRadius: 0.5 },
+      data,
+      transform: [{ type: 'stackY' }],
+      encode: { y: yProp, color: detectColorField(data) },
+    }
+  },
+}
+
+// ========== 渲染主函数 ==========
+function renderChart() {
+  if (!chartInstance) return
+  // 数据来源优先 props.tableData，否则默认示例
+  let data = tableData.value?.length ? tableData.value : getDefaultChartData()
+  data = prepareData(data)
+  // 如果单纵字段且字段不在原始数据中，尝试保留原样（有时候是 value 字段）
+  // 处理 render 参数
+  const x = selectedXField.value || columns.value[0]?.prop || 'x'
+  const yList = yFields.value.length
+    ? yFields.value
+    : [{ prop: props.yField || 'value', label: props.yField || 'value' }]
+  const typeKey = checkedCartType.value || 'bar_group'
+
+  const renderFn = RENDER_MAP[typeKey]
+  const childSpec = renderFn ? renderFn({ data, xField: x, yFieldsList: yList }) : null
+  if (!childSpec) return
+
+  // 基础 options
+  const baseOptions: G2Spec = {
+    title: chartConfig.value.title,
+    legend: false,
+    color: { range: chartConfig.value.colors },
+    axis:
+      chartType.value !== 'pie'
+        ? {
+            [x]: { title: chartConfig.value.xTitle },
+            y: {
+              title: chartConfig.value.yTitle,
+              min: undefined,
+              max: undefined,
+              tickInterval: undefined,
+              type: undefined,
+            },
+          }
+        : false,
+    tooltip: {
+      items: [
+        { channel: x, name: chartConfig.value.xTitle },
+        { channel: yList[0]?.prop || 'value', name: chartConfig.value.yTitle },
+      ],
+    },
+    coordinate: undefined,
+    children: [childSpec],
+    // grid lines control handled via axis styles in G2 spec; G2 Spec here is minimal — more customization may be required per G2 version
+  }
+
+  chartInstance.options(baseOptions)
+  chartInstance.render()
+}
+
+/* -------------------- 初始化 chart -------------------- */
+function initChart() {
+  nextTick(() => {
+    if (chartInstance) {
+      chartInstance.destroy()
+      chartInstance = null
+    }
+    chartInstance = new Chart({
+      container: chartRef.value!,
+      autoFit: true,
+      height: 560,
+    })
+    renderChart()
+  })
+}
+
+/* -------------------- 默认数据 (演示) -------------------- */
+function getDefaultChartData(): Props['tableData'] {
+  return [
+    { genre: '2025-10-14', num1: 11, num2: 3 },
+    { genre: '2025-10-23', num1: 1, num2: 4 },
+    { genre: '2025-10-24', num1: 2, num2: 5 },
+  ]
+}
+
+/* -------------------- 操作函数 -------------------- */
 function handleChartTypeClick(type: ChartType) {
   chartType.value = type
-  // 默认选中当前图表类型的第一个具体类型
-  const firstType = CURRENT_CHART_MAP[type][0] || { name: 'bar_group' }
-  checkedCartType.value = firstType.name
+  const firstType = CURRENT_CHART_MAP[type][0]?.name || 'bar_group'
+  checkedCartType.value = firstType
   renderChart()
 }
 
 function handleCheckedChartType(type: CheckedChartType) {
   checkedCartType.value = type
+  renderChart()
 }
 
 function handleClose() {
@@ -286,185 +584,65 @@ function handleConfirm() {
         config: chartConfig.value,
         chartType: chartType.value,
         checkedType: checkedCartType.value,
-        // yField: yField.value,
-        // xField: xField.value,
+        yFields: yFields.value,
+        xField: selectedXField.value,
       })
       handleClose()
     }
   })
 }
 
-// ========== 细粒度渲染映射表 ==========
-
-function detectColorField(data: ChartDataItem[]): string {
-  if (!data.length) return '__default'
-  const first = data[0]
-  const candidates = Object.keys(first || {}).filter(
-    (k) => k !== xField.value && k !== yField.value,
-  )
-  return candidates[0] || '__default'
+/* 增/删 纵轴字段 */
+function addYField() {
+  const candidate = numericColumns.value[0]?.prop || columns.value[0]?.prop || ''
+  yFields.value.push({ prop: candidate, label: '' })
 }
 
-function prepareData(data: ChartDataItem[]): ChartDataItem[] {
-  const colorKey = detectColorField(data)
-  if (colorKey === '__default') {
-    return data.map((d) => ({ ...d, __default: '系列A' }))
-  }
-  return data
+function removeYField(idx: number) {
+  yFields.value.splice(idx, 1)
 }
 
-const RENDER_MAP: Record<CheckedChartType, (data: ChartDataItem[]) => G2Spec> = {
-  bar_group: (data) => ({
-    type: 'interval',
-    data,
-    encode: {
-      x: xField.value,
-      y: yField.value,
-      color: detectColorField(data),
-    },
-  }),
-  bar_stacked: (data) => ({
-    type: 'interval',
-    autoFit: true,
-    data,
-    encode: {
-      x: xField.value,
-      y: yField.value,
-      color: detectColorField(data),
-    },
-    transform: [{ type: 'stackY' }],
-    interaction: { elementHighlight: { background: true } },
-  }),
-  bar_percent: (data) => ({
-    type: 'interval',
-    data,
-    encode: {
-      x: xField.value,
-      y: yField.value,
-      color: detectColorField(data),
-    },
-    transform: [{ type: 'stackY', y: 'y1' }],
-  }),
-  line: (data) => ({
-    type: 'line',
-    data,
-    encode: {
-      x: xField.value,
-      y: yField.value,
-      color: detectColorField(data),
-      shape: 'line',
-    },
-    style: { lineWidth: 2 },
-  }),
-  line_smooth: (data) => ({
-    type: 'line',
-    data,
-    encode: {
-      x: xField.value,
-      y: yField.value,
-      color: detectColorField(data),
-      shape: 'smooth',
-    },
-    style: { lineWidth: 2 },
-  }),
-  pie: (data) => ({
-    type: 'interval',
-    coordinate: { type: 'theta', radius: 0.8 },
-    data,
-    transform: [{ type: 'stackY' }],
-    encode: {
-      y: yField.value,
-      // color: detectColorField(data),
-    },
-  }),
-  pie_donut: (data) => ({
-    type: 'interval',
-    coordinate: { type: 'theta', radius: 0.8, innerRadius: 0.5 },
-    data,
-    transform: [{ type: 'stackY' }],
-    encode: {
-      y: yField.value,
-      // color: detectColorField(data),
-    },
-  }),
-}
-
-// ========== 渲染主函数 ==========
-function renderChart(): void {
-  if (!chartInstance) return
-
-  let data = props.data?.length ? props.data : getDefaultChartData()
-  data = prepareData(data) // 确保多维字段存在
-
-  const type = checkedCartType.value as CheckedChartType
-  const renderOption = RENDER_MAP[type]?.(data)
-  if (!renderOption) return
-
-  const baseOptions: G2Spec = {
-    title: chartConfig.value.title,
-    legend: chartConfig.value.showLegend ? {} : false,
-    axis:
-      chartType.value !== 'pie'
-        ? {
-            x: { title: chartConfig.value.xTitle },
-            y: { title: chartConfig.value.yTitle },
-          }
-        : false,
-    tooltip: {
-      items: [
-        { channel: xField.value, name: chartConfig.value.xTitle },
-        { channel: yField.value, name: chartConfig.value.yTitle },
-      ],
-    },
-    children: [renderOption],
-  }
-
-  chartInstance.options(baseOptions)
-  chartInstance.render()
-}
-
-// ========== 默认数据 ==========
-function getDefaultChartData(): ChartDataItem[] {
-  return [
-    { genre: 'Sports', sold: 275, series: 'A' },
-    { genre: 'Strategy', sold: 115, series: 'B' },
-    { genre: 'Action', sold: 120, series: 'A' },
-    { genre: 'Shooter', sold: 350, series: 'B' },
-    { genre: 'Other', sold: 150, series: 'A' },
-    { genre: 'Others', sold: 150, series: 'B' },
-  ]
-}
-
-function initChart() {
-  nextTick(() => {
-    chartInstance = new Chart({
-      container: chartRef.value!,
-      autoFit: true,
-      height: 680,
-    })
-    renderChart()
-  })
-}
-
-onBeforeUnmount(() => chartInstance?.destroy())
-
+/* -------------------- 交互/监听 -------------------- */
 watch(
   () => props.visible,
-  (visible) => {
-    if (visible) {
-      initComponentState()
-      initChart()
+  (v) => {
+    if (v) {
+      // 初始化默认值
+      chartConfig.value = { ...DEFAULT_CONFIG }
+      chartType.value = props.current || 'bar'
+      selectedXField.value = props.xField || columns.value[0]?.prop || ''
+      if (!yFields.value.length && numericColumns.value.length) {
+        yFields.value = [{ prop: numericColumns.value[0]?.prop || '', label: '' }]
+      }
+      nextTick(() => initChart())
+    } else {
+      // visible -> false 时销毁实例以释放资源
+      chartInstance?.destroy()
+      chartInstance = null
     }
   },
+  { immediate: true },
 )
 
 watch(
-  [() => props.visible, checkedCartType, chartConfig],
-  ([visible]) => {
-    if (visible) nextTick(() => renderChart())
+  [
+    () => props.tableData,
+    () => props.columns,
+    yFields,
+    selectedXField,
+    checkedCartType,
+    chartConfig,
+  ],
+  () => {
+    // 数据或配置变化时重新渲染
+    if (props.visible) nextTick(() => renderChart())
   },
   { deep: true },
 )
+
+onBeforeUnmount(() => {
+  chartInstance?.destroy()
+})
 </script>
 
 <style lang="scss" scoped>
@@ -537,5 +715,22 @@ watch(
 .dialog-footer {
   display: flex;
   justify-content: flex-end;
+}
+
+.color-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.color-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  border: 1px solid #ccc;
+}
+.theme-name {
+  margin-left: 8px;
+  font-size: 13px;
+  color: #555;
 }
 </style>
