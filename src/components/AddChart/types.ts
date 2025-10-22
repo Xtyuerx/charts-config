@@ -1,4 +1,5 @@
 export type ChartType = 'bar' | 'line' | 'pie'
+
 export interface ChartConfig {
   title: string
   colors: string[]
@@ -20,10 +21,9 @@ export interface CheckedChartTypeItem {
 }
 
 export interface ChartDataItem {
-  [key: string]: string | number // ✅ 动态字段
+  [key: string]: string | number
 }
 
-// 所有子类型键
 export type CheckedChartType =
   | 'bar_group'
   | 'bar_stacked'
@@ -32,6 +32,11 @@ export type CheckedChartType =
   | 'line_smooth'
   | 'pie'
   | 'pie_donut'
+
+export interface ColumnDef {
+  prop: string
+  label?: string
+}
 
 // G2 v5 声明式配置结构
 export interface ChartSpec {
@@ -43,13 +48,7 @@ export interface ChartSpec {
   encode?: Record<string, string>
   transform?: { type: string; [key: string]: unknown }[]
   style?: Record<string, unknown>
-  shape?: string
   axis?: Record<string, unknown> | boolean
   tooltip?: Record<string, unknown> | boolean
   children?: ChartSpec[]
-}
-
-export interface ColumnDef {
-  prop: string
-  label?: string
 }
