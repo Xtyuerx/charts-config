@@ -10,84 +10,171 @@
       <!-- 左侧配置面板 -->
       <el-tabs v-model="activeTab" class="mb-10">
         <el-tab-pane label="基础配置" name="basic">
-          <div class="config-panel">
-            <el-card shadow="hover" class="mb-10">
-              <template #header>
-                <div class="card-header">
-                  <span>图表类型</span>
-                </div>
-              </template>
-              <div class="chart-type-group mb-10">
+          <el-card shadow="hover" class="mb-10">
+            <template #header>
+              <div class="card-header">
+                <span>图表类型</span>
+              </div>
+            </template>
+            <div class="chart-type-group mb-10">
+              <div
+                v-for="item in chartTypes"
+                :key="item.name"
+                :class="['chart-type-item', { active: item.name === chartType }]"
+                @click="handleChartTypeClick(item.name)"
+              >
+                <el-icon><component :is="item.icon" /></el-icon>
+                <span>{{ item.label }}</span>
+              </div>
+            </div>
+            <div class="checked-chart-type">
+              <div class="mb-10">{{ chartTypesMap[chartType].label }}类型</div>
+              <div class="chart-type-group">
                 <div
-                  v-for="item in chartTypes"
+                  v-for="item in currentChartTypes"
                   :key="item.name"
-                  :class="['chart-type-item', { active: item.name === chartType }]"
-                  @click="handleChartTypeClick(item.name)"
+                  :class="['chart-type-item plain', { active: item.name === checkedChartType }]"
+                  @click="handleCheckedChartType(item.name)"
                 >
-                  <el-icon><component :is="item.icon" /></el-icon>
+                  <img :src="item.imageURL" alt="" class="chart-type-image" />
                   <span>{{ item.label }}</span>
                 </div>
               </div>
-              <div class="checked-chart-type">
-                <div class="mb-10">{{ chartTypesMap[chartType].label }}类型</div>
-                <div class="chart-type-group">
-                  <div
-                    v-for="item in currentChartTypes"
-                    :key="item.name"
-                    :class="['chart-type-item plain', { active: item.name === checkedChartType }]"
-                    @click="handleCheckedChartType(item.name)"
-                  >
-                    <img :src="item.imageURL" alt="" class="chart-type-image" />
-                    <span>{{ item.label }}</span>
-                  </div>
-                </div>
-              </div>
-            </el-card>
+            </div>
+          </el-card>
 
-            <el-card shadow="hover">
-              <template #header>
-                <div class="card-header"><span>数据配置</span></div>
-              </template>
-              <el-form-item prop="title" label="标题">
-                <el-input v-model="chartConfig.title" placeholder="请输入图表标题" />
-              </el-form-item>
-              <el-form-item label="颜色主题">
-                <el-select
-                  v-model="chartConfig.colors"
-                  placeholder="请选择主题颜色"
-                  style="width: 100%"
+          <el-card shadow="hover">
+            <template #header>
+              <div class="card-header"><span>数据配置</span></div>
+            </template>
+            <el-form-item prop="title" label="标题">
+              <el-input v-model="chartConfig.title" placeholder="请输入图表标题" />
+            </el-form-item>
+            <el-form-item label="颜色主题">
+              <el-select
+                v-model="chartConfig.colors"
+                placeholder="请选择主题颜色"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="theme in COLOR_THEMES"
+                  :key="theme.name"
+                  :label="theme.name"
+                  :value="theme.colors"
                 >
-                  <el-option
-                    v-for="theme in COLOR_THEMES"
-                    :key="theme.name"
-                    :label="theme.name"
-                    :value="theme.colors"
-                  >
-                    <div class="color-option">
-                      <div
-                        v-for="c in theme.colors"
-                        :key="c"
-                        class="color-swatch"
-                        :style="{ backgroundColor: c }"
-                      />
-                      <span class="theme-name">{{ theme.name }}</span>
-                    </div>
-                  </el-option>
+                  <div class="color-option">
+                    <div
+                      v-for="c in theme.colors"
+                      :key="c"
+                      class="color-swatch"
+                      :style="{ backgroundColor: c }"
+                    />
+                    <span class="theme-name">{{ theme.name }}</span>
+                  </div>
+                </el-option>
+              </el-select>
+            </el-form-item>
+          </el-card>
+        </el-tab-pane>
+        <el-tab-pane label="更多配置" name="more">
+          <el-collapse v-model="activeCollapse">
+            <!-- 图例配置 -->
+            <el-collapse-item name="legend">
+              <template #title>
+                <div class="collapse-title">
+                  <span>图例</span>
+                  <el-switch v-model="chartConfig.legend.show" />
+                </div>
+              </template>
+              <el-form-item label="图例位置">
+                <el-select
+                  v-model="chartConfig.legend.position"
+                  :disabled="!chartConfig.legend.show"
+                >
+                  <el-option label="靠上" value="top" />
+                  <el-option label="靠下" value="bottom" />
+                  <el-option label="靠左" value="left" />
+                  <el-option label="靠右" value="right" />
+                  <el-option label="右上" value="right-top" />
                 </el-select>
               </el-form-item>
-              <el-form-item prop="showLegend" label="显示图例">
-                <el-switch v-model="chartConfig.showLegend" />
+            </el-collapse-item>
+            <!-- 数据标签 -->
+            <el-collapse-item name="label">
+              <template #title>
+                <div class="collapse-title">
+                  <span>数据标签</span>
+                  <el-switch v-model="chartConfig.label.show" />
+                </div>
+              </template>
+              <el-form-item label="标签位置">
+                <el-select v-model="chartConfig.label.position" :disabled="!chartConfig.label.show">
+                  <el-option label="居中" value="center" />
+                  <el-option label="数据标签内" value="inside" />
+                  <el-option label="数据标签外" value="outside" />
+                  <el-option label="轴内侧" value="inner" />
+                </el-select>
               </el-form-item>
-              <el-form-item prop="xTitle" label="横轴标题">
-                <el-input v-model="chartConfig.xTitle" placeholder="请输入横轴标题" />
+            </el-collapse-item>
+            <!-- 横坐标轴 -->
+            <el-collapse-item name="xAxis">
+              <template #title>
+                <div class="collapse-title">
+                  <span>横坐标轴</span>
+                  <el-switch v-model="chartConfig.xAxis.show" />
+                </div>
+              </template>
+              <el-form-item label="标题">
+                <el-input v-model="chartConfig.xAxis.title" :disabled="!chartConfig.xAxis.show" />
               </el-form-item>
-              <el-form-item prop="yTitle" label="纵轴标题">
-                <el-input v-model="chartConfig.yTitle" placeholder="请输入纵轴标题" />
+            </el-collapse-item>
+            <!-- 纵坐标轴 -->
+            <el-collapse-item name="yAxis">
+              <template #title>
+                <div class="collapse-title">
+                  <span>纵坐标轴</span>
+                  <el-switch v-model="chartConfig.yAxis.show" />
+                </div>
+              </template>
+              <el-form-item label="标题">
+                <el-input v-model="chartConfig.yAxis.title" :disabled="!chartConfig.yAxis.show" />
               </el-form-item>
-            </el-card>
-          </div>
+              <el-form-item label="最小边界值">
+                <el-input-number
+                  v-model="chartConfig.yAxis.min"
+                  :disabled="!chartConfig.yAxis.show"
+                />
+              </el-form-item>
+              <el-form-item label="最大边界值">
+                <el-input-number
+                  v-model="chartConfig.yAxis.max"
+                  :disabled="!chartConfig.yAxis.show"
+                />
+              </el-form-item>
+              <el-form-item label="间距">
+                <el-input-number
+                  v-model="chartConfig.yAxis.interval"
+                  :disabled="!chartConfig.yAxis.show"
+                />
+              </el-form-item>
+              <el-form-item label="刻度数">
+                <el-input-number
+                  v-model="chartConfig.yAxis.tickCount"
+                  :disabled="!chartConfig.yAxis.show"
+                />
+              </el-form-item>
+            </el-collapse-item>
+            <!-- 网格线 -->
+            <el-collapse-item name="grid" disabled>
+              <template #title>
+                <div class="collapse-title">
+                  <span>网格线</span>
+                  <el-switch v-model="chartConfig.grid.show" />
+                </div>
+              </template>
+            </el-collapse-item>
+          </el-collapse>
         </el-tab-pane>
-        <el-tab-pane label="更多配置" name="advanced" />
       </el-tabs>
       <!-- 右侧预览 -->
       <div class="preview-panel">
@@ -117,41 +204,6 @@ import type {
   CheckedChartTypeItem,
   ColumnDef,
 } from './types'
-
-// ========================== 类型定义 ==========================
-type ChartTypeIcon = typeof Histogram | typeof TrendCharts | typeof PieChart
-type ChartTypeItemMap = Record<ChartType, ChartTypeItem<ChartTypeIcon>>
-
-interface Props {
-  visible: boolean
-  current?: ChartType
-  tableData: Record<string, unknown>[]
-  columns: ColumnDef[]
-  xField: string
-  yField: string
-}
-
-// ========================== Props & Emits ==========================
-const props = withDefaults(defineProps<Props>(), {
-  visible: false,
-  current: 'bar',
-  tableData: () => [],
-  xField: 'genre',
-  yField: 'sold',
-})
-
-const emit = defineEmits<{
-  'update:visible': [value: boolean]
-  confirm: [
-    payload: {
-      config: ChartConfig
-      chartType: ChartType
-      checkedType: CheckedChartType
-      yFields: { prop: string; label?: string }[]
-      xField: string
-    },
-  ]
-}>()
 
 // ========================== 常量定义 ==========================
 const CHART_TYPES: ChartTypeItem<ChartTypeIcon>[] = [
@@ -214,19 +266,82 @@ const CURRENT_CHART_MAP: Record<ChartType, CheckedChartTypeItem[]> = {
 
 const DEFAULT_CONFIG: ChartConfig = {
   title: '示例图表',
+  type: 'bar',
   colors: COLOR_THEMES[0]?.colors || [],
   showLegend: true,
   xTitle: '分类',
   yTitle: '数量',
+  legend: {
+    show: true,
+    position: 'top',
+  },
+  label: {
+    show: true,
+    position: 'center',
+  },
+  xAxis: {
+    show: true,
+    title: '分类',
+  },
+  yAxis: {
+    show: true,
+    title: '数量',
+  },
+  grid: {
+    show: true,
+  },
 }
+
+// ========================== 类型定义 ==========================
+type ChartTypeIcon = typeof Histogram | typeof TrendCharts | typeof PieChart
+type ChartTypeItemMap = Record<ChartType, ChartTypeItem<ChartTypeIcon>>
+
+interface Props {
+  visible: boolean
+  config: ChartConfig
+  dataSource: {
+    label: string
+    tableData: Record<string, unknown>[]
+    columns: ColumnDef[]
+  }[]
+}
+
+// ========================== Props & Emits ==========================
+const props = withDefaults(defineProps<Props>(), {
+  visible: false,
+  config: () => DEFAULT_CONFIG,
+  dataSource: () => [
+    {
+      label: '数据集',
+      tableData: [],
+      columns: [],
+    },
+  ],
+  xField: 'genre',
+  yField: 'sold',
+})
+
+const emit = defineEmits<{
+  'update:visible': [value: boolean]
+  confirm: [
+    payload: {
+      config: ChartConfig
+      chartType: ChartType
+      checkedType: CheckedChartType
+      yFields: { prop: string; label?: string }[]
+      xField: string
+    },
+  ]
+}>()
 
 // ========================== 响应式状态 ==========================
 const activeTab = ref<'basic' | 'advanced'>('basic')
-const chartType = ref<ChartType>(props.current)
+const chartType = ref<ChartType>(props.config.type)
 const checkedChartType = ref<CheckedChartType>('bar_group')
 const chartConfig = ref<ChartConfig>({ ...DEFAULT_CONFIG })
 const chartRef = ref<HTMLDivElement>()
 const configFormRef = ref<FormInstance>()
+const activeCollapse = ref(['legend', 'label', 'xAxis', 'grid']) // 默认展开所有
 
 let chartInstance: Chart | null = null
 
@@ -239,8 +354,10 @@ const chartTypes = CHART_TYPES
 
 const currentChartTypes = computed(() => CURRENT_CHART_MAP[chartType.value])
 
-const columns = computed<ColumnDef[]>(() => props.columns || [])
-const tableData = computed<Props['tableData']>(() => props.tableData || [])
+const columns = computed<ColumnDef[]>(() => props.dataSource[0]?.columns || [])
+const tableData = computed<Props['dataSource'][0]['tableData']>(
+  () => props.dataSource[0]?.tableData || [],
+)
 
 const numericColumns = computed(() => {
   const cols = columns.value || []
@@ -256,7 +373,7 @@ const numericColumns = computed(() => {
 })
 
 const yFields = ref<{ prop: string; label?: string }[]>([])
-const selectedXField = ref<string>(props.xField || columns.value[0]?.prop || '')
+const selectedXField = ref<string>(props.dataSource[0]?.xField || columns.value[0]?.prop || '')
 
 const dialogVisible = computed({
   get: () => props.visible,
@@ -524,6 +641,9 @@ const getDefaultChartData = (): Props['tableData'] => {
     { genre: '类别A', value: 11, series: '系列1' },
     { genre: '类别B', value: 1, series: '系列1' },
     { genre: '类别C', value: 2, series: '系列1' },
+    { genre: '类别A', value: 3, series: '系列2' },
+    { genre: '类别B', value: 3, series: '系列2' },
+    { genre: '类别C', value: 4, series: '系列2' },
   ]
 }
 
@@ -620,14 +740,18 @@ onBeforeUnmount(() => {
 .mb-10 {
   margin-bottom: 10px;
 }
+:deep(.el-collapse-item__header) {
+  gap: 10px;
+}
+:deep(.el-tabs__content) {
+  width: 400px;
+  overflow-y: auto;
+}
+
 .chart-config-layout {
   display: flex;
   gap: 20px;
   height: 800px;
-}
-.config-panel {
-  width: 400px;
-  overflow-y: auto;
 }
 .preview-panel {
   flex: 1;
@@ -703,5 +827,10 @@ onBeforeUnmount(() => {
   margin-left: 8px;
   font-size: 13px;
   color: #555;
+}
+.collapse-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 </style>

@@ -2,10 +2,34 @@ export type ChartType = 'bar' | 'line' | 'pie'
 
 export interface ChartConfig {
   title: string
+  type: ChartType
   colors: string[]
   showLegend: boolean
   xTitle?: string
   yTitle?: string
+  legend: {
+    show: boolean
+    position: 'top' | 'bottom' | 'left' | 'right' | 'right-top'
+  }
+  label: {
+    show: boolean
+    position: 'center' | 'inside' | 'outside' | 'inner'
+  }
+  xAxis: {
+    show: boolean
+    title?: string
+  }
+  yAxis: {
+    show: boolean
+    title?: string
+    min?: number
+    max?: number
+    interval?: number
+    tickCount?: number
+  }
+  grid: {
+    show: boolean
+  }
 }
 
 export interface ChartTypeItem<T> {
