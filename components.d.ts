@@ -8,7 +8,10 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
-    AddChart: typeof import('./src/components/AddChart/index.vue')['default']
+    BaseTab: typeof import('./src/components/ChartConfigDialog/BaseTab.vue')['default']
+    ChartConfigDialog: typeof import('./src/components/ChartConfigDialog/index.vue')['default']
+    ChartPanel: typeof import('./src/components/ChartConfigDialog/ChartPanel.vue')['default']
+    ConfigForm: typeof import('./src/components/ChartConfigDialog/ConfigForm.vue')['default']
     ElButton: typeof import('element-plus/es')['ElButton']
     ElCard: typeof import('element-plus/es')['ElCard']
     ElCollapse: typeof import('element-plus/es')['ElCollapse']
@@ -26,6 +29,7 @@ declare module 'vue' {
     ElSwitch: typeof import('element-plus/es')['ElSwitch']
     ElTabPane: typeof import('element-plus/es')['ElTabPane']
     ElTabs: typeof import('element-plus/es')['ElTabs']
+    MoreConfigTab: typeof import('./src/components/ChartConfigDialog/MoreConfigTab.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
   }
