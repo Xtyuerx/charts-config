@@ -1,5 +1,13 @@
 <template>
-  <el-dialog v-model="dialogVisible" title="图表配置" width="80%" @close="handleClose">
+  <el-dialog
+    v-model="dialogVisible"
+    title="图表配置"
+    width="80%"
+    align-center
+    destroy-on-close
+    @close="handleClose"
+    @closed="reset"
+  >
     <el-form
       ref="configFormRef"
       label-position="top"
@@ -31,7 +39,7 @@ import ChartPanel from './ChartPanel.vue'
 import { useChartConfig } from './useChartConfig'
 import type { ChartConfig, Props } from './types'
 
-const { setConfig, chartConfig } = useChartConfig()
+const { setConfig, chartConfig, reset } = useChartConfig()
 
 // ========================== Props & Emits ==========================
 const props = withDefaults(defineProps<Props>(), {

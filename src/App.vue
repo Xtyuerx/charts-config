@@ -11,23 +11,23 @@ const dataSource = ref([
     value: 0,
     tableData: [
       {
-        genre: 'Sports',
+        genre: '运动',
         sold: 275,
       },
       {
-        genre: 'Strategy',
+        genre: '策略',
         sold: 115,
       },
       {
-        genre: 'Action',
+        genre: '动作',
         sold: 120,
       },
       {
-        genre: 'Shooter',
+        genre: '射击',
         sold: 350,
       },
       {
-        genre: 'Other',
+        genre: '其他',
         sold: 150,
       },
     ],

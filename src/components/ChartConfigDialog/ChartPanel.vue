@@ -3,7 +3,7 @@
 </template>
 
 <script lang="ts" setup>
-import { inject, onMounted, computed } from 'vue'
+import { inject, computed } from 'vue'
 import { useChartRender } from './useChartRender'
 import { useChartConfig } from './useChartConfig'
 import type { Props, ChartDataItem } from './types'
@@ -16,11 +16,7 @@ const tableData = computed<ChartDataItem[]>(
   () => dataSource?.[chartConfig.value.dataSource]?.tableData || [],
 )
 
-const { chartContainer, render } = useChartRender(chartConfig.value, tableData)
-
-onMounted(() => {
-  render()
-})
+const { chartContainer } = useChartRender(chartConfig, tableData)
 </script>
 
 <style scoped>

@@ -133,6 +133,7 @@ const chartTypesMap = computed<ChartTypeItemMap>(() =>
 // ========================== 事件处理函数 ==========================
 const handleChartTypeClick = (type: ChartMainType) => {
   chartConfig.value.type = type
+  chartConfig.value.subType = CURRENT_CHART_MAP[type][0]?.name || 'bar_group'
 }
 
 const handleCheckedChartType = (type: ChartSubType) => {

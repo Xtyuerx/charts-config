@@ -64,19 +64,19 @@ export const DEFAULT_CONFIG: ChartConfig = {
   title: '销售数据统计',
   type: 'bar', // 假设 ChartMainType 包含 'bar'
   subType: 'bar_group',
-  theme: 'light',
-  categoryField: 'category',
+  theme: ['#1890ff', '#13c2c2', '#2fc25b', '#facc14', '#f04864'],
+  categoryField: 'genre',
   categorySort: 'asc',
-  valueFields: ['value'],
-  colorField: 'category',
-  dataSource: 1,
+  valueFields: ['sold'],
+  colorField: 'genre',
+  dataSource: 0,
   legend: {
     show: true,
     position: 'top',
   },
   label: {
     show: true,
-    position: 'center',
+    position: 'top',
   },
   yAxis: {
     show: true,

@@ -1,4 +1,15 @@
-import type { G2Spec, Encode } from '@antv/g2'
+import type { G2Spec, Encode, LegendComponent } from '@antv/g2'
+
+export type LabelComponent =
+  | 'top'
+  | 'left'
+  | 'right'
+  | 'bottom'
+  | 'top-left'
+  | 'top-right'
+  | 'bottom-left'
+  | 'bottom-right'
+  | 'inside'
 
 export type ChartMainType = 'bar' | 'line' | 'pie'
 export type ChartSubType =
@@ -26,7 +37,7 @@ export interface ChartConfig {
   title?: string
   type: ChartMainType
   subType: ChartSubType
-  theme: string
+  theme: string | string[]
   categoryField: string
   categorySort?: 'asc' | 'desc'
   valueFields: string[]
@@ -34,11 +45,11 @@ export interface ChartConfig {
   dataSource: number
   legend: {
     show: boolean
-    position: 'top' | 'bottom' | 'left' | 'right' | 'top-right'
+    position: LegendComponent['position']
   }
   label: {
     show: boolean
-    position: 'center' | 'inner' | 'outer' | 'inside'
+    position: LabelComponent
   }
   yAxis: {
     show: boolean
