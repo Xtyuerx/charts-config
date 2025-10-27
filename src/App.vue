@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, type Ref, watch } from 'vue'
+import { ref, computed, type Ref } from 'vue'
 import AddChart from '@/components/ChartConfigDialog/index.vue'
 import type { ChartConfig, ChartDataItem } from '@/components/ChartConfigDialog/types'
 import { useChartRender } from '@/components/ChartConfigDialog/useChartRender'
@@ -63,20 +63,21 @@ const currentTableData = computed<ChartDataItem[]>(
 
 const { render } = useChartRender(chartConfig as Ref<ChartConfig>, currentTableData, mainChartRef)
 
-watch(
-  chartConfig,
-  () => {
-    render()
-  },
-  {
-    deep: true,
-  },
-)
+const handleConfirm = (config: ChartConfig) => {
+  console.log('确认配置', config)
+  chartConfig.value = config
+  render()
+}
 </script>
 
 <template>
   <h1>You did it!</h1>
-  <AddChart v-model:visible="dialogVisible" v-model:config="chartConfig" :dataSource="dataSource" />
+  <AddChart
+    v-model:visible="dialogVisible"
+    :config="chartConfig"
+    :dataSource="dataSource"
+    @confirm="handleConfirm"
+  />
   <el-button type="primary" @click="dialogVisible = true">添加图表</el-button>
   <div ref="mainChartRef" class="chart-container"></div>
 </template>

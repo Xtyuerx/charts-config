@@ -59,7 +59,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   'update:visible': [value: boolean]
-  'update:config': [value: ChartConfig]
+  confirm: [value: ChartConfig]
 }>()
 
 provide('dataSource', props.dataSource)
@@ -109,7 +109,7 @@ const handleClose = () => {
 const handleConfirm = () => {
   configFormRef.value?.validate((valid) => {
     if (valid) {
-      emit('update:config', chartConfig.value)
+      emit('confirm', chartConfig.value)
       handleClose()
     }
   })
