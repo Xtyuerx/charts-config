@@ -16,6 +16,7 @@ const subTypeMap: Record<ChartSubType, ChartSpec> = {
       x: cfg.categoryField,
       y: cfg.valueFields[0],
     }),
+    transform: [{ type: 'dodgeX' }],
   },
   bar_stacked: {
     type: 'interval',
@@ -25,7 +26,14 @@ const subTypeMap: Record<ChartSubType, ChartSpec> = {
       y: cfg.valueFields[0],
     }),
   },
-  bar_percent: {},
+  bar_percent: {
+    type: 'interval',
+    transform: [{ type: 'stackY' }],
+    buildEncode: (cfg) => ({
+      x: cfg.categoryField,
+      y: PERCENT_FIELD,
+    }),
+  },
 
   // 折线图
   line: {
@@ -35,9 +43,19 @@ const subTypeMap: Record<ChartSubType, ChartSpec> = {
       y: cfg.valueFields[0],
     }),
     style: { lineWidth: 2 },
-    children: [
+    buildChildren: (cfg) => [
       { type: 'line', labels: [{ text: 'sold', style: { dx: -10, dy: -12 } }] },
-      { type: 'point', style: { fill: 'white' }, tooltip: false },
+      {
+        type: 'point',
+        style: { fill: 'white' },
+        tooltip: {
+          title: cfg.yAxis.title,
+          items: [
+            { field: cfg.categoryField, name: cfg.xAxis.title },
+            { field: cfg.valueFields[0], name: cfg.yAxis.title },
+          ],
+        },
+      },
     ],
   },
   line_smooth: {
@@ -48,9 +66,19 @@ const subTypeMap: Record<ChartSubType, ChartSpec> = {
       shape: 'smooth',
     }),
     style: { lineWidth: 2 },
-    children: [
+    buildChildren: (cfg) => [
       { type: 'line', labels: [{ text: 'sold', style: { dx: -10, dy: -12 } }] },
-      { type: 'point', style: { fill: 'white' }, tooltip: false },
+      {
+        type: 'point',
+        style: { fill: 'white' },
+        tooltip: {
+          title: cfg.yAxis.title,
+          items: [
+            { field: cfg.categoryField, name: cfg.xAxis.title },
+            { field: cfg.valueFields[0], name: cfg.yAxis.title },
+          ],
+        },
+      },
     ],
   },
 
@@ -97,12 +125,12 @@ const isPieChartType = (subType: ChartSubType): boolean => {
 }
 
 /**
- * 为饼图数据计算百分比字段
+ * 为数据计算百分比字段
  * @param data 原始数据
  * @param valueField 数值字段名
  * @returns 包含 percent 字段的新数据
  */
-const calculatePiePercent = (
+const calculatePercent = (
   data: ChartDataItem[],
   valueField: string,
 ): Array<ChartDataItem & { percent: number }> => {
@@ -129,8 +157,8 @@ const formatPercent = (value: number): string => {
 export function useChartRender(
   config: Ref<ChartConfig>,
   data: Ref<ChartDataItem[]> = ref(getDefaultChartData()),
+  chartContainer = ref<HTMLDivElement | null>(null),
 ) {
-  const chartContainer = ref<HTMLDivElement | null>(null)
   let chartInstance: Chart | null = null
 
   // 生成 G2 配置
@@ -139,13 +167,14 @@ export function useChartRender(
       subType,
       categoryField,
       valueFields,
-      // colorField,
+      colorField,
       legend,
       label,
       xAxis,
       yAxis,
       grid,
       theme,
+      title,
     } = unref(config)
 
     const currentData = unref(data)
@@ -169,28 +198,39 @@ export function useChartRender(
           y: valueField,
         }
 
-    /* if (colorField) {
+    const children = base.buildChildren ? base.buildChildren(unref(config)) : base.children
+
+    if (colorField && !isPieChart) {
       encode.color = colorField
-    } */
+    }
 
     // 饼图数据预处理：计算百分比
-    const processedData = isPieChart ? calculatePiePercent(currentData, valueField) : currentData
+    const processedData = calculatePercent(currentData, valueField)
 
     const spec: ChartSpec = {
       ...base,
+      title: {
+        title,
+      },
       autoFit: true,
       data: processedData,
       encode,
       legend: legend.show ? { position: legend.position } : false,
-      tooltip: true,
+      tooltip: {
+        items: [
+          { field: categoryField, name: xAxis.title },
+          { field: valueField, name: yAxis.title },
+        ],
+      },
+      children,
     }
 
     // 饼图特殊配置
-    if (isPieChart) {
+    if (encode.y === PERCENT_FIELD) {
       spec.tooltip = {
         items: [
-          { field: categoryField, name: categoryField },
-          { field: valueField, name: valueField },
+          { field: categoryField, name: xAxis.title },
+          { field: valueField, name: yAxis.title },
           {
             field: PERCENT_FIELD,
             name: '占比',
@@ -201,8 +241,8 @@ export function useChartRender(
     }
 
     // 添加主题配置
-    if (Array.isArray(theme)) {
-      Object.assign(spec, { scale: { color: { range: theme } } })
+    if (theme && Array.isArray(theme.colors)) {
+      Object.assign(spec, { scale: { color: { range: theme.colors } } })
     }
 
     // 饼图不需要轴配置
@@ -235,7 +275,10 @@ export function useChartRender(
         spec.labels = [
           {
             position: label.position,
-            text: valueField,
+            text:
+              encode.y === PERCENT_FIELD
+                ? (d: { percent?: number }) => formatPercent(d?.percent ?? 0)
+                : valueField,
           },
         ]
       }
@@ -261,7 +304,7 @@ export function useChartRender(
     }
 
     // 验证配置完整性
-    if (!currentConfig.categoryField || !currentConfig.valueFields?.length) {
+    if (!currentConfig || !currentConfig.categoryField || !currentConfig.valueFields?.length) {
       console.warn('Chart config incomplete:', currentConfig)
       return
     }
@@ -275,12 +318,6 @@ export function useChartRender(
     if (sampleData && currentConfig.valueFields[0] && !sampleData[currentConfig.valueFields[0]]) {
       console.warn(`Value field '${currentConfig.valueFields[0]}' not found in data`)
       return
-    }
-
-    // 销毁旧实例
-    if (chartInstance) {
-      chartInstance.destroy()
-      chartInstance = null
     }
 
     try {

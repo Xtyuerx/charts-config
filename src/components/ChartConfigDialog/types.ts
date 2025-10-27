@@ -1,4 +1,4 @@
-import type { G2Spec, Encode, LegendComponent } from '@antv/g2'
+import type { G2Spec, Encode, LegendComponent, ViewComposition } from '@antv/g2'
 
 export type LabelComponent =
   | 'top'
@@ -23,7 +23,7 @@ export type ChartSubType =
 
 export interface Props {
   visible: boolean
-  config: ChartConfig
+  config?: ChartConfig
   dataSource: {
     label: string
     value: number
@@ -37,7 +37,10 @@ export interface ChartConfig {
   title?: string
   type: ChartMainType
   subType: ChartSubType
-  theme: string | string[]
+  theme?: {
+    name: string
+    colors: string[]
+  }
   categoryField: string
   categorySort?: 'asc' | 'desc'
   valueFields: string[]
@@ -89,5 +92,7 @@ export interface ColumnDef {
 // G2 v5 声明式配置结构
 export type ChartSpec = G2Spec & {
   buildEncode?: (cfg: ChartConfig) => Encode
+  buildChildren?: (cfg: ChartConfig) => ViewComposition['children']
   legend?: G2Spec['legend']
+  children?: ViewComposition['children']
 }

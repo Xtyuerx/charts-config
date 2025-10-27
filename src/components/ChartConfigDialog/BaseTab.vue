@@ -40,12 +40,17 @@
       <el-input v-model="chartConfig.title" placeholder="请输入图表标题" />
     </el-form-item>
     <el-form-item label="颜色主题">
-      <el-select v-model="chartConfig.theme" placeholder="请选择主题颜色" style="width: 100%">
+      <el-select
+        v-model="chartConfig.theme"
+        placeholder="请选择主题颜色"
+        value-key="name"
+        style="width: 100%"
+      >
         <el-option
           v-for="theme in COLOR_THEMES"
           :key="theme.name"
           :label="theme.name"
-          :value="theme.colors"
+          :value="theme"
         >
           <div class="color-option">
             <div

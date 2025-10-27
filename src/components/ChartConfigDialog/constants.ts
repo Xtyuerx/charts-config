@@ -64,11 +64,11 @@ export const DEFAULT_CONFIG: ChartConfig = {
   title: '销售数据统计',
   type: 'bar', // 假设 ChartMainType 包含 'bar'
   subType: 'bar_group',
-  theme: ['#1890ff', '#13c2c2', '#2fc25b', '#facc14', '#f04864'],
+  theme: COLOR_THEMES[0],
   categoryField: 'genre',
   categorySort: 'asc',
   valueFields: ['sold'],
-  colorField: 'genre',
+  colorField: 'name',
   dataSource: 0,
   legend: {
     show: true,
