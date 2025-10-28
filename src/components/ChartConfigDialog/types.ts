@@ -34,6 +34,7 @@ export interface Props {
 
 export type ChartDataItem = Record<string, unknown>
 export interface ChartConfig {
+  id?: string
   title?: string
   type: ChartMainType
   subType: ChartSubType

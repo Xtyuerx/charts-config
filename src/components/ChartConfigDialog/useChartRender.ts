@@ -63,11 +63,13 @@ const subTypeMap: Record<ChartSubType, ChartSpec> = {
     buildEncode: (cfg) => ({
       x: cfg.categoryField,
       y: cfg.valueFields[0],
-      shape: 'smooth',
     }),
-    style: { lineWidth: 2 },
     buildChildren: (cfg) => [
-      { type: 'line', labels: [{ text: 'sold', style: { dx: -10, dy: -12 } }] },
+      {
+        type: 'line',
+        labels: [{ text: 'sold', style: { dx: -10, dy: -12 } }],
+        style: { lineWidth: 2, shape: 'smooth' },
+      },
       {
         type: 'point',
         style: { fill: 'white' },

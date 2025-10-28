@@ -11,3 +11,8 @@ export function injectColumnTypes(columns: ColumnDef[], tableData: ChartDataItem
     return { ...col, type }
   })
 }
+
+// 生成唯一图表ID
+export function generateChartId(): string {
+  return `chart_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+}

@@ -1,5 +1,5 @@
-import type { ChartConfig, ChartTypeItem, ChartMainType, CheckedChartTypeItem } from './types'
 import { Histogram, PieChart, TrendCharts } from '@element-plus/icons-vue'
+import type { ChartConfig, ChartTypeItem, ChartMainType, CheckedChartTypeItem } from './types'
 
 export type ChartTypeIcon = typeof Histogram | typeof TrendCharts | typeof PieChart
 export const CHART_TYPES: ChartTypeItem<ChartTypeIcon>[] = [
