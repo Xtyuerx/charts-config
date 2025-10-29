@@ -3,8 +3,7 @@ import type { ChartConfig } from './types'
 import { DEFAULT_CONFIG } from './constants'
 const chartConfig = ref<ChartConfig>(DEFAULT_CONFIG)
 
-export function useChartConfig(defaultConfig: ChartConfig = DEFAULT_CONFIG) {
-  chartConfig.value = defaultConfig
+export function useChartConfig() {
   const setConfig = (config: ChartConfig) => {
     chartConfig.value = config
   }

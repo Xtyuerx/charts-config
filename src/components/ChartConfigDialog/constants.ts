@@ -62,7 +62,7 @@ export const CURRENT_CHART_MAP: Record<ChartMainType, CheckedChartTypeItem[]> = 
 
 export const DEFAULT_CONFIG: ChartConfig = {
   title: '销售数据统计',
-  type: 'bar', // 假设 ChartMainType 包含 'bar'
+  type: 'bar',
   subType: 'bar_group',
   theme: COLOR_THEMES[0],
   categoryField: 'genre',

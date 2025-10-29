@@ -9,6 +9,7 @@ import { generateChartId } from '@/components/ChartConfigDialog/utils'
 const dialogVisible = ref(false)
 const chartConfigs = ref<ChartConfig[]>([])
 const chartRefs = ref<HTMLDivElement[]>([])
+const currentChartIndex = ref(0)
 const chartInstances = ref<Map<string, { render: () => void; destroy: () => void }>>(new Map())
 
 const dataSource = ref([
@@ -62,6 +63,7 @@ const dataSource = ref([
 
 // 编辑图表配置
 const showEditChart = (config: ChartConfig, index: number) => {
+  currentChartIndex.value = index
   chartConfigs.value[index] = { ...config }
   dialogVisible.value = true
 }
@@ -78,7 +80,7 @@ const addChart = (config?: ChartConfig) => {
     : { ...DEFAULT_CONFIG, id: generateChartId() }
   if (config?.id === newConfig.id) {
     // 如果是编辑已存在的图表，更新配置
-    const index = chartConfigs.value.findIndex((c) => c.id === newConfig.id)
+    const index = chartConfigs.value.findIndex((c) => c.id === config.id)
     if (index !== -1) {
       chartConfigs.value[index] = newConfig
     }
@@ -153,6 +155,7 @@ const renderAllCharts = () => {
 
 // 处理图表配置确认
 const handleConfirm = (config: ChartConfig) => {
+  console.log('config', config)
   addChart(config)
 }
 
@@ -176,7 +179,12 @@ onMounted(() => {
     </div>
 
     <!-- 图表配置对话框 -->
-    <AddChart v-model:visible="dialogVisible" :dataSource="dataSource" @confirm="handleConfirm" />
+    <AddChart
+      v-model:visible="dialogVisible"
+      :config="chartConfigs[currentChartIndex]"
+      :dataSource="dataSource"
+      @confirm="handleConfirm"
+    />
 
     <!-- 图表容器 -->
     <div class="charts-container">

@@ -109,6 +109,7 @@ const handleClose = () => {
 const handleConfirm = () => {
   configFormRef.value?.validate((valid) => {
     if (valid) {
+      console.log('chartConfig.value', chartConfig.value)
       emit('confirm', chartConfig.value)
       handleClose()
     }
@@ -119,6 +120,9 @@ watch(
   () => props.config,
   (newVal) => {
     setConfig(newVal)
+  },
+  {
+    deep: true,
   },
 )
 </script>

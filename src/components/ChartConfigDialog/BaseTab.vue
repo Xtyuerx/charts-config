@@ -39,7 +39,7 @@
     <el-form-item prop="title" label="标题">
       <el-input v-model="chartConfig.title" placeholder="请输入图表标题" />
     </el-form-item>
-    <el-form-item label="颜色主题">
+    <el-form-item prop="theme" label="颜色主题">
       <el-select
         v-model="chartConfig.theme"
         placeholder="请选择主题颜色"
@@ -65,7 +65,7 @@
       </el-select>
     </el-form-item>
     <!-- 数据源 -->
-    <el-form-item label="数据源">
+    <el-form-item prop="dataSource" label="数据源">
       <el-select v-model="chartConfig.dataSource" placeholder="请选择数据源" style="width: 100%">
         <el-option
           v-for="item in dataSourceOptions"
@@ -76,7 +76,7 @@
       </el-select>
     </el-form-item>
     <!-- 纵轴 -->
-    <el-form-item label="纵轴（类别字段）">
+    <el-form-item prop="categoryField" label="纵轴（类别字段）">
       <el-select v-model="chartConfig.categoryField" placeholder="请选择纵轴字段">
         <el-option
           v-for="item in verticalAxisOptions"
@@ -91,7 +91,7 @@
       </el-radio-group>
     </el-form-item>
     <!-- 横轴 -->
-    <el-form-item label="横轴（值）">
+    <el-form-item prop="valueFields" label="横轴（值）">
       <el-select
         v-model="chartConfig.valueFields"
         multiple
