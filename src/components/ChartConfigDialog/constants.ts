@@ -65,10 +65,10 @@ export const DEFAULT_CONFIG: ChartConfig = {
   type: 'bar',
   subType: 'bar_group',
   theme: COLOR_THEMES[0],
-  categoryField: 'genre',
+  xField: 'genre',
   categorySort: 'asc',
   valueFields: ['sold'],
-  colorField: 'name',
+  categoryField: 'name',
   dataSource: 0,
   legend: {
     show: true,

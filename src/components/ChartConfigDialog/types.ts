@@ -42,10 +42,10 @@ export interface ChartConfig {
     name: string
     colors: string[]
   }
-  categoryField: string
+  xField: string
   categorySort?: 'asc' | 'desc'
   valueFields: string[]
-  colorField?: string
+  categoryField?: string
   dataSource: number
   legend: {
     show: boolean

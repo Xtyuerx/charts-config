@@ -13,7 +13,7 @@ const subTypeMap: Record<ChartSubType, ChartSpec> = {
   bar_group: {
     type: 'interval',
     buildEncode: (cfg) => ({
-      x: cfg.categoryField,
+      x: cfg.xField,
       y: cfg.valueFields[0],
     }),
     transform: [{ type: 'dodgeX' }],
@@ -22,7 +22,7 @@ const subTypeMap: Record<ChartSubType, ChartSpec> = {
     type: 'interval',
     transform: [{ type: 'stackY' }],
     buildEncode: (cfg) => ({
-      x: cfg.categoryField,
+      x: cfg.xField,
       y: cfg.valueFields[0],
     }),
   },
@@ -30,7 +30,7 @@ const subTypeMap: Record<ChartSubType, ChartSpec> = {
     type: 'interval',
     transform: [{ type: 'stackY' }],
     buildEncode: (cfg) => ({
-      x: cfg.categoryField,
+      x: cfg.xField,
       y: PERCENT_FIELD,
     }),
   },
@@ -39,7 +39,7 @@ const subTypeMap: Record<ChartSubType, ChartSpec> = {
   line: {
     type: 'view',
     buildEncode: (cfg) => ({
-      x: cfg.categoryField,
+      x: cfg.xField,
       y: cfg.valueFields[0],
     }),
     style: { lineWidth: 2 },
@@ -51,7 +51,7 @@ const subTypeMap: Record<ChartSubType, ChartSpec> = {
         tooltip: {
           title: cfg.yAxis.title,
           items: [
-            { field: cfg.categoryField, name: cfg.xAxis.title },
+            { field: cfg.xField, name: cfg.xAxis.title },
             { field: cfg.valueFields[0], name: cfg.yAxis.title },
           ],
         },
@@ -61,7 +61,7 @@ const subTypeMap: Record<ChartSubType, ChartSpec> = {
   line_smooth: {
     type: 'view',
     buildEncode: (cfg) => ({
-      x: cfg.categoryField,
+      x: cfg.xField,
       y: cfg.valueFields[0],
     }),
     buildChildren: (cfg) => [
@@ -76,7 +76,7 @@ const subTypeMap: Record<ChartSubType, ChartSpec> = {
         tooltip: {
           title: cfg.yAxis.title,
           items: [
-            { field: cfg.categoryField, name: cfg.xAxis.title },
+            { field: cfg.xField, name: cfg.xAxis.title },
             { field: cfg.valueFields[0], name: cfg.yAxis.title },
           ],
         },
@@ -90,7 +90,7 @@ const subTypeMap: Record<ChartSubType, ChartSpec> = {
     coordinate: { type: 'theta', innerRadius: 0 },
     buildEncode: (cfg) => ({
       y: PERCENT_FIELD,
-      color: cfg.categoryField,
+      color: cfg.xField,
     }),
     transform: [{ type: 'stackY' }],
   },
@@ -99,7 +99,7 @@ const subTypeMap: Record<ChartSubType, ChartSpec> = {
     coordinate: { type: 'theta', innerRadius: 0.6 },
     buildEncode: (cfg) => ({
       y: PERCENT_FIELD,
-      color: cfg.categoryField,
+      color: cfg.xField,
     }),
     transform: [{ type: 'stackY' }],
   },
@@ -167,9 +167,9 @@ export function useChartRender(
   const buildChartSpec = (): ChartSpec => {
     const {
       subType,
-      categoryField,
+      xField,
       valueFields,
-      colorField,
+      categoryField,
       legend,
       label,
       xAxis,
@@ -185,8 +185,8 @@ export function useChartRender(
     if (!valueFields || valueFields.length === 0) {
       throw new Error('valueFields is required')
     }
-    if (!categoryField) {
-      throw new Error('categoryField is required')
+    if (!xField) {
+      throw new Error('xField is required')
     }
 
     const base = subTypeMap[subType] || {}
@@ -196,14 +196,14 @@ export function useChartRender(
     const encode = base.buildEncode
       ? base.buildEncode(unref(config))
       : {
-          x: categoryField,
+          x: xField,
           y: valueField,
         }
 
     const children = base.buildChildren ? base.buildChildren(unref(config)) : base.children
 
-    if (colorField && !isPieChart) {
-      encode.color = colorField
+    if (categoryField && !isPieChart) {
+      encode.color = categoryField
     }
 
     // 饼图数据预处理：计算百分比
@@ -220,7 +220,7 @@ export function useChartRender(
       legend: legend.show ? { position: legend.position } : false,
       tooltip: {
         items: [
-          { field: categoryField, name: xAxis.title },
+          { field: xField, name: xAxis.title },
           { field: valueField, name: yAxis.title },
         ],
       },
@@ -231,7 +231,7 @@ export function useChartRender(
     if (encode.y === PERCENT_FIELD) {
       spec.tooltip = {
         items: [
-          { field: categoryField, name: xAxis.title },
+          { field: xField, name: xAxis.title },
           { field: valueField, name: yAxis.title },
           {
             field: PERCENT_FIELD,
@@ -306,15 +306,15 @@ export function useChartRender(
     }
 
     // 验证配置完整性
-    if (!currentConfig || !currentConfig.categoryField || !currentConfig.valueFields?.length) {
+    if (!currentConfig || !currentConfig.xField || !currentConfig.valueFields?.length) {
       console.warn('Chart config incomplete:', currentConfig)
       return
     }
 
     // 验证数据字段存在性
     const sampleData = currentData[0]
-    if (sampleData && !sampleData[currentConfig.categoryField]) {
-      console.warn(`Category field '${currentConfig.categoryField}' not found in data`)
+    if (sampleData && !sampleData[currentConfig.xField]) {
+      console.warn(`Category field '${currentConfig.xField}' not found in data`)
       return
     }
     if (sampleData && currentConfig.valueFields[0] && !sampleData[currentConfig.valueFields[0]]) {

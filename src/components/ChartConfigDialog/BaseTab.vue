@@ -76,10 +76,10 @@
       </el-select>
     </el-form-item>
     <!-- 纵轴 -->
-    <el-form-item prop="categoryField" label="纵轴（类别字段）">
-      <el-select v-model="chartConfig.categoryField" placeholder="请选择纵轴字段">
+    <el-form-item prop="xField" label="纵轴（值）">
+      <el-select v-model="chartConfig.xField" placeholder="请选择纵轴字段">
         <el-option
-          v-for="item in verticalAxisOptions"
+          v-for="item in horizontalAxisOptions"
           :key="item.prop"
           :label="item.label"
           :value="item.prop"
@@ -91,7 +91,7 @@
       </el-radio-group>
     </el-form-item>
     <!-- 横轴 -->
-    <el-form-item prop="valueFields" label="横轴（值）">
+    <el-form-item prop="valueFields" label="横轴">
       <el-select
         v-model="chartConfig.valueFields"
         multiple
@@ -99,7 +99,7 @@
         style="width: 100%"
       >
         <el-option
-          v-for="item in horizontalAxisOptions"
+          v-for="item in verticalAxisOptions"
           :key="item.prop"
           :label="item.label"
           :value="item.prop"
