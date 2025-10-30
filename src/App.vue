@@ -35,7 +35,7 @@ const dataSource = ref([
         sold: 350,
         value: 300,
       },
-      {
+      /* {
         name: 'Berlin',
         genre: '运动',
         sold: 120,
@@ -52,6 +52,44 @@ const dataSource = ref([
         genre: '射击',
         sold: 200,
         value: 600,
+      }, */
+    ],
+    columns: [
+      {
+        label: '类型',
+        prop: 'genre',
+      },
+      {
+        label: '销售量',
+        prop: 'sold',
+      },
+      {
+        label: '销售额',
+        prop: 'value',
+      },
+    ],
+  },
+  {
+    label: '数据集2',
+    value: 1,
+    tableData: [
+      {
+        name: 'London',
+        genre: '运动',
+        sold: 300,
+        value: 12,
+      },
+      {
+        name: 'London',
+        genre: '策略',
+        sold: 44,
+        value: 435,
+      },
+      {
+        name: 'London',
+        genre: '射击',
+        sold: 350,
+        value: 300,
       },
     ],
     columns: [
@@ -62,6 +100,10 @@ const dataSource = ref([
       {
         label: '销售量',
         prop: 'sold',
+      },
+      {
+        label: '销售额',
+        prop: 'value',
       },
     ],
   },
@@ -77,6 +119,11 @@ const showEditChart = (config: ChartConfig, index: number) => {
 // 获取当前图表对应的数据
 const getChartData = (config: ChartConfig): ChartDataItem[] => {
   return dataSource.value?.[config.dataSource || 0]?.tableData || []
+}
+
+// 获取当前图表对应的列定义
+const getChartColumns = (config: ChartConfig): { prop: string; label?: string }[] => {
+  return dataSource.value?.[config.dataSource || 0]?.columns || []
 }
 
 // 添加新图表
@@ -139,7 +186,8 @@ const renderChart = (chartId?: string) => {
   }
 
   const data = getChartData(config)
-  const { render, destroy } = useChartRender(ref(config), ref(data), ref(chartContainer))
+  const columns = getChartColumns(config)
+  const { render, destroy } = useChartRender(ref(config), ref(data), ref(chartContainer), ref(columns))
 
   try {
     render()

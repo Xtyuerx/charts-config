@@ -16,3 +16,8 @@ export function injectColumnTypes(columns: ColumnDef[], tableData: ChartDataItem
 export function generateChartId(): string {
   return `chart_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 }
+
+// 在columns中寻找series字段
+export function findSeriesField(columns: ColumnDef[], key: string[]): ColumnDef[] | void {
+  return columns.filter((col) => key.includes(col.prop))
+}

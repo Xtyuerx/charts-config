@@ -68,7 +68,6 @@ export const DEFAULT_CONFIG: ChartConfig = {
   xField: 'genre',
   categorySort: 'asc',
   valueFields: ['sold'],
-  categoryField: 'name',
   dataSource: 0,
   legend: {
     show: true,

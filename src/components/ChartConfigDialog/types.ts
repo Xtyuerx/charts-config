@@ -1,4 +1,4 @@
-import type { G2Spec, Encode, LegendComponent, ViewComposition } from '@antv/g2'
+import type { G2Spec, Encode, LegendComponent, ViewComposition, GaugeMark } from '@antv/g2'
 
 export type LabelComponent =
   | 'top'
@@ -102,4 +102,6 @@ export type ChartSpec = G2Spec & {
   buildChildren?: (cfg: ChartConfig) => ViewComposition['children']
   legend?: G2Spec['legend']
   children?: ViewComposition['children']
+  encode?: Encode
+  labels?: GaugeMark['labels']
 }

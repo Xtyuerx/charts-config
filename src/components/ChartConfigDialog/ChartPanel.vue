@@ -18,7 +18,11 @@ const tableData = computed<ChartDataItem[]>(
   () => dataSource?.[chartConfig.value.dataSource]?.tableData || [],
 )
 
-useChartRender(chartConfig, tableData, chartContainer)
+const columns = computed(
+  () => dataSource?.[chartConfig.value.dataSource]?.columns || [],
+)
+
+useChartRender(chartConfig, tableData, chartContainer, columns)
 </script>
 
 <style scoped>

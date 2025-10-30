@@ -1,7 +1,8 @@
 // components/ChartConfigDialog/hooks/useChartRender.ts
-import { ref, watch, onUnmounted, type Ref, unref } from 'vue'
+import { ref, watch, onUnmounted, type Ref, unref, computed } from 'vue'
 import { Chart } from '@antv/g2'
-import type { ChartConfig, ChartSubType, ChartSpec, ChartDataItem } from './types'
+import { injectColumnTypes } from './utils'
+import type { ChartConfig, ChartSubType, ChartSpec, ChartDataItem, ColumnDef } from './types'
 
 // ---------------- 常量定义 ----------------
 const PERCENT_FIELD = 'percent'
@@ -14,45 +15,86 @@ const subTypeMap: Record<ChartSubType, ChartSpec> = {
   // 柱状图
   bar_group: {
     type: 'interval',
-    buildEncode: (cfg) => ({
-      x: cfg.xField,
-      y: cfg.valueFields[0],
-    }),
+    buildEncode: (cfg) => {
+      // 多个纵轴值时，转换为长表格式并使用统一字段
+      if (cfg.valueFields.length > 1) {
+        return {
+          x: cfg.xField,
+          y: VALUE_FIELD,
+          color: SERIES_FIELD,
+        }
+      }
+      return {
+        x: cfg.xField,
+        y: cfg.valueFields[0],
+      }
+    },
     transform: [{ type: 'dodgeX' }],
   },
   bar_stacked: {
     type: 'interval',
+    buildEncode: (cfg) => {
+      // 多个纵轴值时，转换为长表格式并使用统一字段
+      if (cfg.valueFields.length > 1) {
+        return {
+          x: cfg.xField,
+          y: VALUE_FIELD,
+          color: SERIES_FIELD,
+        }
+      }
+      return {
+        x: cfg.xField,
+        y: cfg.valueFields[0],
+      }
+    },
     transform: [{ type: 'stackY' }],
-    buildEncode: (cfg) => ({
-      x: cfg.xField,
-      y: cfg.valueFields[0],
-    }),
   },
   bar_percent: {
     type: 'interval',
-    transform: [{ type: 'stackY' }],
     buildEncode: (cfg) => ({
       x: cfg.xField,
       y: PERCENT_FIELD,
+      color: cfg.valueFields.length > 1 ? SERIES_FIELD : undefined,
     }),
+    transform: [{ type: 'stackY' }],
   },
 
   // 折线图
   line: {
     type: 'view',
-    buildEncode: (cfg) => ({
-      x: cfg.xField,
-      y: cfg.valueFields[0],
-    }),
+    buildEncode: (cfg) => {
+      // 多个纵轴值时，转换为长表格式并使用统一字段
+      if (cfg.valueFields.length > 1) {
+        return {
+          x: cfg.xField,
+          y: VALUE_FIELD,
+          color: SERIES_FIELD,
+        }
+      }
+      return {
+        x: cfg.xField,
+        y: cfg.valueFields[0],
+      }
+    },
     style: { lineWidth: 2 },
     buildChildren: () => [{ type: 'line' }, { type: 'point', style: { fill: 'white' } }],
   },
   line_smooth: {
     type: 'view',
-    buildEncode: (cfg) => ({
-      x: cfg.xField,
-      y: cfg.valueFields[0],
-    }),
+    buildEncode: (cfg) => {
+      // 多个纵轴值时，转换为长表格式并使用统一字段
+      if (cfg.valueFields.length > 1) {
+        return {
+          x: cfg.xField,
+          y: VALUE_FIELD,
+          color: SERIES_FIELD,
+        }
+      }
+      return {
+        x: cfg.xField,
+        y: cfg.valueFields[0],
+      }
+    },
     buildChildren: () => [
       { type: 'line', style: { lineWidth: 2, shape: 'smooth' } },
       { type: 'point', style: { fill: 'white' } },
@@ -95,6 +137,18 @@ const getDefaultChartData = (): ChartDataItem[] => {
 
 // ---------------- 辅助函数 ----------------
 /**
+ * 根据字段名从 columns 中获取对应的 label
+ * @param field 字段名
+ * @param columns 列定义数组
+ * @returns 字段对应的 label，如果找不到则返回字段名本身
+ */
+const getFieldLabel = (field: string, columns?: { prop: string; label?: string }[]): string => {
+  if (!columns || !Array.isArray(columns)) return field
+  const column = columns.find((col) => col.prop === field)
+  return column?.label || field
+}
+
+/**
  * 判断是否为饼图类型
  */
 const isPieChartType = (subType: ChartSubType): boolean => {
@@ -133,6 +187,7 @@ const formatPercent = (value: number): string => {
 /**
  * 宽表转长表：将多个 valueFields 展开为多序列
  * 生成字段：xField、value（统一为数值字段）、series（序列名为原字段名）
+ * 保留所有原始字段，确保tooltip能显示完整信息
  */
 const wideToLong = (
   data: ChartDataItem[],
@@ -144,7 +199,15 @@ const wideToLong = (
     for (const field of valueFields) {
       const raw = Number(row[field] ?? 0)
       const value = Number.isFinite(raw) ? raw : 0
-      result.push({ ...row, [VALUE_FIELD]: value, [SERIES_FIELD]: field, [xField]: row[xField] })
+
+      // 创建新行，保留所有原始字段
+      const newRow: ChartDataItem & { [VALUE_FIELD]: number; [SERIES_FIELD]: string } = {
+        ...row,
+        [VALUE_FIELD]: value,
+        [SERIES_FIELD]: field,
+      }
+
+      result.push(newRow)
     }
   }
   return result
@@ -152,6 +215,7 @@ const wideToLong = (
 
 /**
  * 针对已为长表的数据，按组（如 xField）计算百分比字段
+ * 保留所有原始字段，确保tooltip能显示完整信息
  */
 const calculatePercentByGroup = (
   data: ChartDataItem[],
@@ -165,12 +229,15 @@ const calculatePercentByGroup = (
     const value = Number.isFinite(raw) ? raw : 0
     groupTotal.set(key, (groupTotal.get(key) ?? 0) + value)
   }
+
   return data.map((row) => {
     const key = String(row[groupField])
     const denom = groupTotal.get(key) ?? 0
     const raw = Number(row[yField] ?? 0)
     const value = Number.isFinite(raw) ? raw : 0
     const percent = denom > 0 ? value / denom : 0
+
+    // 保留所有原始字段，添加百分比字段
     return { ...row, [PERCENT_FIELD]: percent }
   })
 }
@@ -211,6 +278,7 @@ export function useChartRender(
   config: Ref<ChartConfig>,
   data: Ref<ChartDataItem[]> = ref(getDefaultChartData()),
   chartContainer = ref<HTMLDivElement | null>(null),
+  columns?: Ref<{ prop: string; label?: string }[]>,
 ) {
   let chartInstance: Chart | null = null
 
@@ -231,6 +299,12 @@ export function useChartRender(
     } = unref(config)
 
     const currentData = unref(data)
+    const horizontalAxisOptions = computed<ColumnDef[]>(() => {
+      return injectColumnTypes(unref(columns || []), currentData)
+    })
+    const verticalAxisOptions = computed<ColumnDef[]>(() => {
+      return horizontalAxisOptions.value.filter((c) => c.type === 'number')
+    })
 
     // 验证必要字段
     if (!valueFields || valueFields.length === 0) {
@@ -281,16 +355,24 @@ export function useChartRender(
     }
 
     // ---------- 编码构建 ----------
-    const encode: Record<string, unknown> = {
-      x: xField,
-      y: yFieldName,
-    }
-    if (isPieChart) {
-      encode.color = xField
-    } else if (multiSeries) {
-      encode.color = SERIES_FIELD
-    } else if (categoryField) {
-      encode.color = categoryField
+    // 使用子类型映射中定义的编码逻辑
+    const baseEncode =
+      typeof base.buildEncode === 'function'
+        ? base.buildEncode(unref(config))
+        : base.encode || { x: xField, y: yFieldName }
+
+    // 合并编码配置
+    const encode: Record<string, unknown> = { ...baseEncode }
+
+    // 如果子类型映射没有定义颜色编码，则使用默认逻辑
+    if (!encode.color) {
+      if (isPieChart) {
+        encode.color = xField
+      } else if (multiSeries) {
+        encode.color = SERIES_FIELD
+      } else if (categoryField) {
+        encode.color = categoryField
+      }
     }
 
     // 子元素（用于折线图等 view 组合）
@@ -303,19 +385,58 @@ export function useChartRender(
       autoFit: true,
       data: dataForSpec,
       encode,
-      legend: legend.show ? { position: legend.position } : false,
+      legend: legend.show
+        ? {
+            position: legend.position,
+            // 对于多纵轴值的情况，使用字段对应的 label 作为图例标题
+            ...(multiSeries
+              ? {}
+              : { label: getFieldLabel(firstValueField, verticalAxisOptions.value) }),
+          }
+        : false,
       tooltip: true,
       children,
+    }
+
+    // 处理动态转换
+    if (typeof base.transform === 'function') {
+      spec.transform = base.transform(unref(config))
     }
 
     // 百分比类图表：自定义 tooltip 百分比显示
     if (yFieldName === PERCENT_FIELD) {
       const items: Array<{ field: string; name: string; valueFormatter?: (v: number) => string }> =
         []
-      items.push({ field: xField, name: String(xAxis.title ?? xField) })
+      items.push({
+        field: xField,
+        name: getFieldLabel(xField, verticalAxisOptions.value) || String(xAxis.title ?? xField),
+      })
       if (multiSeries) items.push({ field: SERIES_FIELD, name: '系列' })
-      items.push({ field: firstValueField, name: String(yAxis.title ?? firstValueField) })
+
+      // 对于多纵轴值的情况，显示所有原始值字段
+      if (multiSeries) {
+        valueFields.forEach((field) => {
+          items.push({ field, name: getFieldLabel(field, verticalAxisOptions.value) })
+        })
+      } else {
+        items.push({
+          field: firstValueField,
+          name:
+            getFieldLabel(firstValueField, verticalAxisOptions.value) ||
+            String(yAxis.title ?? firstValueField),
+        })
+      }
+
       items.push({ field: PERCENT_FIELD, name: '占比', valueFormatter: formatPercent })
+      spec.tooltip = { items }
+    } else if (multiSeries) {
+      // 多纵轴值但非百分比图表，显示系列和值
+      const items: Array<{ field: string; name: string }> = []
+      console.log(getFieldLabel(xField, verticalAxisOptions.value))
+
+      valueFields.forEach((field, index) => {
+        items.push({ field, name: verticalAxisOptions.value[index]?.label || field })
+      })
       spec.tooltip = { items }
     }
 
@@ -350,7 +471,16 @@ export function useChartRender(
             text: (d: { percent?: number }) => formatPercent(d?.percent ?? 0),
           },
         })
+      } else if (multiSeries) {
+        // 多纵轴值：显示值
+        spec.labels = [
+          {
+            position: label.position,
+            text: VALUE_FIELD,
+          },
+        ]
       } else {
+        // 单纵轴值：显示对应的字段
         spec.labels = [
           {
             position: label.position,
@@ -432,7 +562,7 @@ export function useChartRender(
 
   // 监听变化自动更新
   watch(
-    [config.value, data.value],
+    [config, data, columns],
     () => {
       // 延迟一点确保 DOM 已挂载
       if (chartContainer.value) {
