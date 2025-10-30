@@ -76,10 +76,10 @@
       </el-select>
     </el-form-item>
     <!-- 纵轴 -->
-    <el-form-item prop="xField" label="纵轴（值）">
-      <el-select v-model="chartConfig.xField" placeholder="请选择纵轴字段">
+    <el-form-item prop="valueFields" label="纵轴（值）">
+      <el-select v-model="chartConfig.valueFields" placeholder="请选择纵轴字段" multiple>
         <el-option
-          v-for="item in horizontalAxisOptions"
+          v-for="item in verticalAxisOptions"
           :key="item.prop"
           :label="item.label"
           :value="item.prop"
@@ -91,15 +91,10 @@
       </el-radio-group>
     </el-form-item>
     <!-- 横轴 -->
-    <el-form-item prop="valueFields" label="横轴">
-      <el-select
-        v-model="chartConfig.valueFields"
-        multiple
-        placeholder="请选择横轴字段"
-        style="width: 100%"
-      >
+    <el-form-item prop="xField" label="横轴">
+      <el-select v-model="chartConfig.xField" placeholder="请选择横轴字段" style="width: 100%">
         <el-option
-          v-for="item in verticalAxisOptions"
+          v-for="item in horizontalAxisOptions"
           :key="item.prop"
           :label="item.label"
           :value="item.prop"
@@ -124,12 +119,12 @@ type ChartTypeItemMap = Record<ChartMainType, ChartTypeItem<ChartTypeIcon>>
 const dataSourceOptions = computed(() =>
   dataSource?.map((item) => ({ label: item.label, value: item.value })),
 )
-const verticalAxisOptions = computed<ColumnDef[]>(() => {
+const horizontalAxisOptions = computed<ColumnDef[]>(() => {
   const { columns = [], tableData = [] } = dataSource?.[chartConfig.value.dataSource] || {}
   return injectColumnTypes(columns, tableData)
 })
-const horizontalAxisOptions = computed<ColumnDef[]>(() => {
-  return verticalAxisOptions.value.filter((c) => c.type === 'number')
+const verticalAxisOptions = computed<ColumnDef[]>(() => {
+  return horizontalAxisOptions.value.filter((c) => c.type === 'number')
 })
 const chartTypesMap = computed<ChartTypeItemMap>(() =>
   CHART_TYPES.reduce((acc, cur) => ({ ...acc, [cur.name]: cur }), {} as ChartTypeItemMap),

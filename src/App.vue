@@ -21,31 +21,37 @@ const dataSource = ref([
         name: 'London',
         genre: '运动',
         sold: 275,
+        value: 100,
       },
       {
         name: 'London',
         genre: '策略',
         sold: 115,
+        value: 200,
       },
       {
         name: 'London',
         genre: '射击',
         sold: 350,
+        value: 300,
       },
       {
         name: 'Berlin',
         genre: '运动',
         sold: 120,
+        value: 400,
       },
       {
         name: 'Berlin',
         genre: '策略',
         sold: 350,
+        value: 500,
       },
       {
         name: 'Berlin',
         genre: '射击',
         sold: 200,
+        value: 600,
       },
     ],
     columns: [
