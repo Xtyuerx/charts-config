@@ -65,10 +65,9 @@ export const DEFAULT_CONFIG: ChartConfig = {
   type: 'bar',
   subType: 'bar_group',
   theme: COLOR_THEMES[0],
-  xField: 'genre',
+  xField: '',
   categorySort: 'asc',
-  valueFields: ['sold'],
-  dataSource: 0,
+  valueFields: [],
   legend: {
     show: true,
     position: 'top',
@@ -79,7 +78,7 @@ export const DEFAULT_CONFIG: ChartConfig = {
   },
   yAxis: {
     show: true,
-    title: '销售额',
+    title: '',
     min: 0,
     max: 1000,
     tickCount: 5,
@@ -87,7 +86,7 @@ export const DEFAULT_CONFIG: ChartConfig = {
   },
   xAxis: {
     show: true,
-    title: '产品类别',
+    title: '',
   },
   grid: {
     show: true,

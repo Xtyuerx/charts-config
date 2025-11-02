@@ -37,7 +37,7 @@ import { DEFAULT_CONFIG } from './constants'
 import ConfigForm from './ConfigForm.vue'
 import ChartPanel from './ChartPanel.vue'
 import { useChartConfig } from './useChartConfig'
-import type { ChartConfig, Props } from './types'
+import type { ChartConfig, Props, OptionFields } from './types'
 
 const { setConfig, chartConfig, reset } = useChartConfig()
 
@@ -45,24 +45,34 @@ const { setConfig, chartConfig, reset } = useChartConfig()
 const props = withDefaults(defineProps<Props>(), {
   visible: false,
   config: () => DEFAULT_CONFIG,
-  dataSource: () => [
+  dataSource: () => [],
+  dataSourceFields: () => [
     {
+      text: '数据集',
       label: '数据集',
+      key: 'dataset',
       value: 0,
-      tableData: [],
-      columns: [],
     },
   ],
-  xField: 'genre',
-  yField: 'sold',
+  xAxisFields: () => [],
+  yAxisFields: () => [],
 })
 
 const emit = defineEmits<{
   'update:visible': [value: boolean]
+  dataSourceChange: [value: OptionFields]
   confirm: [value: ChartConfig]
 }>()
 
-provide('dataSource', props.dataSource)
+const onDataSourceChange = (value: OptionFields) => {
+  emit('dataSourceChange', value)
+}
+
+provide('dataSource', computed(() => props.dataSource))
+provide('dataSourceFields', computed(() => props.dataSourceFields))
+provide('xAxisFields', computed(() => props.xAxisFields))
+provide('yAxisFields', computed(() => props.yAxisFields))
+provide('onDataSourceChange', onDataSourceChange)
 
 // ========================== 响应式状态 ==========================
 const configFormRef = ref<FormInstance>()

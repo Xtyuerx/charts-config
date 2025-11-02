@@ -1,10 +1,86 @@
 <script setup lang="ts">
 import { ref, onMounted, nextTick } from 'vue'
 import AddChart from '@/components/ChartConfigDialog/index.vue'
-import type { ChartConfig, ChartDataItem } from '@/components/ChartConfigDialog/types'
+import type { ChartConfig, OptionFields } from '@/components/ChartConfigDialog/types'
 import { useChartRender } from '@/components/ChartConfigDialog/useChartRender'
 import { DEFAULT_CONFIG } from '@/components/ChartConfigDialog/constants'
 import { generateChartId } from '@/components/ChartConfigDialog/utils'
+
+// mock远程数据
+const originData = {
+  /* 数据源下拉 */
+  dataSourceFields: [
+    {
+      text: 'dataSource1',
+      label: '数据源1',
+      key: 'axis1',
+      value: 100,
+    },
+    {
+      text: 'dataSource2',
+      label: '数据源2',
+      key: 'axis2',
+      value: 200,
+    },
+  ],
+  /* 横轴下拉 */
+  xAxisFields: [
+    {
+      text: 'xAxis1',
+      label: '横轴1',
+      key: 'axis1',
+      value: 'xAxis1',
+    },
+    {
+      text: 'xAxis2',
+      label: '横轴2',
+      key: 'axis2',
+      value: 'xAxis2',
+    },
+  ],
+  /* 纵轴下拉 */
+  yAxisFields: [
+    {
+      text: 'yAxis1',
+      label: '纵轴1',
+      key: 'axis1',
+      value: 'yAxis1',
+    },
+    {
+      text: 'yAxis2',
+      label: '纵轴2',
+      key: 'axis2',
+      value: 'yAxis2',
+    },
+  ],
+  /* 数据源 */
+  dataSource: [
+    {
+      xAxis1: 100,
+      xAxis2: 200,
+      yAxis1: 100,
+      yAxis2: 200,
+    },
+    {
+      xAxis1: 300,
+      xAxis2: 400,
+      yAxis1: 300,
+      yAxis2: 400,
+    },
+    {
+      xAxis1: 500,
+      xAxis2: 600,
+      yAxis1: 500,
+      yAxis2: 600,
+    },
+    {
+      xAxis1: 700,
+      xAxis2: 800,
+      yAxis1: 700,
+      yAxis2: 800,
+    },
+  ],
+}
 
 const dialogVisible = ref(false)
 const chartConfigs = ref<ChartConfig[]>([])
@@ -12,118 +88,18 @@ const chartRefs = ref<HTMLDivElement[]>([])
 const currentChartIndex = ref(0)
 const chartInstances = ref<Map<string, { render: () => void; destroy: () => void }>>(new Map())
 
-const dataSource = ref([
-  {
-    label: '数据集',
-    value: 0,
-    tableData: [
-      {
-        name: 'London',
-        genre: '运动',
-        sold: 275,
-        value: 100,
-      },
-      {
-        name: 'London',
-        genre: '策略',
-        sold: 115,
-        value: 200,
-      },
-      {
-        name: 'London',
-        genre: '射击',
-        sold: 350,
-        value: 300,
-      },
-      /* {
-        name: 'Berlin',
-        genre: '运动',
-        sold: 120,
-        value: 400,
-      },
-      {
-        name: 'Berlin',
-        genre: '策略',
-        sold: 350,
-        value: 500,
-      },
-      {
-        name: 'Berlin',
-        genre: '射击',
-        sold: 200,
-        value: 600,
-      }, */
-    ],
-    columns: [
-      {
-        label: '类型',
-        prop: 'genre',
-      },
-      {
-        label: '销售量',
-        prop: 'sold',
-      },
-      {
-        label: '销售额',
-        prop: 'value',
-      },
-    ],
-  },
-  {
-    label: '数据集2',
-    value: 1,
-    tableData: [
-      {
-        name: 'London',
-        genre: '运动',
-        sold: 300,
-        value: 12,
-      },
-      {
-        name: 'London',
-        genre: '策略',
-        sold: 44,
-        value: 435,
-      },
-      {
-        name: 'London',
-        genre: '射击',
-        sold: 350,
-        value: 300,
-      },
-    ],
-    columns: [
-      {
-        label: '类型',
-        prop: 'genre',
-      },
-      {
-        label: '销售量',
-        prop: 'sold',
-      },
-      {
-        label: '销售额',
-        prop: 'value',
-      },
-    ],
-  },
-])
+const dataSource = ref()
+const dataSourceFields = ref<OptionFields[]>()
+
+const xAxisFields = ref<OptionFields[]>(originData.xAxisFields)
+
+const yAxisFields = ref<OptionFields[]>(originData.yAxisFields)
 
 // 编辑图表配置
 const showEditChart = (config: ChartConfig, index: number) => {
   currentChartIndex.value = index
   chartConfigs.value[index] = { ...config }
   dialogVisible.value = true
-}
-
-// 获取当前图表对应的数据
-const getChartData = (config: ChartConfig): ChartDataItem[] => {
-  return dataSource.value?.[config.dataSource || 0]?.tableData || []
-}
-
-// 获取当前图表对应的列定义
-const getChartColumns = (config: ChartConfig): { prop: string; label?: string }[] => {
-  return dataSource.value?.[config.dataSource || 0]?.columns || []
 }
 
 // 添加新图表
@@ -185,9 +161,7 @@ const renderChart = (chartId?: string) => {
     existingInstance.destroy()
   }
 
-  const data = getChartData(config)
-  const columns = getChartColumns(config)
-  const { render, destroy } = useChartRender(ref(config), ref(data), ref(chartContainer), ref(columns))
+  const { render, destroy } = useChartRender(ref(config))
 
   try {
     render()
@@ -213,6 +187,16 @@ const handleConfirm = (config: ChartConfig) => {
   addChart(config)
 }
 
+const handleDataSourceChange = (data: OptionFields) => {
+  console.log('data', data)
+  // TODO 处理数据源变化
+  xAxisFields.value = originData.xAxisFields
+  yAxisFields.value = originData.yAxisFields
+  console.log('xAxisFields', xAxisFields.value, 'yAxisFields', yAxisFields.value)
+  // TODO: 请求数据源对应的数据
+  dataSource.value = originData.dataSource
+}
+
 onMounted(() => {
   // 初始渲染所有图表
   nextTick(() => {
@@ -236,8 +220,12 @@ onMounted(() => {
     <AddChart
       v-model:visible="dialogVisible"
       :config="chartConfigs[currentChartIndex]"
-      :dataSource="dataSource"
+      :data-source="dataSource"
+      :data-source-fields="dataSourceFields"
+      :x-axis-fields="xAxisFields"
+      :y-axis-fields="yAxisFields"
       @confirm="handleConfirm"
+      @dataSourceChange="handleDataSourceChange"
     />
 
     <!-- 图表容器 -->

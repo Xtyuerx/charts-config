@@ -3,26 +3,20 @@
 </template>
 
 <script lang="ts" setup>
-import { inject, computed, ref } from 'vue'
+import { inject, ref } from 'vue'
 import { useChartRender } from './useChartRender'
 import { useChartConfig } from './useChartConfig'
-import type { Props, ChartDataItem } from './types'
+import type { Props } from './types'
 
 const { chartConfig } = useChartConfig()
 
 const dataSource = inject<Props['dataSource']>('dataSource')
+const xAxisFields = inject<Props['xAxisFields']>('xAxisFields')
+const yAxisFields = inject<Props['yAxisFields']>('yAxisFields')
 
 const chartContainer = ref<HTMLDivElement | null>(null)
 
-const tableData = computed<ChartDataItem[]>(
-  () => dataSource?.[chartConfig.value.dataSource]?.tableData || [],
-)
-
-const columns = computed(
-  () => dataSource?.[chartConfig.value.dataSource]?.columns || [],
-)
-
-useChartRender(chartConfig, tableData, chartContainer, columns)
+useChartRender(chartConfig, ref(dataSource), chartContainer, ref(xAxisFields), ref(yAxisFields))
 </script>
 
 <style scoped>

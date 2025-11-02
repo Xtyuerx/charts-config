@@ -66,9 +66,14 @@
     </el-form-item>
     <!-- 数据源 -->
     <el-form-item prop="dataSource" label="数据源">
-      <el-select v-model="chartConfig.dataSource" placeholder="请选择数据源" style="width: 100%">
+      <el-select
+        v-model="chartConfig.dataSource"
+        placeholder="请选择数据源"
+        style="width: 100%"
+        @change="handleDataSourceChange"
+      >
         <el-option
-          v-for="item in dataSourceOptions"
+          v-for="item in dataSourceFields"
           :key="item.value"
           :label="item.label"
           :value="item.value"
@@ -79,10 +84,10 @@
     <el-form-item prop="valueFields" label="纵轴（值）">
       <el-select v-model="chartConfig.valueFields" placeholder="请选择纵轴字段" multiple>
         <el-option
-          v-for="item in verticalAxisOptions"
-          :key="item.prop"
+          v-for="item in xAxisFields"
+          :key="item.key"
           :label="item.label"
-          :value="item.prop"
+          :value="item.value"
         />
       </el-select>
       <el-radio-group v-model="chartConfig.categorySort" style="margin-left: 10px">
@@ -94,10 +99,10 @@
     <el-form-item prop="xField" label="横轴">
       <el-select v-model="chartConfig.xField" placeholder="请选择横轴字段" style="width: 100%">
         <el-option
-          v-for="item in horizontalAxisOptions"
-          :key="item.prop"
+          v-for="item in yAxisFields"
+          :key="item.key"
           :label="item.label"
-          :value="item.prop"
+          :value="item.value"
         />
       </el-select>
     </el-form-item>
@@ -105,27 +110,20 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, inject } from 'vue'
+import { computed, inject, type Ref } from 'vue'
+import { type ElSelect } from 'element-plus'
 import { COLOR_THEMES, CHART_TYPES, CURRENT_CHART_MAP, type ChartTypeIcon } from './constants'
 import { useChartConfig } from './useChartConfig'
-import type { ColumnDef, ChartMainType, ChartTypeItem, ChartSubType, Props } from './types'
-import { injectColumnTypes } from './utils'
+import type { ChartMainType, ChartTypeItem, ChartSubType, Props, OptionFields } from './types'
 
-const dataSource = inject<Props['dataSource']>('dataSource')
+const dataSourceFields = inject<Ref<Props['dataSourceFields']>>('dataSourceFields')
+const xAxisFields = inject<Ref<Props['xAxisFields']>>('xAxisFields')
+const yAxisFields = inject<Ref<Props['yAxisFields']>>('yAxisFields')
+const onDataSourceChange = inject<(data: OptionFields | undefined) => void>('onDataSourceChange')
 const { chartConfig } = useChartConfig()
 
 type ChartTypeItemMap = Record<ChartMainType, ChartTypeItem<ChartTypeIcon>>
 
-const dataSourceOptions = computed(() =>
-  dataSource?.map((item) => ({ label: item.label, value: item.value })),
-)
-const horizontalAxisOptions = computed<ColumnDef[]>(() => {
-  const { columns = [], tableData = [] } = dataSource?.[chartConfig.value.dataSource] || {}
-  return injectColumnTypes(columns, tableData)
-})
-const verticalAxisOptions = computed<ColumnDef[]>(() => {
-  return horizontalAxisOptions.value.filter((c) => c.type === 'number')
-})
 const chartTypesMap = computed<ChartTypeItemMap>(() =>
   CHART_TYPES.reduce((acc, cur) => ({ ...acc, [cur.name]: cur }), {} as ChartTypeItemMap),
 )
@@ -141,6 +139,11 @@ const handleCheckedChartType = (type: ChartSubType) => {
 }
 
 const currentChartTypes = computed(() => CURRENT_CHART_MAP[chartConfig.value.type])
+
+const handleDataSourceChange = (value: string) => {
+  const current = dataSourceFields?.value?.find((item) => item.value === value)
+  onDataSourceChange?.(current)
+}
 </script>
 
 <style lang="scss" scoped>

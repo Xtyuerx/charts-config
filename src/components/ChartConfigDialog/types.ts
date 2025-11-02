@@ -21,18 +21,26 @@ export type ChartSubType =
   | 'pie'
   | 'pie_donut'
 
+export type OptionFields = {
+  text: string // 数据源文本
+  label: string // 数据源标签
+  key: string // 数据源键
+  value: number | string // 数据源值
+}
+
 export interface Props {
-  visible: boolean
-  config?: ChartConfig
-  dataSource: {
-    label: string
-    value: number
-    tableData: ChartDataItem[]
-    columns: ColumnDef[]
-  }[]
+  visible: boolean // 是否显示
+  config?: ChartConfig // 图表配置
+  dataSource?: ChartDataItem[] // 数据源
+  dataSourceFields?: OptionFields[] // 数据源下拉
+  xAxisFields?: OptionFields[] // 横轴下拉
+  yAxisFields?: OptionFields[] // 纵轴下拉
 }
 
 export type ChartDataItem = Record<string, unknown>
+
+export type ChartStatus = 'loading' | 'success' | 'error'
+
 export interface ChartConfig {
   id?: string // 图表id
   title?: string // 图表标题
@@ -47,7 +55,7 @@ export interface ChartConfig {
   categorySort?: 'asc' | 'desc' // 分类排序
   valueFields: string[] // 值字段
   categoryField?: string // 分类字段
-  dataSource: number // 数据源
+  dataSource?: number | string // 数据源
   /* 图例 */
   legend: {
     show: boolean // 是否显示
@@ -79,29 +87,29 @@ export interface ChartConfig {
 }
 
 export interface ChartTypeItem<T> {
-  name: ChartMainType
-  label: string
-  icon: T
+  name: ChartMainType // 图表主类型
+  label: string // 图表主类型标签
+  icon: T // 图表主类型图标
 }
 
 export interface CheckedChartTypeItem {
-  label: string
-  imageURL: string
-  name: ChartSubType
+  label: string // 图表子类型标签
+  imageURL: string // 图表子类型图标
+  name: ChartSubType // 图表子类型
 }
 
 export interface ColumnDef {
-  prop: string
-  label?: string
-  type?: string
+  prop: string // 列属性
+  label?: string // 列标签
+  type?: string // 列类型
 }
 
 // G2 v5 声明式配置结构
 export type ChartSpec = G2Spec & {
-  buildEncode?: (cfg: ChartConfig) => Encode
-  buildChildren?: (cfg: ChartConfig) => ViewComposition['children']
-  legend?: G2Spec['legend']
-  children?: ViewComposition['children']
-  encode?: Encode
-  labels?: GaugeMark['labels']
+  buildEncode?: (cfg: ChartConfig) => Encode // 构建编码
+  buildChildren?: (cfg: ChartConfig) => ViewComposition['children'] // 构建子视图
+  legend?: G2Spec['legend'] // 图例
+  children?: ViewComposition['children'] // 子视图
+  encode?: Encode // 编码
+  labels?: GaugeMark['labels'] // 标签
 }

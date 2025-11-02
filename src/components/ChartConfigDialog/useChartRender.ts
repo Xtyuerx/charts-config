@@ -1,8 +1,14 @@
 // components/ChartConfigDialog/hooks/useChartRender.ts
-import { ref, watch, onUnmounted, type Ref, unref, computed } from 'vue'
+import { ref, watch, onUnmounted, type Ref, unref } from 'vue'
 import { Chart } from '@antv/g2'
-import { injectColumnTypes } from './utils'
-import type { ChartConfig, ChartSubType, ChartSpec, ChartDataItem, ColumnDef } from './types'
+import type {
+  ChartConfig,
+  ChartSubType,
+  ChartSpec,
+  ChartDataItem,
+  OptionFields,
+  ChartStatus,
+} from './types'
 
 // ---------------- 常量定义 ----------------
 const PERCENT_FIELD = 'percent'
@@ -142,9 +148,9 @@ const getDefaultChartData = (): ChartDataItem[] => {
  * @param columns 列定义数组
  * @returns 字段对应的 label，如果找不到则返回字段名本身
  */
-const getFieldLabel = (field: string, columns?: { prop: string; label?: string }[]): string => {
+const getFieldLabel = (field: string, columns?: OptionFields[]): string => {
   if (!columns || !Array.isArray(columns)) return field
-  const column = columns.find((col) => col.prop === field)
+  const column = columns.find((col) => col.key === field)
   return column?.label || field
 }
 
@@ -276,11 +282,13 @@ const aggregateForPie = (
 // ---------------- Hook 核心 ----------------
 export function useChartRender(
   config: Ref<ChartConfig>,
-  data: Ref<ChartDataItem[]> = ref(getDefaultChartData()),
+  data: Ref<ChartDataItem[] | undefined> = ref(getDefaultChartData()),
   chartContainer = ref<HTMLDivElement | null>(null),
-  columns?: Ref<{ prop: string; label?: string }[]>,
+  xFields?: Ref<OptionFields[] | undefined>,
+  yFields?: Ref<OptionFields[] | undefined>,
 ) {
   let chartInstance: Chart | null = null
+  const status = ref<ChartStatus>('loading')
 
   // 生成 G2 配置
   const buildChartSpec = (): ChartSpec => {
@@ -298,13 +306,7 @@ export function useChartRender(
       title,
     } = unref(config)
 
-    const currentData = unref(data)
-    const horizontalAxisOptions = computed<ColumnDef[]>(() => {
-      return injectColumnTypes(unref(columns || []), currentData)
-    })
-    const verticalAxisOptions = computed<ColumnDef[]>(() => {
-      return horizontalAxisOptions.value.filter((c) => c.type === 'number')
-    })
+    const currentData = unref(data) || []
 
     // 验证必要字段
     if (!valueFields || valueFields.length === 0) {
@@ -389,9 +391,7 @@ export function useChartRender(
         ? {
             position: legend.position,
             // 对于多纵轴值的情况，使用字段对应的 label 作为图例标题
-            ...(multiSeries
-              ? {}
-              : { label: getFieldLabel(firstValueField, verticalAxisOptions.value) }),
+            ...(multiSeries ? {} : { label: getFieldLabel(firstValueField, yFields?.value) }),
           }
         : false,
       tooltip: true,
@@ -409,20 +409,20 @@ export function useChartRender(
         []
       items.push({
         field: xField,
-        name: getFieldLabel(xField, verticalAxisOptions.value) || String(xAxis.title ?? xField),
+        name: getFieldLabel(xField, xFields?.value) || String(xAxis.title ?? xField),
       })
       if (multiSeries) items.push({ field: SERIES_FIELD, name: '系列' })
 
       // 对于多纵轴值的情况，显示所有原始值字段
       if (multiSeries) {
         valueFields.forEach((field) => {
-          items.push({ field, name: getFieldLabel(field, verticalAxisOptions.value) })
+          items.push({ field, name: getFieldLabel(field, yFields?.value) || field })
         })
       } else {
         items.push({
           field: firstValueField,
           name:
-            getFieldLabel(firstValueField, verticalAxisOptions.value) ||
+            getFieldLabel(firstValueField, yFields?.value) ||
             String(yAxis.title ?? firstValueField),
         })
       }
@@ -432,10 +432,10 @@ export function useChartRender(
     } else if (multiSeries) {
       // 多纵轴值但非百分比图表，显示系列和值
       const items: Array<{ field: string; name: string }> = []
-      console.log(getFieldLabel(xField, verticalAxisOptions.value))
+      console.log(getFieldLabel(xField, xFields?.value))
 
-      valueFields.forEach((field, index) => {
-        items.push({ field, name: verticalAxisOptions.value[index]?.label || field })
+      valueFields.forEach((field) => {
+        items.push({ field, name: getFieldLabel(field, yFields?.value) || field })
       })
       spec.tooltip = { items }
     }
@@ -501,17 +501,20 @@ export function useChartRender(
     // 确保容器已挂载且有数据
     if (!chartContainer.value) {
       console.warn('Chart container not mounted yet')
+      status.value = 'loading'
       return
     }
 
     if (!currentData?.length) {
       console.warn('No data to render')
+      status.value = 'error'
       return
     }
 
     // 验证配置完整性
     if (!currentConfig || !currentConfig.xField || !currentConfig.valueFields?.length) {
       console.warn('Chart config incomplete:', currentConfig)
+      status.value = 'loading'
       return
     }
 
@@ -519,6 +522,7 @@ export function useChartRender(
     const sampleData = currentData[0]
     if (sampleData && !sampleData[currentConfig.xField]) {
       console.warn(`Category field '${currentConfig.xField}' not found in data`)
+      status.value = 'error'
       return
     }
     const isMulti = Array.isArray(currentConfig.valueFields) && currentConfig.valueFields.length > 1
@@ -562,7 +566,7 @@ export function useChartRender(
 
   // 监听变化自动更新
   watch(
-    [config, data, columns],
+    [config, data, xFields, yFields],
     () => {
       // 延迟一点确保 DOM 已挂载
       if (chartContainer.value) {
