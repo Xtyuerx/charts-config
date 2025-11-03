@@ -57,27 +57,27 @@ const originData = {
   dataSource: [
     {
       xAxis1: 100,
-      xAxis2: 200,
+      xAxis2: 123,
       yAxis1: 100,
-      yAxis2: 200,
+      yAxis2: 213,
     },
     {
       xAxis1: 300,
-      xAxis2: 400,
+      xAxis2: 532,
       yAxis1: 300,
-      yAxis2: 400,
+      yAxis2: 444,
     },
     {
       xAxis1: 500,
-      xAxis2: 600,
+      xAxis2: 653,
       yAxis1: 500,
-      yAxis2: 600,
+      yAxis2: 111,
     },
     {
       xAxis1: 700,
-      xAxis2: 800,
+      xAxis2: 853,
       yAxis1: 700,
-      yAxis2: 800,
+      yAxis2: 122,
     },
   ],
 }
@@ -88,8 +88,8 @@ const chartRefs = ref<HTMLDivElement[]>([])
 const currentChartIndex = ref(0)
 const chartInstances = ref<Map<string, { render: () => void; destroy: () => void }>>(new Map())
 
-const dataSource = ref()
-const dataSourceFields = ref<OptionFields[]>()
+const dataSource = ref(originData.dataSource)
+const dataSourceFields = ref<OptionFields[]>(originData.dataSourceFields)
 
 const xAxisFields = ref<OptionFields[]>(originData.xAxisFields)
 
@@ -149,9 +149,8 @@ const renderChart = (chartId?: string) => {
   const config = chartConfigs.value.find((c) => c.id === chartId)
   if (!config) return
 
-  const chartContainer = chartRefs.value.find(
-    (_, index) => chartConfigs.value[index]?.id === chartId,
-  )
+  const index = chartConfigs.value.findIndex((c) => c.id === chartId)
+  const chartContainer = chartRefs.value[index]
 
   if (!chartContainer) return
 
@@ -161,7 +160,13 @@ const renderChart = (chartId?: string) => {
     existingInstance.destroy()
   }
 
-  const { render, destroy } = useChartRender(ref(config))
+  const { render, destroy } = useChartRender(
+    ref(config),
+    dataSource,
+    ref(chartContainer),
+    xAxisFields,
+    yAxisFields,
+  )
 
   try {
     render()

@@ -61,6 +61,8 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   'update:visible': [value: boolean]
   dataSourceChange: [value: OptionFields]
+  xFieldsChange: [value: OptionFields]
+  yFieldsChange: [value: OptionFields[]]
   confirm: [value: ChartConfig]
 }>()
 
@@ -68,11 +70,33 @@ const onDataSourceChange = (value: OptionFields) => {
   emit('dataSourceChange', value)
 }
 
-provide('dataSource', computed(() => props.dataSource))
-provide('dataSourceFields', computed(() => props.dataSourceFields))
-provide('xAxisFields', computed(() => props.xAxisFields))
-provide('yAxisFields', computed(() => props.yAxisFields))
+const onXFieldsChange = (value: OptionFields) => {
+  emit('xFieldsChange', value)
+}
+
+const onYFieldsChange = (value: OptionFields[]) => {
+  emit('yFieldsChange', value)
+}
+
+provide(
+  'dataSource',
+  computed(() => props.dataSource),
+)
+provide(
+  'dataSourceFields',
+  computed(() => props.dataSourceFields),
+)
+provide(
+  'xAxisFields',
+  computed(() => props.xAxisFields),
+)
+provide(
+  'yAxisFields',
+  computed(() => props.yAxisFields),
+)
 provide('onDataSourceChange', onDataSourceChange)
+provide('onXFieldsChange', onXFieldsChange)
+provide('onYFieldsChange', onYFieldsChange)
 
 // ========================== 响应式状态 ==========================
 const configFormRef = ref<FormInstance>()

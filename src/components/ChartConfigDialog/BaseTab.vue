@@ -82,9 +82,14 @@
     </el-form-item>
     <!-- 纵轴 -->
     <el-form-item prop="valueFields" label="纵轴（值）">
-      <el-select v-model="chartConfig.valueFields" placeholder="请选择纵轴字段" multiple>
+      <el-select
+        v-model="chartConfig.valueFields"
+        placeholder="请选择纵轴字段"
+        multiple
+        @change="handleValueFieldsChange"
+      >
         <el-option
-          v-for="item in xAxisFields"
+          v-for="item in yAxisFields"
           :key="item.key"
           :label="item.label"
           :value="item.value"
@@ -96,10 +101,10 @@
       </el-radio-group>
     </el-form-item>
     <!-- 横轴 -->
-    <el-form-item prop="xField" label="横轴">
+    <el-form-item prop="xField" label="横轴" @change="handleXFieldChange">
       <el-select v-model="chartConfig.xField" placeholder="请选择横轴字段" style="width: 100%">
         <el-option
-          v-for="item in yAxisFields"
+          v-for="item in xAxisFields"
           :key="item.key"
           :label="item.label"
           :value="item.value"
@@ -120,6 +125,8 @@ const dataSourceFields = inject<Ref<Props['dataSourceFields']>>('dataSourceField
 const xAxisFields = inject<Ref<Props['xAxisFields']>>('xAxisFields')
 const yAxisFields = inject<Ref<Props['yAxisFields']>>('yAxisFields')
 const onDataSourceChange = inject<(data: OptionFields | undefined) => void>('onDataSourceChange')
+const onYFieldsChange = inject<(value: OptionFields[] | undefined) => void>('onYFieldsChange')
+const onXFieldsChange = inject<(value: OptionFields | undefined) => void>('onXFieldsChange')
 const { chartConfig } = useChartConfig()
 
 type ChartTypeItemMap = Record<ChartMainType, ChartTypeItem<ChartTypeIcon>>
@@ -143,6 +150,16 @@ const currentChartTypes = computed(() => CURRENT_CHART_MAP[chartConfig.value.typ
 const handleDataSourceChange = (value: string) => {
   const current = dataSourceFields?.value?.find((item) => item.value === value)
   onDataSourceChange?.(current)
+}
+
+const handleValueFieldsChange = (value: string[]) => {
+  const current = yAxisFields?.value?.filter((item) => value.includes(item.value as string))
+  onYFieldsChange?.(current)
+}
+
+const handleXFieldChange = (value: string) => {
+  const current = xAxisFields?.value?.find((item) => item.value === value)
+  onXFieldsChange?.(current)
 }
 </script>
 

@@ -150,7 +150,7 @@ const getDefaultChartData = (): ChartDataItem[] => {
  */
 const getFieldLabel = (field: string, columns?: OptionFields[]): string => {
   if (!columns || !Array.isArray(columns)) return field
-  const column = columns.find((col) => col.key === field)
+  const column = columns.find((col) => col.value === field)
   return column?.label || field
 }
 
@@ -197,8 +197,8 @@ const formatPercent = (value: number): string => {
  */
 const wideToLong = (
   data: ChartDataItem[],
-  xField: string,
   valueFields: string[],
+  yFields?: OptionFields[],
 ): Array<ChartDataItem & { [VALUE_FIELD]: number; [SERIES_FIELD]: string }> => {
   const result: Array<ChartDataItem & { [VALUE_FIELD]: number; [SERIES_FIELD]: string }> = []
   for (const row of data) {
@@ -210,7 +210,7 @@ const wideToLong = (
       const newRow: ChartDataItem & { [VALUE_FIELD]: number; [SERIES_FIELD]: string } = {
         ...row,
         [VALUE_FIELD]: value,
-        [SERIES_FIELD]: field,
+        [SERIES_FIELD]: getFieldLabel(field, yFields) || field,
       }
 
       result.push(newRow)
@@ -334,7 +334,7 @@ export function useChartRender(
     } else {
       if (multiSeries) {
         // 宽转长，得到统一的 VALUE_FIELD 与 SERIES_FIELD
-        const longData = wideToLong(currentData, xField, valueFields)
+        const longData = wideToLong(currentData, valueFields, yFields?.value)
         // 百分比柱状图：按 x 分组转百分比
         if (subType === 'bar_percent') {
           dataForSpec = calculatePercentByGroup(longData, VALUE_FIELD, xField)
@@ -432,7 +432,6 @@ export function useChartRender(
     } else if (multiSeries) {
       // 多纵轴值但非百分比图表，显示系列和值
       const items: Array<{ field: string; name: string }> = []
-      console.log(getFieldLabel(xField, xFields?.value))
 
       valueFields.forEach((field) => {
         items.push({ field, name: getFieldLabel(field, yFields?.value) || field })
@@ -447,10 +446,16 @@ export function useChartRender(
 
     // 饼图不需要轴配置
     if (!isPieChart) {
-      const xAxisConfig = xAxis.show ? { title: xAxis.title } : false
+      const xAxisConfig = xAxis.show
+        ? { title: xAxis.title || getFieldLabel(xField, xFields?.value) }
+        : false
       const yAxisConfig = yAxis.show
         ? {
-            title: yAxis.title,
+            title:
+              yAxis.title ||
+              (multiSeries
+                ? '值'
+                : getFieldLabel(firstValueField, yFields?.value) || firstValueField),
             tickCount: yAxis.tickCount,
             ...(grid.show ? {} : { grid: false }),
           }
