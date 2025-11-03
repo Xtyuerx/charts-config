@@ -206,6 +206,8 @@ const wideToLong = (
   
   // 如果字段type为count，根据横轴分类统计每个分类下该字段非空值的行数
   const categoryCounts: Record<string, Record<string, number>> = {}
+  const uniqueCategories = new Set<string>()
+  
   if (yFields && xField) {
     for (const field of valueFields) {
       const fieldConfig = yFields.find(f => f.value === field)
@@ -214,6 +216,7 @@ const wideToLong = (
         // 按横轴字段分组统计
         for (const row of data) {
           const category = String(row[xField])
+          uniqueCategories.add(category)
           if (!categoryCounts[field][category]) {
             categoryCounts[field][category] = 0
           }
@@ -226,33 +229,74 @@ const wideToLong = (
     }
   }
   
-  for (const row of data) {
-    for (const field of valueFields) {
-      let value = 0
+  // 检查是否所有字段都是count类型
+  const allCountFields = yFields && xField && valueFields.every(field => 
+    yFields.find(f => f.value === field)?.type === 'count'
+  )
+  
+  // 如果所有字段都是count类型，为每个分类创建唯一的数据行
+  if (allCountFields && uniqueCategories.size > 0) {
+    for (const category of uniqueCategories) {
+      // 找到该分类的第一行数据作为基础
+      const baseRow = data.find(row => String(row[xField]) === category) || {}
       
-      // 获取字段配置
-      const fieldConfig = yFields?.find(f => f.value === field)
-      
-      if (fieldConfig?.type === 'count' && xField) {
-        // 如果是count类型，使用按横轴分类统计的值
-        const category = String(row[xField])
-        value = categoryCounts[field]?.[category] || 0
-      } else {
-        // 如果是value类型，使用原始值
-        const raw = Number(row[field] ?? 0)
-        value = Number.isFinite(raw) ? raw : 0
-      }
+      for (const field of valueFields) {
+        let value = 0
+        
+        // 获取字段配置
+        const fieldConfig = yFields?.find(f => f.value === field)
+        
+        if (fieldConfig?.type === 'count') {
+          // 如果是count类型，使用按横轴分类统计的值
+          value = categoryCounts[field]?.[category] || 0
+        } else {
+          // 如果是value类型，使用原始值
+          const raw = Number(baseRow[field] ?? 0)
+          value = Number.isFinite(raw) ? raw : 0
+        }
 
-      // 创建新行，保留所有原始字段
-      const newRow: ChartDataItem & { [VALUE_FIELD]: number; [SERIES_FIELD]: string } = {
-        ...row,
-        [VALUE_FIELD]: value,
-        [SERIES_FIELD]: getFieldLabel(field, yFields) || field,
-      }
+        // 创建新行，保留所有原始字段
+        const newRow: ChartDataItem & { [VALUE_FIELD]: number; [SERIES_FIELD]: string } = {
+          ...baseRow,
+          [xField]: category,
+          [VALUE_FIELD]: value,
+          [SERIES_FIELD]: getFieldLabel(field, yFields) || field,
+        }
 
-      result.push(newRow)
+        result.push(newRow)
+      }
+    }
+  } else {
+    // 如果不是所有字段都是count类型，使用原始逻辑
+    for (const row of data) {
+      for (const field of valueFields) {
+        let value = 0
+        
+        // 获取字段配置
+        const fieldConfig = yFields?.find(f => f.value === field)
+        
+        if (fieldConfig?.type === 'count' && xField) {
+          // 如果是count类型，使用按横轴分类统计的值
+          const category = String(row[xField])
+          value = categoryCounts[field]?.[category] || 0
+        } else {
+          // 如果是value类型，使用原始值
+          const raw = Number(row[field] ?? 0)
+          value = Number.isFinite(raw) ? raw : 0
+        }
+
+        // 创建新行，保留所有原始字段
+        const newRow: ChartDataItem & { [VALUE_FIELD]: number; [SERIES_FIELD]: string } = {
+          ...row,
+          [VALUE_FIELD]: value,
+          [SERIES_FIELD]: getFieldLabel(field, yFields) || field,
+        }
+
+        result.push(newRow)
+      }
     }
   }
+  
   return result
 }
 
@@ -433,9 +477,12 @@ export function useChartRender(
           if (fieldConfig?.type === 'count') {
             // 如果是count类型，根据横轴分类统计每个分类下该字段非空值的行数
             const categoryCounts: Record<string, number> = {}
+            const uniqueCategories = new Set<string>()
+            
             // 按横轴字段分组统计
             for (const row of currentData) {
               const category = String(row[xField])
+              uniqueCategories.add(category)
               if (!categoryCounts[category]) {
                 categoryCounts[category] = 0
               }
@@ -444,11 +491,14 @@ export function useChartRender(
                 categoryCounts[category] += 1
               }
             }
-            // 创建一个新数据集，每行都有对应的分类计数值
-            dataForSpec = currentData.map(row => {
-              const category = String(row[xField])
+            
+            // 创建一个去重后的数据集，每个分类只保留一行数据，避免label重复渲染
+            dataForSpec = Array.from(uniqueCategories).map(category => {
+              // 找到该分类的第一行数据作为基础
+              const baseRow = currentData.find(row => String(row[xField]) === category) || {}
               return {
-                ...row,
+                ...baseRow,
+                [xField]: category,
                 [firstValueField]: categoryCounts[category] || 0
               }
             })
