@@ -90,7 +90,7 @@
       >
         <el-option
           v-for="item in yAxisFields"
-          :key="item.key"
+          :key="item.value"
           :label="item.label"
           :value="item.value"
         />
@@ -105,7 +105,7 @@
       <el-select v-model="chartConfig.xField" placeholder="请选择横轴字段" style="width: 100%">
         <el-option
           v-for="item in xAxisFields"
-          :key="item.key"
+          :key="item.value"
           :label="item.label"
           :value="item.value"
         />

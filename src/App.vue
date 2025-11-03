@@ -56,26 +56,26 @@ const originData = {
   /* 数据源 */
   dataSource: [
     {
-      xAxis1: 100,
-      xAxis2: 123,
+      xAxis1: '分类1',
+      xAxis2: '类别1',
       yAxis1: 100,
       yAxis2: 213,
     },
     {
-      xAxis1: 300,
-      xAxis2: 532,
+      xAxis1: '分类2',
+      xAxis2: '类别2',
       yAxis1: 300,
       yAxis2: 444,
     },
     {
-      xAxis1: 500,
-      xAxis2: 653,
+      xAxis1: '分类3',
+      xAxis2: '类别3',
       yAxis1: 500,
       yAxis2: 111,
     },
     {
-      xAxis1: 700,
-      xAxis2: 853,
+      xAxis1: '分类4',
+      xAxis2: '类别4',
       yAxis1: 700,
       yAxis2: 122,
     },
