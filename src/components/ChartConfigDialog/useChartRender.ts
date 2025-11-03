@@ -194,17 +194,54 @@ const formatPercent = (value: number): string => {
  * 宽表转长表：将多个 valueFields 展开为多序列
  * 生成字段：xField、value（统一为数值字段）、series（序列名为原字段名）
  * 保留所有原始字段，确保tooltip能显示完整信息
+ * 当字段type为count时，根据横轴分类统计对应分类的数据
  */
 const wideToLong = (
   data: ChartDataItem[],
   valueFields: string[],
   yFields?: OptionFields[],
+  xField?: string,
 ): Array<ChartDataItem & { [VALUE_FIELD]: number; [SERIES_FIELD]: string }> => {
   const result: Array<ChartDataItem & { [VALUE_FIELD]: number; [SERIES_FIELD]: string }> = []
+  
+  // 如果字段type为count，根据横轴分类统计每个分类下该字段非空值的行数
+  const categoryCounts: Record<string, Record<string, number>> = {}
+  if (yFields && xField) {
+    for (const field of valueFields) {
+      const fieldConfig = yFields.find(f => f.value === field)
+      if (fieldConfig?.type === 'count') {
+        categoryCounts[field] = {}
+        // 按横轴字段分组统计
+        for (const row of data) {
+          const category = String(row[xField])
+          if (!categoryCounts[field][category]) {
+            categoryCounts[field][category] = 0
+          }
+          // 统计该分类下该字段非空值的行数
+          if (row[field] !== null && row[field] !== undefined && row[field] !== '') {
+            categoryCounts[field][category] += 1
+          }
+        }
+      }
+    }
+  }
+  
   for (const row of data) {
     for (const field of valueFields) {
-      const raw = Number(row[field] ?? 0)
-      const value = Number.isFinite(raw) ? raw : 0
+      let value = 0
+      
+      // 获取字段配置
+      const fieldConfig = yFields?.find(f => f.value === field)
+      
+      if (fieldConfig?.type === 'count' && xField) {
+        // 如果是count类型，使用按横轴分类统计的值
+        const category = String(row[xField])
+        value = categoryCounts[field]?.[category] || 0
+      } else {
+        // 如果是value类型，使用原始值
+        const raw = Number(row[field] ?? 0)
+        value = Number.isFinite(raw) ? raw : 0
+      }
 
       // 创建新行，保留所有原始字段
       const newRow: ChartDataItem & { [VALUE_FIELD]: number; [SERIES_FIELD]: string } = {
@@ -252,24 +289,65 @@ const calculatePercentByGroup = (
  * 聚合饼图数据：
  * - 若只有一个 valueField：先按 xField 聚合求和
  * - 若有多个 valueFields：先将多字段求和到统一的 value，再按 xField 聚合
+ * 当字段type为count时，根据横轴分类统计对应分类的数据
  */
 const aggregateForPie = (
   data: ChartDataItem[],
   xField: string,
   valueFields: string[],
+  yFields?: OptionFields[],
 ): Array<ChartDataItem & { [VALUE_FIELD]: number }> => {
   const temp: Record<string, number> = {}
+  
+  // 如果字段type为count，根据横轴分类统计每个分类下该字段非空值的行数
+  const categoryCounts: Record<string, Record<string, number>> = {}
+  if (yFields) {
+    for (const field of valueFields) {
+      const fieldConfig = yFields.find(f => f.value === field)
+      if (fieldConfig?.type === 'count') {
+        categoryCounts[field] = {}
+        // 按横轴字段分组统计
+        for (const row of data) {
+          const category = String(row[xField])
+          if (!categoryCounts[field][category]) {
+            categoryCounts[field][category] = 0
+          }
+          // 统计该分类下该字段非空值的行数
+          if (row[field] !== null && row[field] !== undefined && row[field] !== '') {
+            categoryCounts[field][category] += 1
+          }
+        }
+      }
+    }
+  }
+  
   for (const row of data) {
     const key = String(row[xField])
     let sum = 0
     if (valueFields.length <= 1) {
       const field = valueFields[0] as string
-      const raw = Number(row[field] ?? 0)
-      sum = Number.isFinite(raw) ? raw : 0
+      const fieldConfig = yFields?.find(f => f.value === field)
+      
+      if (fieldConfig?.type === 'count') {
+        // 如果是count类型，使用按横轴分类统计的值
+        sum = categoryCounts[field]?.[key] || 0
+      } else {
+        // 如果是value类型，使用原始值
+        const raw = Number(row[field] ?? 0)
+        sum = Number.isFinite(raw) ? raw : 0
+      }
     } else {
       for (const f of valueFields) {
-        const raw = Number(row[f] ?? 0)
-        sum += Number.isFinite(raw) ? raw : 0
+        const fieldConfig = yFields?.find(field => field.value === f)
+        
+        if (fieldConfig?.type === 'count') {
+          // 如果是count类型，使用按横轴分类统计的值
+          sum += categoryCounts[f]?.[key] || 0
+        } else {
+          // 如果是value类型，使用原始值
+          const raw = Number(row[f] ?? 0)
+          sum += Number.isFinite(raw) ? raw : 0
+        }
       }
     }
     temp[key] = (temp[key] ?? 0) + sum
@@ -327,14 +405,14 @@ export function useChartRender(
 
     if (isPieChart) {
       // 聚合并计算整体百分比（以 xField 分类聚合）
-      const aggregated = aggregateForPie(currentData, xField, valueFields)
+      const aggregated = aggregateForPie(currentData, xField, valueFields, yFields?.value)
       const withPercent = calculatePercent(aggregated, VALUE_FIELD)
       dataForSpec = withPercent
       yFieldName = PERCENT_FIELD
     } else {
       if (multiSeries) {
         // 宽转长，得到统一的 VALUE_FIELD 与 SERIES_FIELD
-        const longData = wideToLong(currentData, valueFields, yFields?.value)
+        const longData = wideToLong(currentData, valueFields, yFields?.value, xField)
         // 百分比柱状图：按 x 分组转百分比
         if (subType === 'bar_percent') {
           dataForSpec = calculatePercentByGroup(longData, VALUE_FIELD, xField)
@@ -350,7 +428,34 @@ export function useChartRender(
           dataForSpec = percentData
           yFieldName = PERCENT_FIELD
         } else {
-          dataForSpec = currentData
+          // 检查字段类型，如果是count类型，需要特殊处理
+          const fieldConfig = yFields?.value?.find(f => f.value === firstValueField)
+          if (fieldConfig?.type === 'count') {
+            // 如果是count类型，根据横轴分类统计每个分类下该字段非空值的行数
+            const categoryCounts: Record<string, number> = {}
+            // 按横轴字段分组统计
+            for (const row of currentData) {
+              const category = String(row[xField])
+              if (!categoryCounts[category]) {
+                categoryCounts[category] = 0
+              }
+              // 统计该分类下该字段非空值的行数
+              if (row[firstValueField] !== null && row[firstValueField] !== undefined && row[firstValueField] !== '') {
+                categoryCounts[category] += 1
+              }
+            }
+            // 创建一个新数据集，每行都有对应的分类计数值
+            dataForSpec = currentData.map(row => {
+              const category = String(row[xField])
+              return {
+                ...row,
+                [firstValueField]: categoryCounts[category] || 0
+              }
+            })
+          } else {
+            // 如果是value类型，使用原始数据
+            dataForSpec = currentData
+          }
           yFieldName = firstValueField
         }
       }

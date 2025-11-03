@@ -26,6 +26,7 @@ export type OptionFields = {
   label: string // 数据源标签
   key: string // 数据源键
   value: number | string // 数据源值
+  type?: 'count' | 'value' // 数据源类型 count: 计数类型 value: 值类型
 }
 
 export interface Props {

@@ -1,13 +1,18 @@
 <script setup lang="ts">
 import { ref, onMounted, nextTick } from 'vue'
 import AddChart from '@/components/ChartConfigDialog/index.vue'
-import type { ChartConfig, OptionFields } from '@/components/ChartConfigDialog/types'
+import type { ChartConfig, OptionFields, ChartDataItem } from '@/components/ChartConfigDialog/types'
 import { useChartRender } from '@/components/ChartConfigDialog/useChartRender'
 import { DEFAULT_CONFIG } from '@/components/ChartConfigDialog/constants'
 import { generateChartId } from '@/components/ChartConfigDialog/utils'
 
 // mock远程数据
-const originData = {
+const originData: {
+  dataSourceFields: OptionFields[]
+  xAxisFields: OptionFields[]
+  yAxisFields: OptionFields[]
+  dataSource: ChartDataItem[]
+} = {
   /* 数据源下拉 */
   dataSourceFields: [
     {
@@ -45,12 +50,14 @@ const originData = {
       label: '纵轴1',
       key: 'axis1',
       value: 'yAxis1',
+      type: 'count',
     },
     {
       text: 'yAxis2',
       label: '纵轴2',
       key: 'axis2',
       value: 'yAxis2',
+      type: 'value',
     },
   ],
   /* 数据源 */
@@ -60,6 +67,12 @@ const originData = {
       xAxis2: '类别1',
       yAxis1: 100,
       yAxis2: 213,
+    },
+    {
+      xAxis1: '分类1',
+      xAxis2: '类别2',
+      yAxis1: 233,
+      yAxis2: 155,
     },
     {
       xAxis1: '分类2',
