@@ -6,7 +6,6 @@
     align-center
     destroy-on-close
     @close="handleClose"
-    @closed="reset"
   >
     <el-form
       ref="configFormRef"
@@ -138,6 +137,7 @@ const rules = reactive<FormRules<ChartConfig>>({
 
 const handleClose = () => {
   emit('update:visible', false)
+  reset()
 }
 
 const handleConfirm = () => {

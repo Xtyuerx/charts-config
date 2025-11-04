@@ -8,12 +8,16 @@ export const CHART_TYPES: ChartTypeItem<ChartTypeIcon>[] = [
   { name: 'pie', label: '饼图', icon: PieChart },
 ]
 
-export const COLOR_THEMES: { name: string; colors: string[] }[] = [
-  { name: '经典蓝绿黄红', colors: ['#1890ff', '#13c2c2', '#2fc25b', '#facc14', '#f04864'] },
-  { name: '多彩鲜艳', colors: ['#722ed1', '#eb2f96', '#fa8c16', '#13c2c2', '#52c41a'] },
-  { name: 'AntV 默认', colors: ['#5B8FF9', '#5AD8A6', '#5D7092', '#F6BD16', '#E8684A'] },
-  { name: '森系绿灰', colors: ['#344E41', '#3A5A40', '#588157', '#A3B18A', '#DAD7CD'] },
-  { name: '暖色沙漠', colors: ['#264653', '#2A9D8F', '#E9C46A', '#F4A261', '#E76F51'] },
+export const COLOR_THEMES: { name: string; colors: string[]; type: string | number }[] = [
+  {
+    name: '经典蓝绿黄红',
+    colors: ['#1890ff', '#13c2c2', '#2fc25b', '#facc14', '#f04864'],
+    type: 1,
+  },
+  { name: '多彩鲜艳', colors: ['#722ed1', '#eb2f96', '#fa8c16', '#13c2c2', '#52c41a'], type: 2 },
+  { name: 'AntV 默认', colors: ['#5B8FF9', '#5AD8A6', '#5D7092', '#F6BD16', '#E8684A'], type: 3 },
+  { name: '森系绿灰', colors: ['#344E41', '#3A5A40', '#588157', '#A3B18A', '#DAD7CD'], type: 4 },
+  { name: '暖色沙漠', colors: ['#264653', '#2A9D8F', '#E9C46A', '#F4A261', '#E76F51'], type: 5 },
 ]
 
 export const CURRENT_CHART_MAP: Record<ChartMainType, CheckedChartTypeItem[]> = {
@@ -64,7 +68,7 @@ export const DEFAULT_CONFIG: ChartConfig = {
   title: '销售数据统计',
   type: 'bar',
   subType: 'bar_group',
-  theme: COLOR_THEMES[0],
+  theme: 1,
   xField: '',
   categorySort: 'asc',
   valueFields: [],

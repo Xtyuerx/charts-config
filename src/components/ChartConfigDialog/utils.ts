@@ -1,4 +1,5 @@
-import type { ColumnDef, ChartDataItem } from './types'
+import { CURRENT_CHART_MAP } from './constants'
+import type { ColumnDef, ChartDataItem, ChartMainType, ChartSubType } from './types'
 export function injectColumnTypes(columns: ColumnDef[], tableData: ChartDataItem[]): ColumnDef[] {
   if (!Array.isArray(columns) || columns.length === 0) return []
   if (!Array.isArray(tableData) || tableData.length === 0) return columns
@@ -20,4 +21,11 @@ export function generateChartId(): string {
 // 在columns中寻找series字段
 export function findSeriesField(columns: ColumnDef[], key: string[]): ColumnDef[] | void {
   return columns.filter((col) => key.includes(col.prop))
+}
+
+// 通过图表子类型subType获取图表类型type
+export function getChartTypeBySubType(subType: ChartSubType): ChartMainType | void {
+  return Object.keys(CURRENT_CHART_MAP).find((key) =>
+    CURRENT_CHART_MAP[key as ChartMainType].some((item) => item.name === subType),
+  ) as ChartMainType | void
 }

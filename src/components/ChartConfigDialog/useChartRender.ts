@@ -1,6 +1,7 @@
 // components/ChartConfigDialog/hooks/useChartRender.ts
 import { ref, watch, onUnmounted, type Ref, unref } from 'vue'
 import { Chart } from '@antv/g2'
+import { COLOR_THEMES } from './constants'
 import type {
   ChartConfig,
   ChartSubType,
@@ -638,8 +639,12 @@ export function useChartRender(
     }
 
     // 添加主题配置
-    if (theme && Array.isArray(theme.colors)) {
-      Object.assign(spec, { scale: { color: { range: theme.colors } } })
+    console.log('Theme value:', theme, typeof theme)
+    console.log('Available themes:', COLOR_THEMES.map(t => ({ type: t.type, typeOf: typeof t.type })))
+    const themeColor = COLOR_THEMES.find((t) => t.type === theme)?.colors
+    console.log('Found theme color:', themeColor)
+    if (Array.isArray(themeColor)) {
+      Object.assign(spec, { scale: { color: { range: themeColor } } })
     }
 
     // 饼图不需要轴配置
