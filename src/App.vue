@@ -8,147 +8,165 @@ import { generateChartId } from '@/components/ChartConfigDialog/utils'
 
 // mock远程数据
 const originData: {
-  dataSourceFields: OptionFields[]
+  label: string
+  value: string
   xAxisFields: OptionFields[]
   yAxisFields: OptionFields[]
   dataSource: ChartDataItem[]
-} = {
-  /* 数据源下拉 */
-  dataSourceFields: [
-    {
-      text: 'dataSource1',
-      label: '数据源1',
-      key: 'axis1',
-      value: 100,
-    },
-    {
-      text: 'dataSource2',
-      label: '数据源2',
-      key: 'axis2',
-      value: 200,
-    },
-  ],
-  /* 横轴下拉 */
-  xAxisFields: [
-    {
-      text: 'xAxis1',
-      label: '横轴1',
-      key: 'axis1',
-      value: 'xAxis1',
-    },
-    {
-      text: 'xAxis2',
-      label: '横轴2',
-      key: 'axis2',
-      value: 'xAxis2',
-    },
-  ],
-  /* 纵轴下拉 */
-  yAxisFields: [
-    {
-      text: 'yAxis1',
-      label: '纵轴1',
-      key: 'axis1',
-      value: 'yAxis1',
-      type: 'count',
-    },
-    {
-      text: 'yAxis2',
-      label: '纵轴2',
-      key: 'axis2',
-      value: 'yAxis2',
-      type: 'value',
-    },
-    {
-      text: 'yAxis3',
-      label: '纵轴3',
-      key: 'axis3',
-      value: 'yAxis3',
-      type: 'count',
-    },
-  ],
-  /* 数据源 */
-  dataSource: [
-    {
-      xAxis1: '分类1',
-      xAxis2: '类别1',
-      yAxis1: 100,
-      yAxis2: 213,
-    },
-    {
-      xAxis1: '分类1',
-      xAxis2: '类别1',
-      yAxis1: 100,
-      yAxis2: 213,
-    },
-    {
-      xAxis1: '分类1',
-      xAxis2: '类别1',
-      yAxis1: 100,
-      yAxis2: 213,
-    },
-    {
-      xAxis1: '分类1',
-      xAxis2: '类别1',
-      yAxis1: 100,
-      yAxis2: 213,
-    },
-    {
-      xAxis1: '分类1',
-      xAxis2: '类别1',
-      yAxis1: 100,
-      yAxis2: 213,
-    },
-    {
-      xAxis1: '分类1',
-      xAxis2: '类别1',
-      yAxis1: 100,
-      yAxis2: 213,
-    },
-    {
-      xAxis1: '分类1',
-      xAxis2: '类别1',
-      yAxis1: 100,
-      yAxis2: 213,
-    },
-    {
-      xAxis1: '分类1',
-      xAxis2: '类别1',
-      yAxis1: 100,
-      yAxis2: 213,
-    },
-    {
-      xAxis1: '分类1',
-      xAxis2: '类别1',
-      yAxis1: 100,
-      yAxis2: 213,
-    },
-    {
-      xAxis1: '分类1',
-      xAxis2: '类别2',
-      yAxis1: 233,
-      yAxis2: 155,
-    },
-    {
-      xAxis1: '分类2',
-      xAxis2: '类别2',
-      yAxis1: 300,
-      yAxis2: 444,
-    },
-    {
-      xAxis1: '分类3',
-      xAxis2: '类别3',
-      yAxis1: 500,
-      yAxis2: 111,
-    },
-    {
-      xAxis1: '分类4',
-      xAxis2: '类别4',
-      yAxis1: 700,
-      yAxis2: 122,
-    },
-  ],
-}
+}[] = [
+  {
+    label: '图表1',
+    value: 'chart1',
+
+    /* 横轴下拉 */
+    xAxisFields: [
+      {
+        text: 'xAxis1',
+        label: '横轴1',
+        key: 'axis1',
+        value: 'xAxis1',
+      },
+      {
+        text: 'xAxis2',
+        label: '横轴2',
+        key: 'axis2',
+        value: 'xAxis2',
+      },
+    ],
+    /* 纵轴下拉 */
+    yAxisFields: [
+      {
+        text: 'yAxis1',
+        label: '纵轴1',
+        key: 'axis1',
+        value: 'yAxis1',
+        type: 'count',
+      },
+      {
+        text: 'yAxis2',
+        label: '纵轴2',
+        key: 'axis2',
+        value: 'yAxis2',
+        type: 'value',
+      },
+      {
+        text: 'yAxis3',
+        label: '纵轴3',
+        key: 'axis3',
+        value: 'yAxis3',
+        type: 'count',
+      },
+    ],
+    /* 数据源 */
+    dataSource: [
+      {
+        xAxis1: '分类1',
+        xAxis2: '类别1',
+        yAxis1: 100,
+        yAxis2: 213,
+      },
+      {
+        xAxis1: '分类1',
+        xAxis2: '类别1',
+        yAxis1: 100,
+        yAxis2: 213,
+      },
+      {
+        xAxis1: '分类1',
+        xAxis2: '类别1',
+        yAxis1: 100,
+        yAxis2: 213,
+      },
+      {
+        xAxis1: '分类1',
+        xAxis2: '类别1',
+        yAxis1: 100,
+        yAxis2: 213,
+      },
+      {
+        xAxis1: '分类1',
+        xAxis2: '类别1',
+        yAxis1: 100,
+        yAxis2: 213,
+      },
+      {
+        xAxis1: '分类1',
+        xAxis2: '类别1',
+        yAxis1: 100,
+        yAxis2: 213,
+      },
+      {
+        xAxis1: '分类1',
+        xAxis2: '类别1',
+        yAxis1: 100,
+        yAxis2: 213,
+      },
+      {
+        xAxis1: '分类1',
+        xAxis2: '类别1',
+        yAxis1: 100,
+        yAxis2: 213,
+      },
+      {
+        xAxis1: '分类1',
+        xAxis2: '类别1',
+        yAxis1: 100,
+        yAxis2: 213,
+      },
+      {
+        xAxis1: '分类1',
+        xAxis2: '类别2',
+        yAxis1: 233,
+        yAxis2: 155,
+      },
+      {
+        xAxis1: '分类2',
+        xAxis2: '类别2',
+        yAxis1: 300,
+        yAxis2: 444,
+      },
+      {
+        xAxis1: '分类3',
+        xAxis2: '类别3',
+        yAxis1: 500,
+        yAxis2: 111,
+      },
+      {
+        xAxis1: '分类4',
+        xAxis2: '类别4',
+        yAxis1: 700,
+        yAxis2: 122,
+      },
+    ],
+  },
+  {
+    label: '图表2',
+    value: 'chart2',
+    xAxisFields: [
+      {
+        text: 'xAxis1',
+        label: '横轴1',
+        key: 'axis1',
+        value: 'xAxis1',
+      },
+    ],
+    yAxisFields: [
+      {
+        text: 'yAxis1',
+        label: '纵轴1',
+        key: 'axis1',
+        value: 'yAxis1',
+        type: 'count',
+      },
+    ],
+    dataSource: [
+      {
+        xAxis1: '分类1',
+        yAxis1: 100,
+      },
+    ],
+  },
+]
 
 const dialogVisible = ref(false)
 const chartConfigs = ref<ChartConfig[]>([])
@@ -156,12 +174,19 @@ const chartRefs = ref<HTMLDivElement[]>([])
 const currentChartIndex = ref(0)
 const chartInstances = ref<Map<string, { render: () => void; destroy: () => void }>>(new Map())
 
-const dataSource = ref(originData.dataSource)
-const dataSourceFields = ref<OptionFields[]>(originData.dataSourceFields)
+const dataSource = ref(originData[0]?.dataSource)
+const dataSourceFields = ref<OptionFields[]>(
+  originData.map((item) => ({
+    text: item.label,
+    label: item.label,
+    key: item.label,
+    value: item.value,
+  })),
+)
 
-const xAxisFields = ref<OptionFields[]>(originData.xAxisFields)
+const xAxisFields = ref<OptionFields[]>(originData[0]?.xAxisFields || [])
 
-const yAxisFields = ref<OptionFields[]>(originData.yAxisFields)
+const yAxisFields = ref<OptionFields[]>(originData[0]?.yAxisFields || [])
 
 // 编辑图表配置
 const showEditChart = (config: ChartConfig, index: number) => {
@@ -211,6 +236,55 @@ const removeChart = (chartId?: string) => {
   }
 }
 
+// 根据配置匹配数据源信息
+const matchDataSourceInfo = (config: ChartConfig) => {
+  // 根据 config.dataSource 匹配对应的数据源信息
+  const matchedOriginData = originData.find(
+    (item) => item.value === config.dataSource || item.label === config.dataSource,
+  )
+
+  if (!matchedOriginData) {
+    console.warn(`未找到匹配的数据源: ${config.dataSource}`)
+    return {
+      dataSource: ref([]),
+      xAxisFields: ref([]),
+      yAxisFields: ref([]),
+      isValid: false,
+    }
+  }
+
+  // 验证横轴字段是否存在
+  const xFieldExists = matchedOriginData.xAxisFields.some((field) => field.value === config.xField)
+  if (!xFieldExists) {
+    console.warn(`横轴字段 ${config.xField} 在数据源 ${config.dataSource} 中不存在`)
+  }
+
+  // 验证纵轴字段是否存在
+  const missingValueFields = config.valueFields.filter(
+    (valueField) => !matchedOriginData.yAxisFields.some((field) => field.value === valueField),
+  )
+  if (missingValueFields.length > 0) {
+    console.warn(`纵轴字段 ${missingValueFields.join(', ')} 在数据源 ${config.dataSource} 中不存在`)
+  }
+
+  // 验证分类字段是否存在（如果配置了的话）
+  if (config.categoryField) {
+    const categoryFieldExists =
+      matchedOriginData.xAxisFields.some((field) => field.value === config.categoryField) ||
+      matchedOriginData.yAxisFields.some((field) => field.value === config.categoryField)
+    if (!categoryFieldExists) {
+      console.warn(`分类字段 ${config.categoryField} 在数据源 ${config.dataSource} 中不存在`)
+    }
+  }
+
+  return {
+    dataSource: ref(matchedOriginData.dataSource),
+    xAxisFields: ref(matchedOriginData.xAxisFields),
+    yAxisFields: ref(matchedOriginData.yAxisFields),
+    isValid: xFieldExists && missingValueFields.length === 0,
+  }
+}
+
 // 渲染单个图表
 const renderChart = (chartId?: string) => {
   if (!chartId) return
@@ -228,12 +302,26 @@ const renderChart = (chartId?: string) => {
     existingInstance.destroy()
   }
 
+  // 根据配置动态匹配数据源信息
+  const {
+    dataSource: matchedDataSource,
+    xAxisFields: matchedXAxisFields,
+    yAxisFields: matchedYAxisFields,
+    isValid,
+  } = matchDataSourceInfo(config)
+
+  // 如果数据源匹配失败，显示错误状态
+  if (!isValid) {
+    console.error(`图表 ${chartId} 配置验证失败，跳过渲染`)
+    return
+  }
+
   const { render, destroy } = useChartRender(
     ref(config),
-    dataSource,
+    matchedDataSource,
     ref(chartContainer),
-    xAxisFields,
-    yAxisFields,
+    matchedXAxisFields,
+    matchedYAxisFields,
   )
 
   try {
@@ -260,14 +348,75 @@ const handleConfirm = (config: ChartConfig) => {
   addChart(config)
 }
 
-const handleDataSourceChange = (data: OptionFields) => {
-  console.log('data', data)
-  // TODO 处理数据源变化
-  xAxisFields.value = originData.xAxisFields
-  yAxisFields.value = originData.yAxisFields
-  console.log('xAxisFields', xAxisFields.value, 'yAxisFields', yAxisFields.value)
-  // TODO: 请求数据源对应的数据
-  dataSource.value = originData.dataSource
+// 处理后台返回的配置列表
+const handleConfigList = (configList: ChartConfig[]) => {
+  console.log('接收到配置列表:', configList)
+
+  // 清空现有图表
+  chartConfigs.value.forEach((config) => {
+    if (config.id) {
+      removeChart(config.id)
+    }
+  })
+  chartConfigs.value = []
+
+  // 批量添加新图表
+  configList.forEach((config) => {
+    // 验证配置的完整性
+    if (!config.dataSource || !config.xField || !config.valueFields?.length) {
+      console.warn('配置不完整，跳过:', config)
+      return
+    }
+
+    // 确保有 ID
+    const configWithId = {
+      ...config,
+      id: config.id || generateChartId(),
+    }
+
+    chartConfigs.value.push(configWithId)
+  })
+
+  // 延迟渲染所有图表
+  nextTick(() => {
+    renderAllCharts()
+  })
+}
+
+// 测试配置列表功能
+const testConfigList = () => {
+  const testConfigs: ChartConfig[] = [
+    {
+      id: 'test-chart-1',
+      title: '测试柱状图',
+      type: 'bar',
+      subType: 'bar_group',
+      dataSource: 'chart1', // 对应 originData[0].value
+      xField: 'xAxis1',
+      valueFields: ['yAxis1', 'yAxis2'],
+      legend: { show: true, position: 'top' },
+      label: { show: false, position: 'top' },
+      yAxis: { show: true, tickCount: 5 },
+      xAxis: { show: true },
+      grid: { show: true },
+    },
+    {
+      id: 'test-chart-2',
+      title: '测试饼图',
+      type: 'pie',
+      subType: 'pie',
+      dataSource: 'chart1',
+      xField: 'xAxis1',
+      valueFields: ['yAxis2'],
+      legend: { show: true, position: 'right' },
+      label: { show: true, position: 'inside' },
+      yAxis: { show: false },
+      xAxis: { show: false },
+      grid: { show: false },
+    },
+  ]
+
+  handleConfigList(testConfigs)
 }
 
 onMounted(() => {
@@ -275,6 +424,14 @@ onMounted(() => {
   nextTick(() => {
     renderAllCharts()
   })
+})
+
+// 导出给外部使用的函数
+defineExpose({
+  handleConfigList,
+  matchDataSourceInfo,
+  renderChart,
+  renderAllCharts,
 })
 </script>
 
@@ -286,6 +443,7 @@ onMounted(() => {
     <div class="chart-toolbar">
       <el-button type="primary" @click="dialogVisible = true">添加图表</el-button>
       <el-button @click="addChart()">添加默认图表</el-button>
+      <el-button @click="testConfigList()">测试配置列表</el-button>
       <span class="chart-count">当前图表数量: {{ chartConfigs.length }}</span>
     </div>
 
@@ -298,7 +456,6 @@ onMounted(() => {
       :x-axis-fields="xAxisFields"
       :y-axis-fields="yAxisFields"
       @confirm="handleConfirm"
-      @dataSourceChange="handleDataSourceChange"
     />
 
     <!-- 图表容器 -->
