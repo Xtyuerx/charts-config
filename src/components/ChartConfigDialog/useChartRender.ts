@@ -155,6 +155,108 @@ const getFieldLabel = (field: string, columns?: OptionFields[]): string => {
 }
 
 /**
+ * 判断字段是否为 count 类型
+ * @param field 字段名
+ * @param yFields 字段配置数组
+ * @returns 是否为 count 类型
+ */
+const isCountField = (field: string, yFields?: OptionFields[]): boolean => {
+  if (!yFields) return false
+  const fieldConfig = yFields.find((f) => f.value === field)
+  return fieldConfig?.type === 'count'
+}
+
+/**
+ * 判断字段数组中是否包含 count 类型的字段
+ * @param fields 字段名数组
+ * @param yFields 字段配置数组
+ * @returns 是否包含 count 类型字段
+ */
+const hasCountFields = (fields: string[], yFields?: OptionFields[]): boolean => {
+  if (!yFields) return false
+  return fields.some((field) => isCountField(field, yFields))
+}
+
+/**
+ * 判断字段数组中是否所有字段都是 count 类型
+ * @param fields 字段名数组
+ * @param yFields 字段配置数组
+ * @returns 是否所有字段都是 count 类型
+ */
+const areAllCountFields = (fields: string[], yFields?: OptionFields[]): boolean => {
+  if (!yFields || fields.length === 0) return false
+  return fields.every((field) => isCountField(field, yFields))
+}
+
+/**
+ * 计算 count 类型字段的分类统计数据
+ * @param data 原始数据
+ * @param countFields count 类型的字段数组
+ * @param xField 横轴字段
+ * @returns 分类统计结果 { fieldName: { category: count } }
+ */
+const calculateCountByCategory = (
+  data: ChartDataItem[],
+  countFields: string[],
+  xField: string,
+): Record<string, Record<string, number>> => {
+  const categoryCounts: Record<string, Record<string, number>> = {}
+
+  for (const field of countFields) {
+    categoryCounts[field] = {}
+    // 按横轴字段分组统计
+    for (const row of data) {
+      const category = String(row[xField])
+      if (!categoryCounts[field][category]) {
+        categoryCounts[field][category] = 0
+      }
+
+      // 对于 count 类型字段：
+      // 1. 如果字段存在且非空，统计非空值的行数
+      // 2. 如果字段不存在，统计该分类下所有数据的行数
+      if (field in row) {
+        // 字段存在，统计该分类下该字段非空值的行数
+        if (row[field] !== null && row[field] !== undefined && row[field] !== '') {
+          categoryCounts[field][category] += 1
+        }
+      } else {
+        // 字段不存在，统计该分类下所有数据的行数
+        categoryCounts[field][category] += 1
+      }
+    }
+  }
+
+  return categoryCounts
+}
+
+/**
+ * 获取字段的值（根据字段类型处理）
+ * @param row 数据行
+ * @param field 字段名
+ * @param yFields 字段配置数组
+ * @param categoryCounts count 类型字段的分类统计数据
+ * @param xField 横轴字段
+ * @returns 字段值
+ */
+const getFieldValue = (
+  row: ChartDataItem,
+  field: string,
+  yFields?: OptionFields[],
+  categoryCounts?: Record<string, Record<string, number>>,
+  xField?: string,
+): number => {
+  if (isCountField(field, yFields) && categoryCounts && xField) {
+    // 如果是 count 类型，使用按横轴分类统计的值
+    const category = String(row[xField])
+    return categoryCounts[field]?.[category] || 0
+  } else {
+    // 如果是 value 类型，使用原始值
+    const raw = Number(row[field] ?? 0)
+    return Number.isFinite(raw) ? raw : 0
+  }
+}
+
+/**
  * 判断是否为饼图类型
  */
 const isPieChartType = (subType: ChartSubType): boolean => {
@@ -203,57 +305,47 @@ const wideToLong = (
   xField?: string,
 ): Array<ChartDataItem & { [VALUE_FIELD]: number; [SERIES_FIELD]: string }> => {
   const result: Array<ChartDataItem & { [VALUE_FIELD]: number; [SERIES_FIELD]: string }> = []
-  
-  // 如果字段type为count，根据横轴分类统计每个分类下该字段非空值的行数
-  const categoryCounts: Record<string, Record<string, number>> = {}
-  const uniqueCategories = new Set<string>()
-  
-  if (yFields && xField) {
-    for (const field of valueFields) {
-      const fieldConfig = yFields.find(f => f.value === field)
-      if (fieldConfig?.type === 'count') {
-        categoryCounts[field] = {}
-        // 按横轴字段分组统计
-        for (const row of data) {
-          const category = String(row[xField])
-          uniqueCategories.add(category)
-          if (!categoryCounts[field][category]) {
-            categoryCounts[field][category] = 0
-          }
-          // 统计该分类下该字段非空值的行数
-          if (row[field] !== null && row[field] !== undefined && row[field] !== '') {
-            categoryCounts[field][category] += 1
-          }
+
+  if (!xField) {
+    // 如果没有横轴字段，直接使用原始逻辑
+    for (const row of data) {
+      for (const field of valueFields) {
+        const value = getFieldValue(row, field, yFields)
+        const newRow: ChartDataItem & { [VALUE_FIELD]: number; [SERIES_FIELD]: string } = {
+          ...row,
+          [VALUE_FIELD]: value,
+          [SERIES_FIELD]: getFieldLabel(field, yFields) || field,
         }
+        result.push(newRow)
       }
     }
+    return result
   }
-  
-  // 检查是否所有字段都是count类型
-  const allCountFields = yFields && xField && valueFields.every(field => 
-    yFields.find(f => f.value === field)?.type === 'count'
-  )
-  
-  // 如果所有字段都是count类型，为每个分类创建唯一的数据行
+
+  // 获取所有 count 类型的字段
+  const countFields = valueFields.filter((field) => isCountField(field, yFields))
+
+  // 计算 count 类型字段的分类统计数据
+  const categoryCounts =
+    countFields.length > 0 ? calculateCountByCategory(data, countFields, xField) : {}
+
+  // 获取所有唯一分类
+  const uniqueCategories = new Set<string>()
+  for (const row of data) {
+    uniqueCategories.add(String(row[xField]))
+  }
+
+  // 检查是否所有字段都是 count 类型
+  const allCountFields = areAllCountFields(valueFields, yFields)
+
+  // 如果所有字段都是 count 类型，为每个分类创建唯一的数据行
   if (allCountFields && uniqueCategories.size > 0) {
     for (const category of uniqueCategories) {
       // 找到该分类的第一行数据作为基础
-      const baseRow = data.find(row => String(row[xField]) === category) || {}
-      
+      const baseRow = data.find((row) => String(row[xField]) === category) || {}
+
       for (const field of valueFields) {
-        let value = 0
-        
-        // 获取字段配置
-        const fieldConfig = yFields?.find(f => f.value === field)
-        
-        if (fieldConfig?.type === 'count') {
-          // 如果是count类型，使用按横轴分类统计的值
-          value = categoryCounts[field]?.[category] || 0
-        } else {
-          // 如果是value类型，使用原始值
-          const raw = Number(baseRow[field] ?? 0)
-          value = Number.isFinite(raw) ? raw : 0
-        }
+        const value = getFieldValue(baseRow, field, yFields, categoryCounts, xField)
 
         // 创建新行，保留所有原始字段
         const newRow: ChartDataItem & { [VALUE_FIELD]: number; [SERIES_FIELD]: string } = {
@@ -267,23 +359,10 @@ const wideToLong = (
       }
     }
   } else {
-    // 如果不是所有字段都是count类型，使用原始逻辑
+    // 如果不是所有字段都是 count 类型，使用原始逻辑
     for (const row of data) {
       for (const field of valueFields) {
-        let value = 0
-        
-        // 获取字段配置
-        const fieldConfig = yFields?.find(f => f.value === field)
-        
-        if (fieldConfig?.type === 'count' && xField) {
-          // 如果是count类型，使用按横轴分类统计的值
-          const category = String(row[xField])
-          value = categoryCounts[field]?.[category] || 0
-        } else {
-          // 如果是value类型，使用原始值
-          const raw = Number(row[field] ?? 0)
-          value = Number.isFinite(raw) ? raw : 0
-        }
+        const value = getFieldValue(row, field, yFields, categoryCounts, xField)
 
         // 创建新行，保留所有原始字段
         const newRow: ChartDataItem & { [VALUE_FIELD]: number; [SERIES_FIELD]: string } = {
@@ -296,7 +375,7 @@ const wideToLong = (
       }
     }
   }
-  
+
   return result
 }
 
@@ -342,64 +421,37 @@ const aggregateForPie = (
   yFields?: OptionFields[],
 ): Array<ChartDataItem & { [VALUE_FIELD]: number }> => {
   const temp: Record<string, number> = {}
-  
-  // 如果字段type为count，根据横轴分类统计每个分类下该字段非空值的行数
-  const categoryCounts: Record<string, Record<string, number>> = {}
-  if (yFields) {
-    for (const field of valueFields) {
-      const fieldConfig = yFields.find(f => f.value === field)
-      if (fieldConfig?.type === 'count') {
-        categoryCounts[field] = {}
-        // 按横轴字段分组统计
-        for (const row of data) {
-          const category = String(row[xField])
-          if (!categoryCounts[field][category]) {
-            categoryCounts[field][category] = 0
-          }
-          // 统计该分类下该字段非空值的行数
-          if (row[field] !== null && row[field] !== undefined && row[field] !== '') {
-            categoryCounts[field][category] += 1
-          }
-        }
-      }
-    }
-  }
-  
+
+  // 获取所有 count 类型的字段
+  const countFields = valueFields.filter((field) => isCountField(field, yFields))
+
+  // 计算 count 类型字段的分类统计数据
+  const categoryCounts =
+    countFields.length > 0 ? calculateCountByCategory(data, countFields, xField) : {}
+
   for (const row of data) {
     const key = String(row[xField])
     let sum = 0
+
     if (valueFields.length <= 1) {
       const field = valueFields[0] as string
-      const fieldConfig = yFields?.find(f => f.value === field)
-      
-      if (fieldConfig?.type === 'count') {
-        // 如果是count类型，使用按横轴分类统计的值
-        sum = categoryCounts[field]?.[key] || 0
-      } else {
-        // 如果是value类型，使用原始值
-        const raw = Number(row[field] ?? 0)
-        sum = Number.isFinite(raw) ? raw : 0
-      }
+      sum = getFieldValue(row, field, yFields, categoryCounts, xField)
     } else {
-      for (const f of valueFields) {
-        const fieldConfig = yFields?.find(field => field.value === f)
-        
-        if (fieldConfig?.type === 'count') {
-          // 如果是count类型，使用按横轴分类统计的值
-          sum += categoryCounts[f]?.[key] || 0
-        } else {
-          // 如果是value类型，使用原始值
-          const raw = Number(row[f] ?? 0)
-          sum += Number.isFinite(raw) ? raw : 0
-        }
+      for (const field of valueFields) {
+        sum += getFieldValue(row, field, yFields, categoryCounts, xField)
       }
     }
+
     temp[key] = (temp[key] ?? 0) + sum
   }
+
   return Object.entries(temp).map(([k, v]) => ({ [xField]: k, [VALUE_FIELD]: v })) as Array<
     ChartDataItem & { [VALUE_FIELD]: number }
   >
 }
+
+// ---------------- 导出辅助函数 ----------------
+export { isCountField, hasCountFields, areAllCountFields, calculateCountByCategory, getFieldValue }
 
 // ---------------- Hook 核心 ----------------
 export function useChartRender(
@@ -473,33 +525,24 @@ export function useChartRender(
           yFieldName = PERCENT_FIELD
         } else {
           // 检查字段类型，如果是count类型，需要特殊处理
-          const fieldConfig = yFields?.value?.find(f => f.value === firstValueField)
-          if (fieldConfig?.type === 'count') {
+          if (isCountField(firstValueField, yFields?.value)) {
             // 如果是count类型，根据横轴分类统计每个分类下该字段非空值的行数
-            const categoryCounts: Record<string, number> = {}
+            const categoryCounts = calculateCountByCategory(currentData, [firstValueField], xField)
             const uniqueCategories = new Set<string>()
-            
-            // 按横轴字段分组统计
+
+            // 获取所有唯一分类
             for (const row of currentData) {
-              const category = String(row[xField])
-              uniqueCategories.add(category)
-              if (!categoryCounts[category]) {
-                categoryCounts[category] = 0
-              }
-              // 统计该分类下该字段非空值的行数
-              if (row[firstValueField] !== null && row[firstValueField] !== undefined && row[firstValueField] !== '') {
-                categoryCounts[category] += 1
-              }
+              uniqueCategories.add(String(row[xField]))
             }
-            
+
             // 创建一个去重后的数据集，每个分类只保留一行数据，避免label重复渲染
-            dataForSpec = Array.from(uniqueCategories).map(category => {
+            dataForSpec = Array.from(uniqueCategories).map((category) => {
               // 找到该分类的第一行数据作为基础
-              const baseRow = currentData.find(row => String(row[xField]) === category) || {}
+              const baseRow = currentData.find((row) => String(row[xField]) === category) || {}
               return {
                 ...baseRow,
                 [xField]: category,
-                [firstValueField]: categoryCounts[category] || 0
+                [firstValueField]: categoryCounts[firstValueField]?.[category] || 0,
               }
             })
           } else {
@@ -685,15 +728,28 @@ export function useChartRender(
       status.value = 'error'
       return
     }
+    // 验证值字段是否存在
+    // 但是对于 count 类型的字段，即使不存在也可以按横轴分类计算数据条数
     const isMulti = Array.isArray(currentConfig.valueFields) && currentConfig.valueFields.length > 1
-    if (
-      !isMulti &&
-      sampleData &&
-      currentConfig.valueFields[0] &&
-      !sampleData[currentConfig.valueFields[0]]
-    ) {
-      console.warn(`Value field '${currentConfig.valueFields[0]}' not found in data`)
-      return
+
+    if (sampleData) {
+      if (isMulti) {
+        // 多值图表：检查每个非 count 类型的字段是否存在
+        const missingFields = currentConfig.valueFields.filter(
+          (field) => !sampleData[field] && !isCountField(field, yFields?.value),
+        )
+        if (missingFields.length > 0) {
+          console.warn(`Value fields not found in data: ${missingFields.join(', ')}`)
+          return
+        }
+      } else {
+        // 单值图表：检查字段是否存在（count 类型除外）
+        const field = currentConfig.valueFields[0]
+        if (field && !sampleData[field] && !isCountField(field, yFields?.value)) {
+          console.warn(`Value field '${field}' not found in data`)
+          return
+        }
+      }
     }
 
     try {

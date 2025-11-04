@@ -59,6 +59,13 @@ const originData: {
       value: 'yAxis2',
       type: 'value',
     },
+    {
+      text: 'yAxis3',
+      label: '纵轴3',
+      key: 'axis3',
+      value: 'yAxis3',
+      type: 'count',
+    },
   ],
   /* 数据源 */
   dataSource: [
