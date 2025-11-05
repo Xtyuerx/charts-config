@@ -265,6 +265,80 @@ const isPieChartType = (subType: ChartSubType): boolean => {
 }
 
 /**
+ * 根据分类字段对数据进行排序
+ * @param data 数据数组
+ * @param xField 横轴字段
+ * @param categorySort 排序方式：'asc' 升序，'desc' 降序
+ * @param valueFields 值字段数组，用于排序依据
+ * @param yFields 字段配置数组
+ * @returns 排序后的数据
+ */
+const sortDataByCategory = (
+  data: ChartDataItem[],
+  xField: string,
+  categorySort?: 'asc' | 'desc',
+  valueFields?: string[],
+  yFields?: OptionFields[],
+): ChartDataItem[] => {
+  if (!categorySort || !data.length) {
+    return data
+  }
+
+  // 创建数据副本进行排序
+  const sortedData = [...data]
+
+  // 如果有值字段，按值排序；否则按分类名称排序
+  if (valueFields && valueFields.length > 0) {
+    const firstValueField = valueFields[0]
+
+    if (!firstValueField) {
+      return sortedData
+    }
+
+    // 计算每个分类的总值（用于排序）
+    const categoryTotals = new Map<string, number>()
+
+    for (const row of data) {
+      const category = String(row[xField])
+      let value = 0
+
+      if (isCountField(firstValueField, yFields)) {
+        // 对于 count 类型字段，统计该分类下的数据条数
+        const categoryCounts = calculateCountByCategory(data, [firstValueField], xField)
+        value = categoryCounts[firstValueField]?.[category] || 0
+      } else {
+        // 对于 value 类型字段，使用原始值
+        value = Number(row[firstValueField] ?? 0)
+      }
+
+      categoryTotals.set(category, (categoryTotals.get(category) || 0) + value)
+    }
+
+    // 按值排序
+    sortedData.sort((a, b) => {
+      const categoryA = String(a[xField])
+      const categoryB = String(b[xField])
+      const valueA = categoryTotals.get(categoryA) || 0
+      const valueB = categoryTotals.get(categoryB) || 0
+
+      return categorySort === 'asc' ? valueA - valueB : valueB - valueA
+    })
+  } else {
+    // 按分类名称排序
+    sortedData.sort((a, b) => {
+      const categoryA = String(a[xField])
+      const categoryB = String(b[xField])
+
+      return categorySort === 'asc'
+        ? categoryA.localeCompare(categoryB)
+        : categoryB.localeCompare(categoryA)
+    })
+  }
+
+  return sortedData
+}
+
+/**
  * 为数据计算百分比字段
  * @param data 原始数据
  * @param valueField 数值字段名
@@ -381,6 +455,53 @@ const wideToLong = (
 }
 
 /**
+ * 为重复数据添加行索引，实现数据展开
+ * @param data 原始数据
+ * @param valueField 值字段
+ * @param xField 横轴字段
+ * @param yFields 字段配置数组
+ * @returns 长表格式数据
+ */
+const expandDuplicateData = (
+  data: ChartDataItem[],
+  valueField: string,
+  xField: string,
+  yFields?: OptionFields[],
+): Array<ChartDataItem & { [VALUE_FIELD]: number; [SERIES_FIELD]: string }> => {
+  const result: Array<ChartDataItem & { [VALUE_FIELD]: number; [SERIES_FIELD]: string }> = []
+
+  // 为每个原始数据行创建对应的长表数据，确保所有数据都能展开显示
+  for (let i = 0; i < data.length; i++) {
+    const row = data[i]
+    if (!row) continue
+
+    // 为每个数据行添加唯一标识符，确保即使值相同也不会被合并
+    const uniqueId = `${String(row[xField])}_${i}`
+
+    let value: number
+    if (isCountField(valueField, yFields)) {
+      // 对于 count 类型字段，每行数据计为 1
+      value =
+        row[valueField] !== null && row[valueField] !== undefined && row[valueField] !== '' ? 1 : 0
+    } else {
+      // 对于 value 类型字段，使用原始值
+      value = getFieldValue(row, valueField, yFields)
+    }
+
+    result.push({
+      ...row,
+      [VALUE_FIELD]: value,
+      [SERIES_FIELD]: uniqueId, // 使用行索引作为唯一标识符
+      // 保留行索引信息
+      _rowIndex: i + 1,
+      _uniqueId: uniqueId,
+    })
+  }
+
+  return result
+}
+
+/**
  * 针对已为长表的数据，按组（如 xField）计算百分比字段
  * 保留所有原始字段，确保tooltip能显示完整信息
  */
@@ -472,6 +593,8 @@ export function useChartRender(
       xField,
       valueFields,
       categoryField,
+      categorySort,
+      expandDuplicates,
       legend,
       label,
       xAxis,
@@ -507,9 +630,20 @@ export function useChartRender(
       dataForSpec = withPercent
       yFieldName = PERCENT_FIELD
     } else {
-      if (multiSeries) {
-        // 宽转长，得到统一的 VALUE_FIELD 与 SERIES_FIELD
-        const longData = wideToLong(currentData, valueFields, yFields?.value, xField)
+      if (multiSeries || expandDuplicates) {
+        // 多序列或需要展开重复数据时，需要转换为长表格式
+        let longData: Array<ChartDataItem & { [VALUE_FIELD]: number; [SERIES_FIELD]: string }>
+
+        if (multiSeries) {
+          // 多个值字段：宽转长，得到统一的 VALUE_FIELD 与 SERIES_FIELD
+          longData = wideToLong(currentData, valueFields, yFields?.value, xField)
+        } else if (expandDuplicates && valueFields[0]) {
+          // 单个值字段但需要展开重复数据：为每行数据添加唯一标识
+          longData = expandDuplicateData(currentData, valueFields[0], xField, yFields?.value)
+        } else {
+          longData = wideToLong(currentData, valueFields, yFields?.value, xField)
+        }
+
         // 百分比柱状图：按 x 分组转百分比
         if (subType === 'bar_percent') {
           dataForSpec = calculatePercentByGroup(longData, VALUE_FIELD, xField)
@@ -555,6 +689,18 @@ export function useChartRender(
       }
     }
 
+    // ---------- 数据排序 ----------
+    // 在所有数据预处理完成后，根据 categorySort 配置对数据进行排序
+    if (categorySort && !isPieChart) {
+      dataForSpec = sortDataByCategory(
+        dataForSpec,
+        xField,
+        categorySort,
+        valueFields,
+        yFields?.value,
+      )
+    }
+
     // ---------- 编码构建 ----------
     // 使用子类型映射中定义的编码逻辑
     const baseEncode =
@@ -591,6 +737,8 @@ export function useChartRender(
             position: legend.position,
             // 对于多纵轴值的情况，使用字段对应的 label 作为图例标题
             ...(multiSeries ? {} : { label: getFieldLabel(firstValueField, yFields?.value) }),
+            // 如果展开了重复数据，隐藏图例（因为每个数据行都有唯一的系列标识）
+            ...(expandDuplicates && !multiSeries ? { show: false } : {}),
           }
         : false,
       tooltip: true,
@@ -628,19 +776,43 @@ export function useChartRender(
 
       items.push({ field: PERCENT_FIELD, name: '占比', valueFormatter: formatPercent })
       spec.tooltip = { items }
-    } else if (multiSeries) {
-      // 多纵轴值但非百分比图表，显示系列和值
-      const items: Array<{ field: string; name: string }> = []
+    } else if (multiSeries || expandDuplicates) {
+      // 多纵轴值或展开重复数据但非百分比图表，显示系列和值
+      const items: Array<{ field: string; name: string; valueFormatter?: (v: unknown) => string }> =
+        []
 
-      valueFields.forEach((field) => {
-        items.push({ field, name: getFieldLabel(field, yFields?.value) || field })
+      // 添加横轴字段
+      items.push({
+        field: xField,
+        name: getFieldLabel(xField, xFields?.value) || String(xAxis.title ?? xField),
       })
+
+      if (multiSeries) {
+        // 多纵轴值情况
+        valueFields.forEach((field) => {
+          items.push({ field, name: getFieldLabel(field, yFields?.value) || field })
+        })
+      } else if (expandDuplicates) {
+        // 展开重复数据情况，显示行号和值
+        items.push({
+          field: '_rowIndex',
+          name: '数据行',
+        })
+        items.push({
+          field: VALUE_FIELD,
+          name: getFieldLabel(firstValueField, yFields?.value) || firstValueField,
+        })
+      }
+
       spec.tooltip = { items }
     }
 
     // 添加主题配置
     console.log('Theme value:', theme, typeof theme)
-    console.log('Available themes:', COLOR_THEMES.map(t => ({ type: t.type, typeOf: typeof t.type })))
+    console.log(
+      'Available themes:',
+      COLOR_THEMES.map((t) => ({ type: t.type, typeOf: typeof t.type })),
+    )
     const themeColor = COLOR_THEMES.find((t) => t.type === theme)?.colors
     console.log('Found theme color:', themeColor)
     if (Array.isArray(themeColor)) {

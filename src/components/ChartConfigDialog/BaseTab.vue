@@ -106,8 +106,28 @@
         />
       </el-select>
     </el-form-item>
+    <!-- 展开重复数据选项 -->
+    <el-form-item prop="expandDuplicates" label="数据展示">
+      <el-switch
+        v-model="chartConfig.expandDuplicates"
+        active-text="展开重复数据"
+        inactive-text="合并相同数据"
+      />
+      <div class="field-help-text">
+        开启后，相同的数据行会展开为多个柱子显示；关闭后，相同数据会合并为一个柱子
+      </div>
+    </el-form-item>
   </el-card>
 </template>
+
+<style scoped>
+.field-help-text {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+</style>
 
 <script lang="ts" setup>
 import { computed, inject, type Ref } from 'vue'

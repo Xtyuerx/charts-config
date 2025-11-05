@@ -151,9 +151,11 @@ const handleConfirm = () => {
 }
 
 watch(
-  () => props.config,
+  () => props.visible,
   (newVal) => {
-    setConfig(newVal)
+    if (newVal) {
+      setConfig(props.config || DEFAULT_CONFIG)
+    }
   },
   {
     deep: true,

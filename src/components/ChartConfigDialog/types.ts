@@ -53,6 +53,7 @@ export interface ChartConfig {
   categorySort?: 'asc' | 'desc' // 分类排序
   valueFields: string[] // 值字段
   categoryField?: string // 分类字段
+  expandDuplicates?: boolean // 是否展开重复数据
   dataSource?: number | string // 数据源
   /* 图例 */
   legend: {

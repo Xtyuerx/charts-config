@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, nextTick, computed } from 'vue'
 import AddChart from '@/components/ChartConfigDialog/index.vue'
 import type { ChartConfig, OptionFields, ChartDataItem } from '@/components/ChartConfigDialog/types'
 import { useChartRender } from '@/components/ChartConfigDialog/useChartRender'
@@ -171,7 +171,7 @@ const originData: {
 const dialogVisible = ref(false)
 const chartConfigs = ref<ChartConfig[]>([])
 const chartRefs = ref<HTMLDivElement[]>([])
-const currentChartIndex = ref(0)
+const currentChartIndex = ref(-1) // -1 表示新增模式，>=0 表示编辑模式
 const chartInstances = ref<Map<string, { render: () => void; destroy: () => void }>>(new Map())
 
 const dataSource = ref(originData[0]?.dataSource)
@@ -187,6 +187,16 @@ const dataSourceFields = ref<OptionFields[]>(
 const xAxisFields = ref<OptionFields[]>(originData[0]?.xAxisFields || [])
 
 const yAxisFields = ref<OptionFields[]>(originData[0]?.yAxisFields || [])
+
+const currentConfig = computed(() =>
+  currentChartIndex.value >= 0 ? chartConfigs.value[currentChartIndex.value] : undefined,
+)
+
+// 显示新增图表对话框
+const showAddChart = () => {
+  currentChartIndex.value = -1 // 设置为新增模式
+  dialogVisible.value = true
+}
 
 // 编辑图表配置
 const showEditChart = (config: ChartConfig, index: number) => {
@@ -425,14 +435,6 @@ onMounted(() => {
     renderAllCharts()
   })
 })
-
-// 导出给外部使用的函数
-defineExpose({
-  handleConfigList,
-  matchDataSourceInfo,
-  renderChart,
-  renderAllCharts,
-})
 </script>
 
 <template>
@@ -441,7 +443,7 @@ defineExpose({
 
     <!-- 图表管理工具栏 -->
     <div class="chart-toolbar">
-      <el-button type="primary" @click="dialogVisible = true">添加图表</el-button>
+      <el-button type="primary" @click="showAddChart">添加图表</el-button>
       <el-button @click="addChart()">添加默认图表</el-button>
       <el-button @click="testConfigList()">测试配置列表</el-button>
       <span class="chart-count">当前图表数量: {{ chartConfigs.length }}</span>
@@ -450,7 +452,7 @@ defineExpose({
     <!-- 图表配置对话框 -->
     <AddChart
       v-model:visible="dialogVisible"
-      :config="chartConfigs[currentChartIndex]"
+      :config="currentConfig"
       :data-source="dataSource"
       :data-source-fields="dataSourceFields"
       :x-axis-fields="xAxisFields"

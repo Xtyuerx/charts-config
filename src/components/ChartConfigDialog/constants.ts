@@ -72,6 +72,7 @@ export const DEFAULT_CONFIG: ChartConfig = {
   xField: '',
   categorySort: 'asc',
   valueFields: [],
+  expandDuplicates: false,
   legend: {
     show: true,
     position: 'top',
