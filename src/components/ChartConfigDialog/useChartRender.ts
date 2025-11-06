@@ -36,7 +36,14 @@ const subTypeMap: Record<ChartSubType, ChartSpec> = {
         y: cfg.valueFields[0],
       }
     },
-    transform: [{ type: 'dodgeX' }],
+    transform: (cfg) => {
+      // 只有在多系列时才使用 dodgeX 转换，避免展开重复数据时被合并
+      if (cfg.valueFields.length > 1) {
+        return [{ type: 'dodgeX' }]
+      }
+      // 展开重复数据时，不使用任何转换，确保每个数据点都独立显示
+      return []
+    },
   },
   bar_stacked: {
     type: 'interval',
@@ -475,9 +482,6 @@ const expandDuplicateData = (
     const row = data[i]
     if (!row) continue
 
-    // 为每个数据行添加唯一标识符，确保即使值相同也不会被合并
-    const uniqueId = `${String(row[xField])}_${i}`
-
     let value: number
     if (isCountField(valueField, yFields)) {
       // 对于 count 类型字段，每行数据计为 1
@@ -488,13 +492,23 @@ const expandDuplicateData = (
       value = getFieldValue(row, valueField, yFields)
     }
 
+    // 使用统一的系列名称，确保所有数据属于同一系列
+    // 这样G2会将它们作为同一系列下的多个柱子，而不是不同系列
+    const seriesName = getFieldLabel(valueField, yFields) || valueField
+
+    // 创建一个唯一的分组标识符，确保即使值相同也不会被合并
+    // 这个标识符将被用作一个额外的维度，而不是系列字段
+    const groupKey = `${String(row[xField])}_${i}`
+
     result.push({
       ...row,
+      [xField]: groupKey, // 使用唯一的分组标识符作为横轴值
       [VALUE_FIELD]: value,
-      [SERIES_FIELD]: uniqueId, // 使用行索引作为唯一标识符
-      // 保留行索引信息
+      [SERIES_FIELD]: seriesName, // 使用统一的系列名称
+      // 保留原始横轴值和行索引信息，用于tooltip显示
+      _originalXField: String(row[xField]),
       _rowIndex: i + 1,
-      _uniqueId: uniqueId,
+      _uniqueId: groupKey,
     })
   }
 
@@ -717,6 +731,9 @@ export function useChartRender(
         encode.color = xField
       } else if (multiSeries) {
         encode.color = SERIES_FIELD
+      } else if (expandDuplicates) {
+        // 展开重复数据时，不使用颜色编码，避免数据被合并
+        // 所有数据使用相同的颜色
       } else if (categoryField) {
         encode.color = categoryField
       }
@@ -766,12 +783,12 @@ export function useChartRender(
           items.push({ field, name: getFieldLabel(field, yFields?.value) || field })
         })
       } else {
-        items.push({
+        /* items.push({
           field: firstValueField,
           name:
             getFieldLabel(firstValueField, yFields?.value) ||
             String(yAxis.title ?? firstValueField),
-        })
+        }) */
       }
 
       items.push({ field: PERCENT_FIELD, name: '占比', valueFormatter: formatPercent })
@@ -793,7 +810,11 @@ export function useChartRender(
           items.push({ field, name: getFieldLabel(field, yFields?.value) || field })
         })
       } else if (expandDuplicates) {
-        // 展开重复数据情况，显示行号和值
+        // 展开重复数据情况，显示原始横轴值、行号和值
+        items.push({
+          field: '_originalXField',
+          name: getFieldLabel(xField, xFields?.value) || xField,
+        })
         items.push({
           field: '_rowIndex',
           name: '数据行',
@@ -822,7 +843,17 @@ export function useChartRender(
     // 饼图不需要轴配置
     if (!isPieChart) {
       const xAxisConfig = xAxis.show
-        ? { title: xAxis.title || getFieldLabel(xField, xFields?.value) }
+        ? {
+            title: xAxis.title || getFieldLabel(xField, xFields?.value),
+            // 展开重复数据时，使用原始横轴值作为轴标签
+            ...(expandDuplicates
+              ? {
+                  label: {
+                    text: (d: { _originalXField?: string }) => d._originalXField || '',
+                  },
+                }
+              : {}),
+          }
         : false
       const yAxisConfig = yAxis.show
         ? {
@@ -853,6 +884,14 @@ export function useChartRender(
         })
       } else if (multiSeries) {
         // 多纵轴值：显示值
+        spec.labels = [
+          {
+            position: label.position,
+            text: VALUE_FIELD,
+          },
+        ]
+      } else if (expandDuplicates) {
+        // 展开重复数据：显示值
         spec.labels = [
           {
             position: label.position,
