@@ -22,7 +22,7 @@ const subTypeMap: Record<ChartSubType, ChartSpec> = {
   // 柱状图
   bar_group: {
     type: 'interval',
-    buildEncode: (cfg) => {
+    buildEncode: (cfg: ChartConfig) => {
       // 多个纵轴值时，转换为长表格式并使用统一字段
       if (cfg.valueFields.length > 1) {
         return {
@@ -36,7 +36,7 @@ const subTypeMap: Record<ChartSubType, ChartSpec> = {
         y: cfg.valueFields[0],
       }
     },
-    transform: (cfg) => {
+    transform: (cfg: ChartConfig) => {
       // 只有在多系列时才使用 dodgeX 转换，避免展开重复数据时被合并
       if (cfg.valueFields.length > 1) {
         return [{ type: 'dodgeX' }]
@@ -278,6 +278,7 @@ const isPieChartType = (subType: ChartSubType): boolean => {
  * @param categorySort 排序方式：'asc' 升序，'desc' 降序
  * @param valueFields 值字段数组，用于排序依据
  * @param yFields 字段配置数组
+ * @param originalData 原始数据（用于count类型字段的统计计算）
  * @returns 排序后的数据
  */
 const sortDataByCategory = (
@@ -286,6 +287,7 @@ const sortDataByCategory = (
   categorySort?: 'asc' | 'desc',
   valueFields?: string[],
   yFields?: OptionFields[],
+  originalData?: ChartDataItem[],
 ): ChartDataItem[] => {
   if (!categorySort || !data.length) {
     return data
@@ -305,20 +307,24 @@ const sortDataByCategory = (
     // 计算每个分类的总值（用于排序）
     const categoryTotals = new Map<string, number>()
 
-    for (const row of data) {
-      const category = String(row[xField])
-      let value = 0
+    if (isCountField(firstValueField, yFields)) {
+      // 对于 count 类型字段，使用原始数据进行统计计算
+      const dataForCalculation = originalData || data
+      const categoryCounts = calculateCountByCategory(dataForCalculation, [firstValueField], xField)
 
-      if (isCountField(firstValueField, yFields)) {
-        // 对于 count 类型字段，统计该分类下的数据条数
-        const categoryCounts = calculateCountByCategory(data, [firstValueField], xField)
-        value = categoryCounts[firstValueField]?.[category] || 0
-      } else {
-        // 对于 value 类型字段，使用原始值
-        value = Number(row[firstValueField] ?? 0)
+      // 为每个分类设置统计值
+      for (const row of data) {
+        const category = String(row[xField])
+        const value = categoryCounts[firstValueField]?.[category] || 0
+        categoryTotals.set(category, value)
       }
-
-      categoryTotals.set(category, (categoryTotals.get(category) || 0) + value)
+    } else {
+      // 对于 value 类型字段，使用当前数据的原始值
+      for (const row of data) {
+        const category = String(row[xField])
+        const value = Number(row[firstValueField] ?? 0)
+        categoryTotals.set(category, (categoryTotals.get(category) || 0) + value)
+      }
     }
 
     // 按值排序
@@ -712,6 +718,7 @@ export function useChartRender(
         categorySort,
         valueFields,
         yFields?.value,
+        currentData, // 传入原始数据用于count类型字段的统计计算
       )
     }
 
@@ -756,6 +763,9 @@ export function useChartRender(
             ...(multiSeries ? {} : { label: getFieldLabel(firstValueField, yFields?.value) }),
             // 如果展开了重复数据，隐藏图例（因为每个数据行都有唯一的系列标识）
             ...(expandDuplicates && !multiSeries ? { show: false } : {}),
+            color: {
+              selectable: false,
+            },
           }
         : false,
       tooltip: true,
