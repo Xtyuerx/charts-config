@@ -9,7 +9,7 @@
       <div
         v-for="item in CHART_TYPES"
         :key="item.name"
-        :class="['chart-type-item', { active: item.name === chartConfig.type }]"
+        :class="['chart-type-item', { active: item.name === chartMainType }]"
         @click="handleChartTypeClick(item.name)"
       >
         <el-icon><component :is="item.icon" /></el-icon>
@@ -17,7 +17,7 @@
       </div>
     </div>
     <div class="checked-chart-type">
-      <div class="mb-10">{{ chartTypesMap[chartConfig.type].label }}类型</div>
+      <div class="mb-10">{{ chartTypesMap[chartMainType]?.label }}类型</div>
       <div class="chart-type-group">
         <div
           v-for="item in currentChartTypes"
@@ -40,17 +40,12 @@
       <el-input v-model="chartConfig.title" placeholder="请输入图表标题" />
     </el-form-item>
     <el-form-item prop="theme" label="颜色主题">
-      <el-select
-        v-model="chartConfig.theme"
-        placeholder="请选择主题颜色"
-        value-key="name"
-        style="width: 100%"
-      >
+      <el-select v-model="chartConfig.theme" placeholder="请选择主题颜色" style="width: 100%">
         <el-option
           v-for="theme in COLOR_THEMES"
-          :key="theme.name"
+          :key="theme.type"
           :label="theme.name"
-          :value="theme"
+          :value="theme.type"
         >
           <div class="color-option">
             <div
@@ -111,14 +106,35 @@
         />
       </el-select>
     </el-form-item>
+    <!-- 展开重复数据选项 -->
+    <el-form-item prop="expandDuplicates" label="数据展示">
+      <el-switch
+        v-model="chartConfig.expandDuplicates"
+        active-text="展开重复数据"
+        inactive-text="合并相同数据"
+      />
+      <div class="field-help-text">
+        开启后，相同的数据行会展开为多个柱子显示；关闭后，相同数据会合并为一个柱子
+      </div>
+    </el-form-item>
   </el-card>
 </template>
+
+<style scoped>
+.field-help-text {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+</style>
 
 <script lang="ts" setup>
 import { computed, inject, type Ref } from 'vue'
 import { type ElSelect } from 'element-plus'
 import { COLOR_THEMES, CHART_TYPES, CURRENT_CHART_MAP, type ChartTypeIcon } from './constants'
 import { useChartConfig } from './useChartConfig'
+import { getChartTypeBySubType } from './utils'
 import type { ChartMainType, ChartTypeItem, ChartSubType, Props, OptionFields } from './types'
 
 const dataSourceFields = inject<Ref<Props['dataSourceFields']>>('dataSourceFields')
@@ -133,6 +149,10 @@ type ChartTypeItemMap = Record<ChartMainType, ChartTypeItem<ChartTypeIcon>>
 
 const chartTypesMap = computed<ChartTypeItemMap>(() =>
   CHART_TYPES.reduce((acc, cur) => ({ ...acc, [cur.name]: cur }), {} as ChartTypeItemMap),
+)
+
+const chartMainType = computed<ChartMainType>(
+  () => chartConfig.value.type ?? getChartTypeBySubType(chartConfig.value.subType),
 )
 
 // ========================== 事件处理函数 ==========================

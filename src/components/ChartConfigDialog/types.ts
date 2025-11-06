@@ -48,14 +48,12 @@ export interface ChartConfig {
   type: ChartMainType
   subType: ChartSubType // 图表子类型
   /* 主题 */
-  theme?: {
-    name: string // 主题名称
-    colors: string[] // 主题颜色
-  }
+  theme?: string | number // 主题颜色
   xField: string // 横轴字段
   categorySort?: 'asc' | 'desc' // 分类排序
   valueFields: string[] // 值字段
   categoryField?: string // 分类字段
+  expandDuplicates?: boolean // 是否展开重复数据
   dataSource?: number | string // 数据源
   /* 图例 */
   legend: {
