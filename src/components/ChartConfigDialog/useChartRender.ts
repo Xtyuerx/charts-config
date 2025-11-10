@@ -24,7 +24,7 @@ const subTypeMap: Record<ChartSubType, ChartSpec> = {
     type: 'interval',
     buildEncode: (cfg: ChartConfig) => {
       // 多个纵轴值时，转换为长表格式并使用统一字段
-      if (cfg.valueFields.length > 1) {
+      if (cfg.valueFields && cfg.valueFields.length > 1) {
         return {
           x: cfg.xField,
           y: VALUE_FIELD,
@@ -33,23 +33,16 @@ const subTypeMap: Record<ChartSubType, ChartSpec> = {
       }
       return {
         x: cfg.xField,
-        y: cfg.valueFields[0],
+        y: cfg.valueFields?.[0],
       }
     },
-    transform: (cfg: ChartConfig) => {
-      // 只有在多系列时才使用 dodgeX 转换，避免展开重复数据时被合并
-      if (cfg.valueFields.length > 1) {
-        return [{ type: 'dodgeX' }]
-      }
-      // 展开重复数据时，不使用任何转换，确保每个数据点都独立显示
-      return []
-    },
+    // transform将在buildChartSpec函数中根据配置动态添加
   },
   bar_stacked: {
     type: 'interval',
-    buildEncode: (cfg) => {
+    buildEncode: (cfg: ChartConfig) => {
       // 多个纵轴值时，转换为长表格式并使用统一字段
-      if (cfg.valueFields.length > 1) {
+      if (cfg.valueFields && cfg.valueFields.length > 1) {
         return {
           x: cfg.xField,
           y: VALUE_FIELD,
@@ -58,17 +51,17 @@ const subTypeMap: Record<ChartSubType, ChartSpec> = {
       }
       return {
         x: cfg.xField,
-        y: cfg.valueFields[0],
+        y: cfg.valueFields?.[0],
       }
     },
     transform: [{ type: 'stackY' }],
   },
   bar_percent: {
     type: 'interval',
-    buildEncode: (cfg) => ({
+    buildEncode: (cfg: ChartConfig) => ({
       x: cfg.xField,
       y: PERCENT_FIELD,
-      color: cfg.valueFields.length > 1 ? SERIES_FIELD : undefined,
+      color: cfg.valueFields && cfg.valueFields.length > 1 ? SERIES_FIELD : undefined,
     }),
     transform: [{ type: 'stackY' }],
   },
@@ -76,9 +69,9 @@ const subTypeMap: Record<ChartSubType, ChartSpec> = {
   // 折线图
   line: {
     type: 'view',
-    buildEncode: (cfg) => {
+    buildEncode: (cfg: ChartConfig) => {
       // 多个纵轴值时，转换为长表格式并使用统一字段
-      if (cfg.valueFields.length > 1) {
+      if (cfg.valueFields && cfg.valueFields.length > 1) {
         return {
           x: cfg.xField,
           y: VALUE_FIELD,
@@ -87,7 +80,7 @@ const subTypeMap: Record<ChartSubType, ChartSpec> = {
       }
       return {
         x: cfg.xField,
-        y: cfg.valueFields[0],
+        y: cfg.valueFields?.[0],
       }
     },
     style: { lineWidth: 2 },
@@ -95,9 +88,9 @@ const subTypeMap: Record<ChartSubType, ChartSpec> = {
   },
   line_smooth: {
     type: 'view',
-    buildEncode: (cfg) => {
+    buildEncode: (cfg: ChartConfig) => {
       // 多个纵轴值时，转换为长表格式并使用统一字段
-      if (cfg.valueFields.length > 1) {
+      if (cfg.valueFields && cfg.valueFields.length > 1) {
         return {
           x: cfg.xField,
           y: VALUE_FIELD,
@@ -106,7 +99,7 @@ const subTypeMap: Record<ChartSubType, ChartSpec> = {
       }
       return {
         x: cfg.xField,
-        y: cfg.valueFields[0],
+        y: cfg.valueFields?.[0],
       }
     },
     buildChildren: () => [
@@ -119,7 +112,7 @@ const subTypeMap: Record<ChartSubType, ChartSpec> = {
   pie: {
     type: 'interval',
     coordinate: { type: 'theta', innerRadius: 0 },
-    buildEncode: (cfg) => ({
+    buildEncode: (cfg: ChartConfig) => ({
       y: PERCENT_FIELD,
       color: cfg.xField,
     }),
@@ -128,7 +121,7 @@ const subTypeMap: Record<ChartSubType, ChartSpec> = {
   pie_donut: {
     type: 'interval',
     coordinate: { type: 'theta', innerRadius: 0.6 },
-    buildEncode: (cfg) => ({
+    buildEncode: (cfg: ChartConfig) => ({
       y: PERCENT_FIELD,
       color: cfg.xField,
     }),
@@ -418,17 +411,19 @@ const wideToLong = (
     countFields.length > 0 ? calculateCountByCategory(data, countFields, xField) : {}
 
   // 获取所有唯一分类
-  const uniqueCategories = new Set<string>()
-  for (const row of data) {
-    uniqueCategories.add(String(row[xField]))
-  }
+    const uniqueCategoriesSet = new Set<string>()
+    for (const row of data) {
+      uniqueCategoriesSet.add(String(row[xField]))
+    }
+    // 转换为数组以避免迭代问题
+    const uniqueCategories = Array.from(uniqueCategoriesSet)
 
-  // 检查是否所有字段都是 count 类型
-  const allCountFields = areAllCountFields(valueFields, yFields)
+    // 检查是否所有字段都是 count 类型
+    const allCountFields = areAllCountFields(valueFields, yFields)
 
-  // 如果所有字段都是 count 类型，为每个分类创建唯一的数据行
-  if (allCountFields && uniqueCategories.size > 0) {
-    for (const category of uniqueCategories) {
+    // 如果所有字段都是 count 类型，为每个分类创建唯一的数据行
+    if (allCountFields && uniqueCategories.length > 0) {
+      for (const category of uniqueCategories) {
       // 找到该分类的第一行数据作为基础
       const baseRow = data.find((row) => String(row[xField]) === category) || {}
 
@@ -773,8 +768,15 @@ export function useChartRender(
     }
 
     // 处理动态转换
-    if (typeof base.transform === 'function') {
-      spec.transform = base.transform(unref(config))
+    if (subType === 'bar_group') {
+      // 对于bar_group类型，根据配置动态添加transform
+      if (unref(config).valueFields && unref(config).valueFields.length > 1) {
+        spec.transform = [{ type: 'dodgeX' }]
+      } else {
+        spec.transform = []
+      }
+    } else if (base.transform) {
+      spec.transform = base.transform
     }
 
     // 百分比类图表：自定义 tooltip 百分比显示
@@ -1013,6 +1015,12 @@ export function useChartRender(
       // 延迟一点确保 DOM 已挂载
       if (chartContainer.value) {
         render()
+      }
+      if (!config.value.xField || !config.value.valueFields?.length) {
+        if (chartInstance) {
+          chartInstance?.destroy()
+          chartInstance = null
+        }
       }
     },
     { deep: true, immediate: false },
