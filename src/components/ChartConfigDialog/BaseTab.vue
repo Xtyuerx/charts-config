@@ -143,7 +143,7 @@ const yAxisFields = inject<Ref<Props['yAxisFields']>>('yAxisFields')
 const onDataSourceChange = inject<(data: OptionFields | undefined) => void>('onDataSourceChange')
 const onYFieldsChange = inject<(value: OptionFields[] | undefined) => void>('onYFieldsChange')
 const onXFieldsChange = inject<(value: OptionFields | undefined) => void>('onXFieldsChange')
-const { chartConfig } = useChartConfig()
+const { chartConfig, setConfig } = useChartConfig()
 
 type ChartTypeItemMap = Record<ChartMainType, ChartTypeItem<ChartTypeIcon>>
 
@@ -169,6 +169,7 @@ const currentChartTypes = computed(() => CURRENT_CHART_MAP[chartConfig.value.typ
 
 const handleDataSourceChange = (value: string) => {
   const current = dataSourceFields?.value?.find((item) => item.value === value)
+  setConfig({ ...chartConfig.value, valueFields: [], xField: '' })
   onDataSourceChange?.(current)
 }
 
