@@ -18,9 +18,12 @@
   "dependencies": {
     "@antv/g2": "^5.4.2",
     "@element-plus/icons-vue": "^2.3.2",
+    "@types/three": "^0.181.0",
     "element-plus": "^2.11.5",
     "lodash": "^4.17.21",
     "pinia": "^3.0.3",
+    "three": "^0.181.1",
+    "three-stdlib": "^2.36.1",
     "vue": "^3.5.22",
     "vue-router": "^4.5.1"
   },
