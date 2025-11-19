@@ -1,208 +1,291 @@
 <template>
-  <div class="modelAnalysis">
-    <div class="header">
-      <div class="head_name">
-        <div class="head_cont">
-          <div class="head_item select_head">
-            <el-icon><House /></el-icon>
-            <span>返回</span>
-          </div>
-          <div class="head_item">
-            <el-icon><FullScreen /></el-icon>
-            <span>网格</span>
-          </div>
-          <div class="head_item">
-            <el-icon><EditPen /></el-icon>
-            <span>测量</span>
-          </div>
-        </div>
-        <div class="head_cont">
-          <div class="head_item select_head">
-            <el-icon><House /></el-icon>
-            <span>牙号</span>
-          </div>
-          <div class="head_item">
-            <el-icon><FullScreen /></el-icon>
-            <span>牙宽测量</span>
-          </div>
-          <div class="head_item">
-            <el-icon><EditPen /></el-icon>
-            <span>测量</span>
-          </div>
-          <div class="head_item">
-            <el-icon><House /></el-icon>
-            <span>返回</span>
-          </div>
-          <div class="head_item">
-            <el-icon><FullScreen /></el-icon>
-            <span>网格</span>
-          </div>
-          <div class="head_item">
-            <el-icon><EditPen /></el-icon>
-            <span>测量</span>
-          </div>
-          <div class="head_item">
-            <el-icon><House /></el-icon>
-            <span>返回</span>
-          </div>
-          <div class="head_item">
-            <el-icon><FullScreen /></el-icon>
-            <span>网格</span>
-          </div>
-          <div class="head_item">
-            <el-icon><EditPen /></el-icon>
-            <span>测量</span>
-          </div>
-        </div>
-      </div>
-      <el-button type="success">保存</el-button>
-    </div>
-    <div class="content">
-      <div ref="container" class="oral-3d"></div>
-    </div>
-  </div>
+  <div ref="container" class="three-container"></div>
 </template>
 
-<script lang="ts" setup>
-import { House, FullScreen, EditPen } from '@element-plus/icons-vue'
-import { ref, onMounted, onUnmounted } from 'vue'
+<script setup lang="ts">
+import { onMounted, ref } from 'vue'
 import * as THREE from 'three'
-import { OrbitControls, STLLoader } from 'three-stdlib'
+import { STLLoader } from 'three-stdlib'
+import { CSS2DRenderer, CSS2DObject } from 'three-stdlib'
+import { OrbitControls } from 'three-stdlib'
 
-const container = ref<HTMLDivElement | null>(null)
-
-let scene: THREE.Scene
-let camera: THREE.PerspectiveCamera
-let renderer: THREE.WebGLRenderer
-let controls: OrbitControls
+const container = ref<HTMLDivElement>()
 
 onMounted(() => {
-  initScene()
-  loadModels()
-  animate()
+  initThree()
 })
 
-onUnmounted(() => {
-  renderer?.dispose()
-})
+function initThree() {
+  const scene = new THREE.Scene()
+  scene.background = new THREE.Color(0xffffff)
 
-function initScene() {
-  scene = new THREE.Scene()
-  scene.background = new THREE.Color(0xf2f2f2)
+  const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000)
+  camera.position.set(0, 0, 250)
 
-  const width = container.value!.clientWidth
-  const height = container.value!.clientHeight
-
-  camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000)
-  camera.position.set(0, 0, 150)
-
-  renderer = new THREE.WebGLRenderer({ antialias: true })
-  renderer.setSize(width, height)
+  const renderer = new THREE.WebGLRenderer({ antialias: true })
+  renderer.setSize(window.innerWidth, window.innerHeight)
   container.value!.appendChild(renderer.domElement)
 
-  // 灯光
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6)
-  scene.add(ambientLight)
-  const dirLight = new THREE.DirectionalLight(0xffffff, 0.8)
-  dirLight.position.set(100, 100, 100)
-  scene.add(dirLight)
+  const labelRenderer = new CSS2DRenderer()
+  labelRenderer.setSize(window.innerWidth, window.innerHeight)
+  labelRenderer.domElement.style.position = 'absolute'
+  labelRenderer.domElement.style.top = '0'
+  labelRenderer.domElement.style.pointerEvents = 'none'
+  container.value!.appendChild(labelRenderer.domElement)
 
-  // 控制器
-  controls = new OrbitControls(camera, renderer.domElement)
+  const controls = new OrbitControls(camera, renderer.domElement)
   controls.enableDamping = true
-  controls.dampingFactor = 0.05
-  controls.minDistance = 30
-  controls.maxDistance = 300
+  controls.enablePan = false
+  controls.minDistance = 80
+  controls.maxDistance = 500
 
-  // 可选：坐标轴辅助
-  // const axesHelper = new THREE.AxesHelper(50)
-  // scene.add(axesHelper)
-}
+  const light = new THREE.DirectionalLight(0xffffff, 1)
+  light.position.set(50, 100, 50)
+  scene.add(light)
+  scene.add(new THREE.AmbientLight(0xffffff, 0.4))
 
-function loadModels() {
   const loader = new STLLoader()
 
-  // 上颌
+  // ---------- 加载真实 STL ----------
   loader.load('/models/UpperJaw.stl', (geometry) => {
+    geometry.computeVertexNormals()
+    // 将几何体居中（调整原点）
+    geometry.center()
+
     const material = new THREE.MeshPhongMaterial({
       color: 0xf8d7d7,
       specular: 0x555555,
       shininess: 30,
     })
-    const upperMesh = new THREE.Mesh(geometry, material)
-    upperMesh.scale.set(1, 1, 1) // 缩放比例按你的文件调整
-    upperMesh.position.set(0, 0, 0) // 稍微上移一点x,y,z轴的坐标
-    scene.add(upperMesh)
+    const jawMesh = new THREE.Mesh(geometry, material)
+
+    // 如果需要旋转，使模型朝向合适（根据你的 STL 可能需要）
+    jawMesh.rotation.x = -Math.PI
+
+    // 把模型加入场景
+    scene.add(jawMesh)
+
+    // ---------- 示例：一些“近似点”（世界坐标），程序会自动把它们吸附到模型表面 ----------
+    // 这些点可以来自 AI，或你手动输入，这里只是示例：
+    const approxWorldPoints = [
+      new THREE.Vector3(5, 10, 0),
+      new THREE.Vector3(-10, 5, 2),
+      new THREE.Vector3(15, 8, -2),
+    ]
+
+    approxWorldPoints.forEach((worldP, idx) => {
+      // 将近似点投影到模型表面（返回局部点）
+      const projected = projectPointToMeshSurface(jawMesh, worldP)
+      if (projected) {
+        // projected.localPoint 是 THREE.Vector3（局部坐标）
+        // 我们把 label 作为子对象挂在 jawMesh（局部坐标）
+        addLabelToMesh(jawMesh, projected.localPoint, String(idx + 1))
+      } else {
+        // 未找到投影（异常），直接把 label 加到场景某处以便调试
+        console.warn('无法投影该点到网格表面：', worldP)
+      }
+    })
+
+    // 如果你需要后续动态投影（比如用户用鼠标点击某处来放标签），可以调用同一个 projectPointToMeshSurface
   })
 
-  // 下颌
-  loader.load('/models/LowerJaw.stl', (geometry) => {
-    const material = new THREE.MeshPhongMaterial({
-      color: 0xf8d7d7,
-      specular: 0x555555,
-      shininess: 30,
-    })
-    const lowerMesh = new THREE.Mesh(geometry, material)
-    lowerMesh.scale.set(1, 1, 1)
-    lowerMesh.position.set(0, 0, 0) // 稍微下移一点
-    scene.add(lowerMesh)
+  // ---------- 添加 Label 并把它作为 mesh 的子对象 ----------
+  function addLabelToMesh(parentMesh: THREE.Object3D, localPos: THREE.Vector3, text: string) {
+    const div = document.createElement('div')
+    div.textContent = text
+    div.style.padding = '4px 6px'
+    div.style.background = 'rgba(0,0,0,0.7)'
+    div.style.color = 'white'
+    div.style.borderRadius = '4px'
+    div.style.fontSize = '12px'
+
+    const label = new CSS2DObject(div)
+    // 重要：这里使用局部坐标位置（父对象是 jawMesh）
+    label.position.copy(localPos)
+    parentMesh.add(label)
+  }
+
+  // ---------- 动画循环 ----------
+  function animate() {
+    requestAnimationFrame(animate)
+    controls.update()
+    renderer.render(scene, camera)
+    labelRenderer.render(scene, camera)
+  }
+  animate()
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight
+    camera.updateProjectionMatrix()
+    renderer.setSize(window.innerWidth, window.innerHeight)
+    labelRenderer.setSize(window.innerWidth, window.innerHeight)
   })
 }
 
-function animate() {
-  requestAnimationFrame(animate)
-  controls.update()
-  renderer.render(scene, camera)
+/**
+ * projectPointToMeshSurface
+ * - 输入：mesh（THREE.Mesh） 和 一个 worldPoint（THREE.Vector3，世界坐标）
+ * - 输出：{ localPoint: THREE.Vector3, worldPoint: THREE.Vector3, normal: THREE.Vector3 } 或 null
+ *
+ * 算法：把 worldPoint 转为 mesh.local 坐标，然后遍历三角面，找离点最近的三角面上的点（closest point on triangle）。
+ * 返回局部坐标（便于 parent.add(label)），也返回世界坐标与法向。
+ *
+ * 注意：该实现为逐三角遍历，精确但在面数很大时会慢。若性能成为问题，请使用 three-mesh-bvh。
+ */
+function projectPointToMeshSurface(mesh: THREE.Mesh, worldPoint: THREE.Vector3) {
+  const geometry = mesh.geometry as THREE.BufferGeometry
+  if (!geometry || !geometry.attributes.position) return null
+
+  // 把世界坐标转为 mesh 的局部坐标
+  const localPoint = worldPoint.clone()
+  mesh.worldToLocal(localPoint)
+
+  const posAttr = geometry.attributes.position
+  const indexAttr = geometry.index // 可能为 null（非索引化）
+  const a = new THREE.Vector3()
+  const b = new THREE.Vector3()
+  const c = new THREE.Vector3()
+  const triClosest = new THREE.Vector3()
+  const tmpNormal = new THREE.Vector3()
+
+  const bestPoint = new THREE.Vector3()
+  let bestDistSq = Infinity
+  const bestNormal = new THREE.Vector3()
+
+  // 辅助：获取三角顶点坐标（局部坐标系）
+  const getVertex = (i: number, target: THREE.Vector3) => {
+    target.fromBufferAttribute(posAttr, i)
+  }
+
+  // 遍历三角
+  const triCount = indexAttr ? indexAttr.count / 3 : posAttr.count / 3
+  for (let ti = 0; ti < triCount; ti++) {
+    let i0: number, i1: number, i2: number
+    if (indexAttr) {
+      i0 = indexAttr.getX(ti * 3)
+      i1 = indexAttr.getX(ti * 3 + 1)
+      i2 = indexAttr.getX(ti * 3 + 2)
+    } else {
+      i0 = ti * 3
+      i1 = ti * 3 + 1
+      i2 = ti * 3 + 2
+    }
+
+    getVertex(i0, a)
+    getVertex(i1, b)
+    getVertex(i2, c)
+
+    // 计算当前三角上离 localPoint 最近的点（局部坐标系）
+    closestPointOnTriangle(localPoint, a, b, c, triClosest)
+
+    // 计算距离平方
+    const dsq = triClosest.distanceToSquared(localPoint)
+    if (dsq < bestDistSq) {
+      bestDistSq = dsq
+      bestPoint.copy(triClosest)
+
+      // 计算三角面法向（用于让 label 以法线偏移）
+      tmpNormal.subVectors(b, a).cross(tmpNormal.subVectors(c, a)).normalize()
+      bestNormal.copy(tmpNormal)
+    }
+  }
+
+  // 返回局部点和世界点与法向
+  const outLocal = bestPoint.clone()
+  const outWorld = outLocal.clone()
+  mesh.localToWorld(outWorld)
+
+  return {
+    localPoint: outLocal,
+    worldPoint: outWorld,
+    normal: bestNormal,
+  }
+}
+
+/**
+ * closestPointOnTriangle（经典实现）
+ * 计算点 p 到三角面 abc 的最近点，结果写入 out（都为 THREE.Vector3）
+ *
+ * 算法参考：Real-Time Collision Detection（Christer Ericson）
+ */
+function closestPointOnTriangle(
+  p: THREE.Vector3,
+  a: THREE.Vector3,
+  b: THREE.Vector3,
+  c: THREE.Vector3,
+  out: THREE.Vector3,
+) {
+  // 从 a 出发的向量
+  const ab = new THREE.Vector3().subVectors(b, a)
+  const ac = new THREE.Vector3().subVectors(c, a)
+  const ap = new THREE.Vector3().subVectors(p, a)
+
+  const d1 = ab.dot(ap)
+  const d2 = ac.dot(ap)
+
+  if (d1 <= 0 && d2 <= 0) {
+    // 区域A（顶点 a）
+    out.copy(a)
+    return out
+  }
+
+  // 检查顶点 B 区域
+  const bp = new THREE.Vector3().subVectors(p, b)
+  const d3 = ab.dot(bp)
+  const d4 = ac.dot(bp)
+  if (d3 >= 0 && d4 <= d3) {
+    out.copy(b)
+    return out
+  }
+
+  // 检查边 AB 区域
+  const vc = d1 * d4 - d3 * d2
+  if (vc <= 0 && d1 >= 0 && d3 <= 0) {
+    const v = d1 / (d1 - d3)
+    out.copy(ab).multiplyScalar(v).add(a)
+    return out
+  }
+
+  // 检查顶点 C 区域
+  const cp = new THREE.Vector3().subVectors(p, c)
+  const d5 = ab.dot(cp)
+  const d6 = ac.dot(cp)
+  if (d6 >= 0 && d5 <= d6) {
+    out.copy(c)
+    return out
+  }
+
+  // 检查边 AC 区域
+  const vb = d5 * d2 - d1 * d6
+  if (vb <= 0 && d2 >= 0 && d6 <= 0) {
+    const w = d2 / (d2 - d6)
+    out.copy(ac).multiplyScalar(w).add(a)
+    return out
+  }
+
+  // 检查边 BC 区域
+  const va = d3 * d6 - d5 * d4
+  if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0) {
+    const w = (d4 - d3) / (d4 - d3 + (d5 - d6))
+    const bc = new THREE.Vector3().subVectors(c, b)
+    out.copy(bc).multiplyScalar(w).add(b)
+    return out
+  }
+
+  // 内部区域（投影到三角面平面上，然后用重心坐标）
+  const denom = 1 / (va + vb + vc) // safe because not zero here
+  const v = vb * denom
+  const w = vc * denom
+  out.copy(ab).multiplyScalar(v).add(ac.clone().multiplyScalar(w)).add(a)
+  return out
 }
 </script>
 
-<style lang="scss" scoped>
-.modelAnalysis {
-  .header {
-    width: 100%;
-    height: 50px;
-    padding: 0px 20px;
-    box-sizing: border-box;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    .head_name {
-      width: 55%;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .head_cont {
-      display: flex;
-      align-items: center;
-      .head_item {
-        width: 60px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        margin: 0 3px;
-        .el-icon {
-          font-size: 28px;
-          color: green;
-          margin-bottom: 5px;
-        }
-        span {
-          font-size: 12px;
-          color: #606266;
-        }
-      }
-      .select_head {
-        border-bottom: 5px solid green;
-      }
-    }
-  }
-  .content {
-    .oral-3d {
-      width: 100%;
-      height: 100vh;
-      background-color: #f9f9f9;
-      overflow: hidden;
-    }
-  }
+<style>
+.three-container {
+  width: 100%;
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
 }
 </style>
