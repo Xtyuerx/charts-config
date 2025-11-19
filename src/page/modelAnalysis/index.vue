@@ -60,7 +60,8 @@ function initThree() {
     const jawMesh = new THREE.Mesh(geometry, material)
 
     // 如果需要旋转，使模型朝向合适（根据你的 STL 可能需要）
-    jawMesh.rotation.x = -Math.PI
+    jawMesh.rotation.y = Math.PI
+    jawMesh.rotation.x = Math.PI / 2
 
     // 把模型加入场景
     scene.add(jawMesh)
@@ -68,9 +69,9 @@ function initThree() {
     // ---------- 示例：一些“近似点”（世界坐标），程序会自动把它们吸附到模型表面 ----------
     // 这些点可以来自 AI，或你手动输入，这里只是示例：
     const approxWorldPoints = [
-      new THREE.Vector3(5, 10, 0),
-      new THREE.Vector3(-10, 5, 2),
-      new THREE.Vector3(15, 8, -2),
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(0, 6, 8),
+      new THREE.Vector3(5, 5, -2),
     ]
 
     approxWorldPoints.forEach((worldP, idx) => {

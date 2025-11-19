@@ -4,9 +4,15 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
-      path: '/',
+      path: '/modelAnalysis',
       name: 'modelAnalysis',
       component: () => import('@/page/modelAnalysis/index.vue'),
+      meta: { title: '模型分析' },
+    },
+    {
+      path: '/',
+      name: 'demoModel',
+      component: () => import('@/page/demoModel/index.vue'),
       meta: { title: '模型分析' },
     },
     {
