@@ -4,6 +4,12 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
+      path: '/uploadPreview',
+      name: 'uploadPreview',
+      component: () => import('@/components/UploadPreview/index.vue'),
+      meta: { title: '上传预览' },
+    },
+    {
       path: '/chartTable',
       name: 'chartTable',
       component: () => import('@/page/chartTable/index.vue'),
