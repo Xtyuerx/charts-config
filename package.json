@@ -22,7 +22,7 @@
     "element-plus": "^2.11.5",
     "lodash": "^4.17.21",
     "pinia": "^3.0.3",
-    "three": "^0.181.1",
+    "three": "^0.181.2",
     "three-stdlib": "^2.36.1",
     "vue": "^3.5.22",
     "vue-router": "^4.5.1"

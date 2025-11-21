@@ -13,6 +13,7 @@ import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRe
 import { Line2 } from 'three/examples/jsm/lines/Line2'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial'
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry'
+import { TransformControls } from 'three/addons/controls/TransformControls.js'
 
 // container ref
 const container = ref<HTMLDivElement | null>(null)
@@ -44,6 +45,7 @@ const labelGroups: {
 // ---------------- init ----------------
 onMounted(() => {
   initThree()
+
   loadModelAndCreateLabels('/models/UpperJaw.stl') // <- 替换为你的 stl 路径
   window.addEventListener('resize', onWindowResize)
 })
@@ -102,22 +104,18 @@ function drawPath(points: THREE.Vector3[]) {
 
   return line
 }
-function addDistanceLabel(A: THREE.Vector3, B: THREE.Vector3) {
-  const text = `${A.distanceTo(B).toFixed(2)} mm`
-  const div = document.createElement('div')
+function addDistanceLabel(a: THREE.Vector3, b: THREE.Vector3) {
+  const mid = a.clone().add(b).multiplyScalar(0.5)
 
-  div.textContent = text
-  div.style.padding = '4px 6px'
-  div.style.borderRadius = '4px'
-  div.style.background = 'rgba(0,0,0,0.6)'
-  div.style.color = '#fff'
-  div.style.fontSize = '12px'
+  const div = document.createElement('div')
+  div.className = 'distance-label'
+
+  const distance = a.distanceTo(b).toFixed(2)
+  div.textContent = `${distance} mm`
 
   const label = new CSS2DObject(div)
-  const mid = A.clone().add(B).multiplyScalar(0.5)
   label.position.copy(mid)
-
-  return label
+  scene.add(label)
 }
 // ---------------- functions ----------------
 function initThree() {
@@ -154,12 +152,25 @@ function initThree() {
   const dir = new THREE.DirectionalLight(0xffffff, 0.6)
   dir.position.set(50, 100, 80)
   scene.add(dir)
-
+  // const transformControls = new TransformControls(camera, renderer.domElement)
+  // transformControls.addEventListener('dragging-changed', function (event) {
+  //   const isDragging = event.value
+  //   if (!isDragging) {
+  //     // 拖拽结束后获取最新的curve点集，从而更新曲线
+  //     const points = curve.getPoints(50)
+  //     curveObject.geometry.setFromPoints(points)
+  //     // flow.updateCurve(0, curve)
+  //   }
+  //   controls.enabled = !isDragging
+  // })
+  // // // TransformControls需要添加到场景，可以通过控制其visible来显示隐藏
+  // scene.add(transformControls)
   animate()
 }
 
 function loadModelAndCreateLabels(stlUrl: string) {
   const loader = new STLLoader()
+
   loader.load(
     stlUrl,
     (geometry) => {
@@ -175,31 +186,34 @@ function loadModelAndCreateLabels(stlUrl: string) {
 
       // 常见的 STL 需要旋转调整 —— 这里把 X 旋转 -90° 以便与多数牙科模型对齐（若你的模型不需要可删）
       // mesh.rotation.y = -90
-      // mesh.rotation.x = Math.PI
+      // mesh.rotation.x = 45
+      // mesh.rotation.z = 90
       // 计算中心并把模型放在原点
-      geometry.computeBoundingBox()
-      if (geometry.boundingBox) {
-        const center = new THREE.Vector3()
-        geometry.boundingBox.getCenter(center)
-        mesh.geometry.translate(-center.x, -center.y, -center.z)
-      }
+      // geometry.computeBoundingBox()
+      // if (geometry.boundingBox) {
+      //   const center = new THREE.Vector3()
+      //   geometry.boundingBox.getCenter(center)
+      //   mesh.geometry.translate(-center.x, -center.y, -center.z)
+      // }
 
-      // 缩放使模型适配视图（可根据情况调整）
-      // 这里按包围盒最大边长缩放到约 100 单位
-      const bbox = new THREE.Box3().setFromObject(mesh)
-      const size = new THREE.Vector3()
-      bbox.getSize(size)
-      const maxSide = Math.max(size.x, size.y, size.z)
-      if (maxSide > 0) {
-        const scale = 100 / maxSide
-        mesh.scale.setScalar(scale)
-      }
+      // // 缩放使模型适配视图（可根据情况调整）
+      // // 这里按包围盒最大边长缩放到约 100 单位
+      // const bbox = new THREE.Box3().setFromObject(mesh)
+      // const size = new THREE.Vector3()
+      // bbox.getSize(size)
+      // const maxSide = Math.max(size.x, size.y, size.z)
+      // if (maxSide > 0) {
+      //   const scale = 100 / maxSide
+      //   mesh.scale.setScalar(scale)
+      // }
 
       scene.add(mesh)
       modelMesh = mesh
 
       // 创建标签点（在模型加载后）
       createLabelPoints()
+      // 🔥 添加三条避障线
+      createSafeConnectLines()
       // ------------------- 连接 A → B，避障连线 -------------------
       const A = labelDefs[0].position.clone()
       const B = labelDefs[1].position.clone()
@@ -224,7 +238,41 @@ function loadModelAndCreateLabels(stlUrl: string) {
     },
   )
 }
+function createSafeConnectLines() {
+  if (!modelMesh) return
 
+  // 把输入点转换到模型最终坐标系统
+  const A = toModelCoord(labelDefs[0].position)
+  const B = toModelCoord(labelDefs[1].position)
+  const C = toModelCoord(labelDefs[2].position)
+
+  const pairs = [
+    { p1: A, p2: B, name: 'A-B' },
+    { p1: B, p2: C, name: 'B-C' },
+    { p1: A, p2: C, name: 'A-C' },
+  ]
+
+  pairs.forEach((pair) => {
+    // 1. 生成避障路径点
+    const pts = buildSafePath(pair.p1, pair.p2, modelMesh)
+
+    // 2. 绘制连线
+    const line = drawPath(pts)
+    scene.add(line)
+
+    // 3. 距离标签
+    const dist = addDistanceLabel(pair.p1, pair.p2)
+    scene.add(dist)
+  })
+}
+let stlCenter = new THREE.Vector3()
+let stlScale = 1
+function toModelCoord(p: THREE.Vector3) {
+  return p
+    .clone()
+    .sub(stlCenter) // 同样减掉 bounding box center
+    .multiplyScalar(stlScale) // 同样乘上 scale
+}
 // 创建 3D 小点 + 线 + DOM 标签（CSS2D）
 function createLabelPoints() {
   if (!modelMesh) return
@@ -245,67 +293,129 @@ function createLabelPoints() {
     roughness: 0.5,
   })
 
-  for (const def of labelDefs) {
-    // 因为我们对模型做了 translate/scale，输入坐标应与模型原始坐标系一致。
-    // 若你的坐标基于模型加载后的位置/缩放，需要做相同变换（见下）
-    // 将用户给的坐标（假设是 STL 原始坐标）应用同样的缩放和平移：
-    const worldPos = def.position.clone()
+  // for (const def of labelDefs) {
+  //   // 因为我们对模型做了 translate/scale，输入坐标应与模型原始坐标系一致。
+  //   // 若你的坐标基于模型加载后的位置/缩放，需要做相同变换（见下）
+  //   // 将用户给的坐标（假设是 STL 原始坐标）应用同样的缩放和平移：
+  //   // const worldPos = def.position.clone()
+  //   const worldPos = toModelCoord(def.position)
+  //   // 如果你对模型应用了 translate(center), scale(s)
+  //   // 需要把坐标移动到同一坐标系：先减去 center，再乘以 scale
+  //   // 我在上面对 geometry.translate(-center) 做了处理，并对 mesh 做了 scale
+  //   // 因此如果你的 labelDefs 是 model 原始坐标（跟 geometry 一致），需要同样转换：
+  //   // -> apply translation: (pos - center) * scale
+  //   // For simplicity: assume labelDefs are already in the same coordinates as final mesh.
+  //   // If标签位置不对：把你的坐标按同样的 center/scale 处理（我在注释里写明如何处理）。
 
-    // 如果你对模型应用了 translate(center), scale(s)
-    // 需要把坐标移动到同一坐标系：先减去 center，再乘以 scale
-    // 我在上面对 geometry.translate(-center) 做了处理，并对 mesh 做了 scale
-    // 因此如果你的 labelDefs 是 model 原始坐标（跟 geometry 一致），需要同样转换：
-    // -> apply translation: (pos - center) * scale
-    // For simplicity: assume labelDefs are already in the same coordinates as final mesh.
-    // If标签位置不对：把你的坐标按同样的 center/scale 处理（我在注释里写明如何处理）。
+  //   // 创建一个 group 以便整体偏移 label（sphere + line + css）
+  //   const group = new THREE.Object3D()
+  //   group.position.copy(worldPos)
 
-    // 创建一个 group 以便整体偏移 label（sphere + line + css）
-    const group = new THREE.Object3D()
-    group.position.copy(worldPos)
+  //   // sphere
+  //   const sphere = new THREE.Mesh(sphereGeom, sphereMat)
+  //   sphere.castShadow = false
+  //   sphere.receiveShadow = false
+  //   sphere.position.set(0, 0, 0)
+  //   group.add(sphere)
 
-    // sphere
-    const sphere = new THREE.Mesh(sphereGeom, sphereMat)
-    sphere.castShadow = false
-    sphere.receiveShadow = false
-    sphere.position.set(0, 0, 0)
-    group.add(sphere)
+  //   // CSS2D label DOM
+  //   const div = document.createElement('div')
+  //   div.className = 'label-box'
+  //   div.textContent = def.text
+  //   // pointer events none so it doesn't block OrbitControls
+  //   div.style.pointerEvents = 'auto' // 如果需要交互可改为 auto
+  //   // label 可以自定义样式，下面 CSS 有样式示例
+  //   const cssObj = new CSS2DObject(div)
+  //   // 将 label 放置在点外侧（沿着从模型质心指向点的方向），使 label 不与模型表面重叠
+  //   // compute an outward offset
+  //   const bbox = new THREE.Box3().setFromObject(modelMesh!)
+  //   const center = new THREE.Vector3()
+  //   bbox.getCenter(center)
+  //   // direction from model center to point
+  //   const dir = new THREE.Vector3().subVectors(worldPos, center).normalize()
+  //   const outwardOffset = dir.clone().multiplyScalar(12) // 偏移长度（可调）
+  //   cssObj.position.copy(outwardOffset)
+  //   group.add(cssObj)
 
-    // CSS2D label DOM
+  //   // line: from sphere (0,0,0) to cssObj.position
+  //   const lineGeom = new THREE.BufferGeometry().setFromPoints([
+  //     new THREE.Vector3(0, 0, 0),
+  //     cssObj.position.clone(),
+  //   ])
+  //   const lineMat = new THREE.LineBasicMaterial({ color: 0x333333 })
+  //   const line = new THREE.Line(lineGeom, lineMat)
+  //   group.add(line)
+
+  //   // 把 group 添加到场景（坐标系与 mesh 一致）
+  //   scene.add(group)
+
+  //   // store
+  //   labelGroups.push({ group, sphere, line, cssObject: cssObj })
+  // }
+  labelDefs.forEach((p, i) => {
+    // tiny point
+    const sphere = new THREE.Mesh(
+      new THREE.SphereGeometry(2, 32, 32),
+      new THREE.MeshStandardMaterial({ color: 0xaa0000 }),
+    )
+    sphere.position.copy(p.position)
+    scene.add(sphere)
+
+    // text label
     const div = document.createElement('div')
-    div.className = 'label-box'
-    div.textContent = def.text
-    // pointer events none so it doesn't block OrbitControls
-    div.style.pointerEvents = 'auto' // 如果需要交互可改为 auto
-    // label 可以自定义样式，下面 CSS 有样式示例
-    const cssObj = new CSS2DObject(div)
-    // 将 label 放置在点外侧（沿着从模型质心指向点的方向），使 label 不与模型表面重叠
-    // compute an outward offset
-    const bbox = new THREE.Box3().setFromObject(modelMesh!)
-    const center = new THREE.Vector3()
-    bbox.getCenter(center)
-    // direction from model center to point
-    const dir = new THREE.Vector3().subVectors(worldPos, center).normalize()
-    const outwardOffset = dir.clone().multiplyScalar(12) // 偏移长度（可调）
-    cssObj.position.copy(outwardOffset)
-    group.add(cssObj)
+    div.className = 'label'
+    div.textContent = p.text
 
-    // line: from sphere (0,0,0) to cssObj.position
-    const lineGeom = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(0, 0, 0),
-      cssObj.position.clone(),
-    ])
-    const lineMat = new THREE.LineBasicMaterial({ color: 0x333333 })
-    const line = new THREE.Line(lineGeom, lineMat)
-    group.add(line)
+    const label = new CSS2DObject(div)
+    label.position.copy(p.position.clone().add(new THREE.Vector3(0, 8, 0)))
+    scene.add(label)
+  })
 
-    // 把 group 添加到场景（坐标系与 mesh 一致）
-    scene.add(group)
+  // draw safe lines + distance
+  function connect(i: number, j: number) {
+    const A = labelDefs[i].position
+    const B = labelDefs[j].position
 
-    // store
-    labelGroups.push({ group, sphere, line, cssObject: cssObj })
+    const safePoints = computeSafePath(A, B, modelMesh)
+    createLine(safePoints)
+
+    addDistanceLabel(A, B)
   }
-}
 
+  // A-B, B-C, C-A
+  connect(0, 1)
+  connect(1, 2)
+  connect(2, 0)
+}
+function createLine(points: THREE.Vector3[]) {
+  const geometry = new THREE.BufferGeometry().setFromPoints(points)
+  const material = new THREE.LineBasicMaterial({
+    color: 0x33cfff,
+    linewidth: 2,
+  })
+  const line = new THREE.Line(geometry, material)
+  scene.add(line)
+  return line
+}
+function computeSafePath(a: THREE.Vector3, b: THREE.Vector3, mesh: THREE.Mesh) {
+  const direction = b.clone().sub(a).normalize()
+  const ray = new THREE.Raycaster(a, direction)
+
+  const hits = ray.intersectObject(mesh, true)
+
+  if (hits.length && hits[0].distance < a.distanceTo(b)) {
+    // 发生穿透 → 在中点向法线方向抬高
+    const mid = a.clone().add(b).multiplyScalar(0.5)
+
+    const normal = hits[0].face?.normal.clone().normalize() || new THREE.Vector3(0, 1, 0)
+    const liftedMid = mid.add(normal.multiplyScalar(5)) // 抬高 5mm
+
+    return [a, liftedMid, b]
+  }
+
+  // 不穿透 → 直连
+  return [a, b]
+}
 // 当窗口大小改变
 function onWindowResize() {
   if (!container.value) return
@@ -369,6 +479,21 @@ function animate() {
   pointer-events: auto; /* 如果你想让标签能被点击或 hover，保留 auto */
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
   user-select: none;
+}
+.label {
+  padding: 2px 6px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 12px;
+  border-radius: 4px;
+}
+.distance-label {
+  padding: 3px 8px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  font-size: 12px;
+  border-radius: 6px;
+  white-space: nowrap;
 }
 
 /* 小屏时缩小文本 */

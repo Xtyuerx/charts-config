@@ -12,7 +12,7 @@ const router = createRouter({
     {
       path: '/',
       name: 'demoModel',
-      component: () => import('@/page/demoModel/index.vue'),
+      component: () => import('@/page/demoModel/demo.vue'),
       meta: { title: '模型分析' },
     },
     {
@@ -20,6 +20,12 @@ const router = createRouter({
       name: 'chartTable',
       component: () => import('@/page/chartTable/index.vue'),
       meta: { title: '图表分析' },
+    },
+    {
+      path: '/mousic',
+      name: 'mousic',
+      component: () => import('@/page/mousic/index.vue'),
+      meta: { title: '运动轨迹' },
     },
   ],
 })
