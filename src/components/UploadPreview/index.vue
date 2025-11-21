@@ -1,4 +1,5 @@
 <template>
+  <el-button @click="changeStatus">显示/隐藏</el-button>
   <div class="upload-preview">
     <el-upload
       :auto-upload="false"
@@ -25,7 +26,7 @@
 
 <script lang="ts" setup>
 import { ref } from 'vue'
-import type { UploadProps, UploadUserFile } from 'element-plus'
+import { ElMessage, type UploadProps, type UploadUserFile } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 const previewList = ref<UploadUserFile[]>([])
 
@@ -33,6 +34,18 @@ const handleChange: UploadProps['onChange'] = (file) => {
   console.log(file)
   previewList.value.push(file)
 }
+
+const changeStatus = () => {
+  ElMessage({
+    message: 'Congrats, this is a success message.',
+    type: 'success',
+  })
+  console.log('changeStatus')
+}
+
+defineExpose({
+  changeStatus,
+})
 </script>
 
 <style scoped>
