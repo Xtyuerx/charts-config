@@ -5,9 +5,15 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import * as THREE from 'three'
-import { STLLoader } from 'three-stdlib'
-import { CSS2DRenderer, CSS2DObject } from 'three-stdlib'
-import { OrbitControls } from 'three-stdlib'
+import {
+  STLLoader,
+  OrbitControls,
+  Line2,
+  LineMaterial,
+  LineGeometry,
+  CSS2DRenderer,
+  CSS2DObject,
+} from 'three-stdlib'
 
 const container = ref<HTMLDivElement>()
 
@@ -87,6 +93,48 @@ function initThree() {
       }
     })
 
+    // ---------- 绘制贴合模型的加粗曲线 ----------
+    // 三维向量Vector3创建一组顶点坐标
+    const arr = [
+      new THREE.Vector3(-60, -20, -10),
+      new THREE.Vector3(0, 28, 0),
+      new THREE.Vector3(60, -28, -10),
+    ]
+
+    // 生成样条曲线上的点
+    const curve = new THREE.CatmullRomCurve3(arr)
+    const curvePoints = curve.getPoints(100)
+
+    // 将曲线上的每个点投影到模型表面
+
+    console.log('原始点数:', curvePoints.length, '投影成功点数:', arr.length)
+
+    if (arr.length > 1) {
+      // 使用 Line2 和 LineMaterial 来支持真正的线宽
+      const positions: number[] = []
+      curvePoints.forEach((p) => {
+        positions.push(p.x, p.y, p.z)
+      })
+
+      const lineGeometry = new LineGeometry()
+      lineGeometry.setPositions(positions)
+
+      const lineMaterial = new LineMaterial({
+        color: 0xff0000, // 红色
+        linewidth: 5, // 线宽（像素）- Line2 支持真正的线宽
+        resolution: new THREE.Vector2(window.innerWidth, window.innerHeight), // 分辨率
+      })
+
+      // 保存材质引用，用于窗口调整时更新
+      lineMaterials.push(lineMaterial)
+
+      const line = new Line2(lineGeometry, lineMaterial)
+      line.computeLineDistances() // 必须调用
+
+      // 作为 jawMesh 的子对象，继承其旋转变换
+      jawMesh.add(line)
+    }
+
     // 如果你需要后续动态投影（比如用户用鼠标点击某处来放标签），可以调用同一个 projectPointToMeshSurface
   })
 
@@ -106,6 +154,9 @@ function initThree() {
     parentMesh.add(label)
   }
 
+  // 存储线条材质，用于窗口调整时更新分辨率
+  const lineMaterials: LineMaterial[] = []
+
   // ---------- 动画循环 ----------
   function animate() {
     requestAnimationFrame(animate)
@@ -120,6 +171,11 @@ function initThree() {
     camera.updateProjectionMatrix()
     renderer.setSize(window.innerWidth, window.innerHeight)
     labelRenderer.setSize(window.innerWidth, window.innerHeight)
+
+    // 更新 Line2 材质的分辨率
+    lineMaterials.forEach((material) => {
+      material.resolution.set(window.innerWidth, window.innerHeight)
+    })
   })
 }
 
