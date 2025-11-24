@@ -1,9 +1,16 @@
 <template>
-  <div ref="container" class="three-container"></div>
+  <div class="model-analysis-container">
+    <div ref="container" class="three-container"></div>
+    <div class="controls-panel">
+      <button @click="resetNodes" class="control-btn">重置节点</button>
+      <button @click="addRandomNode" class="control-btn">添加节点</button>
+      <button @click="logNodeInfo" class="control-btn">节点信息</button>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import * as THREE from 'three'
 import {
   STLLoader,
@@ -15,15 +22,85 @@ import {
   CSS2DObject,
 } from 'three-stdlib'
 
+// 拖拽状态管理
+interface DragState {
+  isDragging: boolean
+  draggedObject: THREE.Object3D | null
+  dragPlane: THREE.Plane
+  dragOffset: THREE.Vector3
+  raycaster: THREE.Raycaster
+  mouse: THREE.Vector2
+}
+
+// 全局接口声明
+declare global {
+  interface Window {
+    threeDNodeUtils: {
+      resetNodePositions: () => void
+      getNodeInfo: () => Array<{
+        index: number
+        position: THREE.Vector3
+        originalPosition?: THREE.Vector3
+        color: number
+      }>
+      cleanup: () => void
+      createDraggableNode: (position: THREE.Vector3, color?: number, size?: number) => THREE.Mesh
+      updateCurves: () => void
+    }
+    threeJSScene?: THREE.Scene
+  }
+}
+
 const container = ref<HTMLDivElement>()
+
+// 控制函数
+function resetNodes() {
+  if (window.threeDNodeUtils) {
+    window.threeDNodeUtils.resetNodePositions()
+  }
+}
+
+function addRandomNode() {
+  if (window.threeDNodeUtils) {
+    const randomPos = new THREE.Vector3(
+      (Math.random() - 0.5) * 100,
+      (Math.random() - 0.5) * 100,
+      (Math.random() - 0.5) * 50,
+    )
+    const randomColor = Math.random() * 0xffffff
+    window.threeDNodeUtils.createDraggableNode(randomPos, randomColor)
+    window.threeDNodeUtils.updateCurves()
+  }
+}
+
+function logNodeInfo() {
+  if (window.threeDNodeUtils) {
+    const info = window.threeDNodeUtils.getNodeInfo()
+    console.log('节点信息:', info)
+    alert(`当前有 ${info.length} 个节点，详细信息请查看控制台`)
+  }
+}
 
 onMounted(() => {
   initThree()
 })
 
+onUnmounted(() => {
+  // 组件卸载时清理资源
+  if (window.threeDNodeUtils) {
+    window.threeDNodeUtils.cleanup()
+    window.threeDNodeUtils = undefined
+  }
+  if (window.threeJSScene) {
+    window.threeJSScene = undefined
+  }
+})
 function initThree() {
   const scene = new THREE.Scene()
   scene.background = new THREE.Color(0xffffff)
+
+  // 将scene存储到window对象，供其他函数访问
+  window.threeJSScene = scene
 
   const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000)
   camera.position.set(0, 0, 250)
@@ -49,6 +126,125 @@ function initThree() {
   light.position.set(50, 100, 50)
   scene.add(light)
   scene.add(new THREE.AmbientLight(0xffffff, 0.4))
+
+  // 初始化拖拽状态
+  const dragState: DragState = {
+    isDragging: false,
+    draggedObject: null,
+    dragPlane: new THREE.Plane(),
+    dragOffset: new THREE.Vector3(),
+    raycaster: new THREE.Raycaster(),
+    mouse: new THREE.Vector2(),
+  }
+
+  // 存储可拖拽的节点
+  const draggableNodes: THREE.Mesh[] = []
+
+  // 创建可拖拽节点
+  function createDraggableNode(
+    position: THREE.Vector3,
+    color: number = 0xff4444,
+    size: number = 8,
+  ) {
+    const geometry = new THREE.SphereGeometry(size, 16, 16)
+    const material = new THREE.MeshPhongMaterial({
+      color: color,
+      emissive: color,
+      emissiveIntensity: 0.2,
+    })
+    const node = new THREE.Mesh(geometry, material)
+    node.position.copy(position)
+    node.userData = { isDraggable: true, originalPosition: position.clone() }
+
+    scene.add(node)
+    draggableNodes.push(node)
+
+    return node
+  }
+
+  // 创建控制节点（用于曲线控制）
+  function createControlNodes() {
+    // 在曲线关键位置创建可拖拽节点
+    const nodePositions = [
+      new THREE.Vector3(-60, -20, -10),
+      new THREE.Vector3(0, 28, 0),
+      new THREE.Vector3(60, -28, -10),
+    ]
+
+    nodePositions.forEach((pos, index) => {
+      const colors = [0xff4444, 0x44ff44, 0x4444ff]
+      const node = createDraggableNode(pos, colors[index])
+
+      // 添加节点标签
+      addLabelToMesh(node, new THREE.Vector3(0, 15, 0), `控制点${index + 1}`)
+    })
+
+    // 创建初始动态曲线
+    updateCurves()
+  }
+
+  // 重置所有节点位置
+  function resetNodePositions() {
+    draggableNodes.forEach((node) => {
+      if (node.userData.originalPosition) {
+        node.position.copy(node.userData.originalPosition)
+      }
+    })
+    updateCurves()
+  }
+
+  // 获取节点信息
+  function getNodeInfo() {
+    return draggableNodes.map((node, index) => ({
+      index,
+      position: node.position.clone(),
+      originalPosition: node.userData.originalPosition?.clone(),
+      color: (node.material as THREE.MeshPhongMaterial).color.getHex(),
+    }))
+  }
+
+  // 清理函数
+  function cleanup() {
+    const currentScene = window.threeJSScene || scene
+
+    // 移除事件监听器
+    if (container.value) {
+      container.value.removeEventListener('mousemove', onMouseMove)
+      container.value.removeEventListener('mousedown', onMouseDown)
+      container.value.removeEventListener('mouseup', onMouseUp)
+      container.value.removeEventListener('mouseleave', onMouseUp)
+    }
+
+    // 清理场景中的动态对象
+    draggableNodes.forEach((node) => {
+      currentScene.remove(node)
+      node.geometry.dispose()
+      ;(node.material as THREE.Material).dispose()
+    })
+    draggableNodes.length = 0
+
+    // 清理动态曲线
+    const dynamicCurves: Line2[] = []
+    currentScene.traverse((child) => {
+      if (child instanceof Line2 && child.userData.isDynamicCurve) {
+        dynamicCurves.push(child)
+      }
+    })
+    dynamicCurves.forEach((curve) => {
+      currentScene.remove(curve)
+      curve.geometry.dispose()
+      ;(curve.material as THREE.Material).dispose()
+    })
+  }
+
+  // 暴露给外部的接口
+  window.threeDNodeUtils = {
+    resetNodePositions,
+    getNodeInfo,
+    cleanup,
+    createDraggableNode,
+    updateCurves,
+  }
 
   const loader = new STLLoader()
 
@@ -135,6 +331,9 @@ function initThree() {
       jawMesh.add(line)
     }
 
+    // 创建控制节点（在模型加载完成后）
+    createControlNodes()
+
     // 如果你需要后续动态投影（比如用户用鼠标点击某处来放标签），可以调用同一个 projectPointToMeshSurface
   })
 
@@ -157,6 +356,180 @@ function initThree() {
   // 存储线条材质，用于窗口调整时更新分辨率
   const lineMaterials: LineMaterial[] = []
 
+  // 鼠标事件处理函数
+  function onMouseMove(event: MouseEvent) {
+    if (!container.value) return
+
+    const rect = container.value.getBoundingClientRect()
+    dragState.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
+    dragState.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
+
+    if (dragState.isDragging && dragState.draggedObject) {
+      // 更新射线
+      dragState.raycaster.setFromCamera(dragState.mouse, camera)
+
+      // 计算拖拽平面与射线的交点
+      const intersection = new THREE.Vector3()
+      if (dragState.raycaster.ray.intersectPlane(dragState.dragPlane, intersection)) {
+        // 应用偏移并更新物体位置
+        intersection.sub(dragState.dragOffset)
+        dragState.draggedObject.position.copy(intersection)
+
+        // 更新相关曲线（如果有的话）
+        updateCurves()
+      }
+    } else {
+      // 非拖拽状态下的鼠标悬停检测
+      dragState.raycaster.setFromCamera(dragState.mouse, camera)
+      const intersects = dragState.raycaster.intersectObjects(draggableNodes)
+
+      // 重置所有节点的悬停状态
+      draggableNodes.forEach((node) => {
+        if (node.userData.isHovered) {
+          const material = node.material as THREE.MeshPhongMaterial
+          material.emissiveIntensity = 0.2
+          node.scale.set(1, 1, 1)
+          node.userData.isHovered = false
+        }
+      })
+
+      // 设置悬停节点的状态
+      if (intersects.length > 0) {
+        // 检查悬停状态
+        const hoveredNode = intersects[0]?.object as THREE.Mesh
+        if (!dragState.isDragging) {
+          const material = hoveredNode.material as THREE.MeshPhongMaterial
+          material.emissiveIntensity = 0.3
+          hoveredNode.scale.set(1.2, 1.2, 1.2)
+          hoveredNode.userData.isHovered = true
+
+          // 改变鼠标样式
+          container.value!.style.cursor = 'pointer'
+        }
+      } else {
+        container.value!.style.cursor = 'default'
+      }
+    }
+  }
+
+  function onMouseDown(event: MouseEvent) {
+    if (!container.value) return
+
+    const rect = container.value.getBoundingClientRect()
+    dragState.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
+    dragState.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
+
+    // 更新射线
+    dragState.raycaster.setFromCamera(dragState.mouse, camera)
+
+    // 检测与可拖拽物体的交集
+    const intersects = dragState.raycaster.intersectObjects(draggableNodes)
+
+    if (intersects.length > 0 && intersects[0]) {
+      // 禁用轨道控制器
+      controls.enabled = false
+
+      // 设置拖拽状态
+      dragState.isDragging = true
+      dragState.draggedObject = intersects[0].object
+
+      // 设置拖拽平面（与相机垂直的平面）
+      const cameraDirection = new THREE.Vector3()
+      camera.getWorldDirection(cameraDirection)
+      dragState.dragPlane.setFromNormalAndCoplanarPoint(cameraDirection, intersects[0].point!)
+
+      // 计算偏移
+      dragState.dragOffset.subVectors(intersects[0].point!, dragState.draggedObject.position)
+
+      // 高亮被拖拽的物体
+      if (dragState.draggedObject instanceof THREE.Mesh) {
+        const material = dragState.draggedObject.material as THREE.MeshPhongMaterial
+        material.emissiveIntensity = 0.5
+      }
+    }
+  }
+
+  function onMouseUp() {
+    if (dragState.isDragging && dragState.draggedObject) {
+      // 恢复物体材质
+      if (dragState.draggedObject instanceof THREE.Mesh) {
+        const material = dragState.draggedObject.material as THREE.MeshPhongMaterial
+        material.emissiveIntensity = 0.2
+      }
+
+      // 重置拖拽状态
+      dragState.isDragging = false
+      dragState.draggedObject = null
+
+      // 重新启用轨道控制器
+      controls.enabled = true
+    }
+  }
+
+  // 更新曲线函数（当控制点移动时）
+  function updateCurves() {
+    // 获取控制点位置
+    const controlPoints = draggableNodes.map((node) => node.position.clone())
+
+    if (controlPoints.length >= 2) {
+      // 创建新的曲线
+      const curve = new THREE.CatmullRomCurve3(controlPoints)
+      const curvePoints = curve.getPoints(100)
+
+      // 更新现有曲线或创建新曲线
+      updateOrCreateCurve(curvePoints)
+    }
+
+    console.log('控制点位置已更新，曲线已重新生成')
+  }
+
+  // 更新或创建曲线
+  function updateOrCreateCurve(points: THREE.Vector3[]) {
+    const currentScene = window.threeJSScene || scene
+
+    // 查找现有的曲线
+    let existingLine: Line2 | null = null
+    currentScene.traverse((child) => {
+      if (child instanceof Line2 && child.userData.isDynamicCurve) {
+        existingLine = child
+      }
+    })
+
+    if (existingLine) {
+      // 更新现有曲线
+      const positions: number[] = []
+      points.forEach((p) => {
+        positions.push(p.x, p.y, p.z)
+      })
+
+      const geometry = (existingLine as Line2).geometry as LineGeometry
+      geometry.setPositions(positions)
+      ;(existingLine as Line2).computeLineDistances()
+    } else {
+      // 创建新曲线
+      const positions: number[] = []
+      points.forEach((p) => {
+        positions.push(p.x, p.y, p.z)
+      })
+
+      const lineGeometry = new LineGeometry()
+      lineGeometry.setPositions(positions)
+
+      const lineMaterial = new LineMaterial({
+        color: 0x00ff00, // 绿色动态曲线
+        linewidth: 4,
+        resolution: new THREE.Vector2(window.innerWidth, window.innerHeight),
+      })
+
+      const line = new Line2(lineGeometry, lineMaterial)
+      line.computeLineDistances()
+      line.userData.isDynamicCurve = true
+
+      currentScene.add(line)
+      lineMaterials.push(lineMaterial)
+    }
+  }
+
   // ---------- 动画循环 ----------
   function animate() {
     requestAnimationFrame(animate)
@@ -177,6 +550,12 @@ function initThree() {
       material.resolution.set(window.innerWidth, window.innerHeight)
     })
   })
+
+  // 添加鼠标事件监听器
+  container.value!.addEventListener('mousemove', onMouseMove)
+  container.value!.addEventListener('mousedown', onMouseDown)
+  container.value!.addEventListener('mouseup', onMouseUp)
+  container.value!.addEventListener('mouseleave', onMouseUp) // 鼠标离开容器时结束拖拽
 }
 
 /**
@@ -339,10 +718,49 @@ function closestPointOnTriangle(
 </script>
 
 <style>
-.three-container {
+.model-analysis-container {
+  position: relative;
   width: 100%;
   height: 100vh;
+}
+
+.three-container {
+  width: 100%;
+  height: 100%;
   position: relative;
   overflow: hidden;
+}
+
+.controls-panel {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 100;
+}
+
+.control-btn {
+  padding: 8px 16px;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.3s;
+}
+
+.control-btn:hover {
+  background: #0056b3;
+}
+
+.control-btn:active {
+  transform: scale(0.98);
 }
 </style>

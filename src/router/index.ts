@@ -21,12 +21,12 @@ const router = createRouter({
       component: () => import('@/page/chartTable/index.vue'),
       meta: { title: '图表分析' },
     },
-    {
+    /* {
       path: '/mousic',
       name: 'mousic',
       component: () => import('@/page/mousic/index.vue'),
       meta: { title: '运动轨迹' },
-    },
+    }, */
   ],
 })
 
