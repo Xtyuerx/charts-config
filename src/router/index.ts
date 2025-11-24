@@ -27,6 +27,12 @@ const router = createRouter({
       component: () => import('@/page/mousic/index.vue'),
       meta: { title: '运动轨迹' },
     },
+    {
+      path: '/listVisible',
+      name: 'listVisible',
+      component: () => import('@/page/listVisible/index.vue'),
+      meta: { title: '列表显示隐藏控制' },
+    },
   ],
 })
 
