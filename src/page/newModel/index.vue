@@ -9,18 +9,19 @@ import { OrbitControls, STLLoader } from 'three-stdlib'
 
 const container = ref<HTMLDivElement | null>(null)
 
-let stlCenter = new THREE.Vector3()
-let stlScale = 1
-let pointsCloudUpper: THREE.Points | null = null
-let pointsCloudLower: THREE.Points | null = null
+const stlCenter = new THREE.Vector3()
+const stlScale = 1
+let pointsCloudUpper: number[] = []
+let pointsCloudLower: number[] = []
 
 let scene: THREE.Scene
 let camera: THREE.PerspectiveCamera
 let renderer: THREE.WebGLRenderer
 let controls: OrbitControls
 
-onMounted(() => {
+onMounted(async () => {
   initScene()
+  await loadJsonPoints()
   loadModels()
   animate()
 })
@@ -29,25 +30,26 @@ onUnmounted(() => {
   renderer?.dispose()
 })
 
-function renderPointsFromJsonB(pointsArray: number[], color: number) {
-  const geometry = new THREE.BufferGeometry()
+function renderPointsFromJson(
+  geometry: THREE.BufferGeometry,
+  pointsArray: number[],
+  color: number,
+) {
   const transformed = new Float32Array(pointsArray.length)
 
   for (let i = 0; i < pointsArray.length; i += 3) {
-    const x = pointsArray[i]
-    const y = pointsArray[i + 1]
-    const z = pointsArray[i + 2]
+    const x: number = pointsArray[i] || 0
+    const y: number = pointsArray[i + 1] || 0
+    const z: number = pointsArray[i + 2] || 0
 
     // 坐标映射到 STL 的空间
     transformed[i] = (x - stlCenter.x) * stlScale
     transformed[i + 1] = (y - stlCenter.y) * stlScale
     transformed[i + 2] = (z - stlCenter.z) * stlScale
   }
-  geometry.setAttribute('position', new THREE.BufferAttribute(transformed, 3))
-
   const material = new THREE.PointsMaterial({
-    color: 0xffb6c1,
-    size: 0.8, // 🔹 点大小
+    color,
+    size: 0.1, // 🔹 点大小
     sizeAttenuation: true,
     depthTest: false, // ✅ 关键
     depthWrite: false,
@@ -58,21 +60,6 @@ function renderPointsFromJsonB(pointsArray: number[], color: number) {
   scene.add(points)
 
   return points
-}
-function stickPointToSurface(worldPos: THREE.Vector3, mesh: THREE.Mesh) {
-  const raycaster = new THREE.Raycaster()
-
-  // 从点向模型中心投射
-  const dir = worldPos.clone().sub(mesh.position).normalize()
-  raycaster.set(worldPos, dir.multiplyScalar(-1))
-
-  const intersects = raycaster.intersectObject(mesh)
-
-  if (intersects.length > 0) {
-    return intersects[0].point
-  }
-
-  return worldPos
 }
 
 function initScene() {
@@ -171,26 +158,7 @@ function loadModels() {
       scene.rotation.x = -Math.PI / 2
       scene.rotation.z = -Math.PI / 2
       scene.add(upperMesh)
-      geometry.computeBoundingBox()
-      const bbox = geometry.boundingBox!
-
-      // 记录 STL 的中心点
-      bbox.getCenter(stlCenter)
-
-      // 平移模型到原点
-      geometry.translate(-stlCenter.x, -stlCenter.y, -stlCenter.z)
-
-      // 获取包围盒尺寸
-      const size = new THREE.Vector3()
-      bbox.getSize(size)
-      const maxSide = Math.max(size.x, size.y, size.z)
-
-      // 统一缩放到 100 范围
-      stlScale = 100 / maxSide
-      scene.scale.setScalar(stlScale)
-
-      // ✅ STL 加载完后加载点位
-      loadJsonPoints()
+      renderPointsFromJson(geometry, pointsCloudUpper, 0x000000)
     })
     loader.load('/models/lower_only_tooth.stl', (geometry) => {
       const material = new THREE.MeshPhongMaterial({
@@ -198,16 +166,17 @@ function loadModels() {
         specular: 0x555555,
         shininess: 100,
       })
-      const upperMesh = new THREE.Mesh(geometry, material)
-      upperMesh.scale.set(1, 1, 1) // 缩放比例按你的文件调整
-      // upperMesh.position.set(0, 10, 0) // 稍微上移一点
+      const downMesh = new THREE.Mesh(geometry, material)
+      downMesh.scale.set(1, 1, 1) // 缩放比例按你的文件调整
+      // downMesh.position.set(0, 10, 0) // 稍微上移一点
       // 绕 Y 轴旋转 90°（相当于左右旋转）
       // scene.rotation.y = Math.PI
 
       // 向下仰俯 45°（绕 X 轴）
       scene.rotation.x = -Math.PI / 2
       scene.rotation.z = -Math.PI / 2
-      scene.add(upperMesh)
+      scene.add(downMesh)
+      renderPointsFromJson(geometry, pointsCloudLower, 0x000000)
     })
   }, 300)
   // 坐标轴辅助
@@ -218,9 +187,9 @@ function loadModels() {
 async function loadJsonPoints() {
   const upperJson = await fetch('/points/upper.json').then((r) => r.json())
   const lowerJson = await fetch('/points/lower.json').then((r) => r.json())
-  pointsCloudUpper = renderPointsFromJsonB(upperJson.labels, 0x00ff88)
+  pointsCloudUpper = upperJson
 
-  pointsCloudLower = renderPointsFromJsonB(lowerJson.labels, 0xff8800)
+  pointsCloudLower = lowerJson
 }
 
 function animate() {

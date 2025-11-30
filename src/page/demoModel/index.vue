@@ -265,8 +265,8 @@ function createSafeConnectLines() {
     scene.add(dist)
   })
 }
-let stlCenter = new THREE.Vector3()
-let stlScale = 1
+const stlCenter = new THREE.Vector3()
+const stlScale = 1
 function toModelCoord(p: THREE.Vector3) {
   return p
     .clone()
