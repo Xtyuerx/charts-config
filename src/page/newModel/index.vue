@@ -43,19 +43,36 @@ function renderPointsFromJsonB(pointsArray: number[], color: number) {
     transformed[i + 1] = (y - stlCenter.y) * stlScale
     transformed[i + 2] = (z - stlCenter.z) * stlScale
   }
-
   geometry.setAttribute('position', new THREE.BufferAttribute(transformed, 3))
 
   const material = new THREE.PointsMaterial({
     color: 0xffb6c1,
     size: 0.8, // 🔹 点大小
     sizeAttenuation: true,
+    depthTest: false, // ✅ 关键
+    depthWrite: false,
+    transparent: true,
   })
 
   const points = new THREE.Points(geometry, material)
   scene.add(points)
 
   return points
+}
+function stickPointToSurface(worldPos: THREE.Vector3, mesh: THREE.Mesh) {
+  const raycaster = new THREE.Raycaster()
+
+  // 从点向模型中心投射
+  const dir = worldPos.clone().sub(mesh.position).normalize()
+  raycaster.set(worldPos, dir.multiplyScalar(-1))
+
+  const intersects = raycaster.intersectObject(mesh)
+
+  if (intersects.length > 0) {
+    return intersects[0].point
+  }
+
+  return worldPos
 }
 
 function initScene() {
@@ -140,6 +157,7 @@ function loadModels() {
         color: 0xffffff,
         specular: 0x555555,
         shininess: 30,
+        // depthTest: false,
         flatShading: false, // 关键：设置为false启用平滑着色
       })
 
