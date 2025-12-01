@@ -5,7 +5,7 @@
 <script lang="ts" setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import * as THREE from 'three'
-import { OrbitControls, STLLoader } from 'three-stdlib'
+import { OrbitControls, STLLoader, DragControls } from 'three-stdlib'
 
 const container = ref<HTMLDivElement | null>(null)
 
@@ -17,6 +17,13 @@ let scene: THREE.Scene
 let camera: THREE.PerspectiveCamera
 let renderer: THREE.WebGLRenderer
 let controls: OrbitControls
+// 存储所有可拖拽的控制点
+const draggableObjects: THREE.Object3D[] = []
+let dragControls: DragControls
+
+// 存储上下颌的中心点数据，用于生成中间牙弓线
+let upperCentersData: Record<number, THREE.Vector3> | null = null
+let lowerCentersData: Record<number, THREE.Vector3> | null = null
 
 // 为不同牙齿编号定义颜色映射
 const toothColorMap: Record<number, number> = {
@@ -28,14 +35,6 @@ const toothColorMap: Record<number, number> = {
   16: 0x9acd32, // 黄绿色
   17: 0x00ff00, // 绿色
   18: 0x00ced1, // 深青色
-  21: 0x1e90ff, // 道奇蓝
-  22: 0x0000ff, // 蓝色
-  23: 0x8a2be2, // 蓝紫色
-  24: 0x9370db, // 中紫色
-  25: 0xba55d3, // 中兰花紫
-  26: 0xff00ff, // 品红色
-  27: 0xff1493, // 深粉红
-  28: 0xc71585, // 中紫红色
   31: 0xdc143c, // 深红色
   32: 0xb22222, // 火砖色
   33: 0x8b0000, // 深红色
@@ -52,6 +51,14 @@ const toothColorMap: Record<number, number> = {
   46: 0x87ceeb, // 天蓝色
   47: 0x87cefa, // 浅天蓝色
   48: 0xb0c4de, // 浅钢蓝色
+  21: 0x1e90ff, // 道奇蓝
+  22: 0x0000ff, // 蓝色
+  23: 0x8a2be2, // 蓝紫色
+  24: 0x9370db, // 中紫色
+  25: 0xba55d3, // 中兰花紫
+  26: 0xff00ff, // 品红色
+  27: 0xff1493, // 深粉红
+  28: 0xc71585, // 中紫红色
 }
 
 onMounted(async () => {
@@ -63,6 +70,9 @@ onMounted(async () => {
 
 onUnmounted(() => {
   renderer?.dispose()
+  if (dragControls) {
+    dragControls.dispose()
+  }
 })
 
 /**
@@ -190,7 +200,7 @@ function renderPointsFromJson(
       sizeAttenuation: true,
       depthTest: false, // 确保点云始终可见
       depthWrite: false,
-      transparent: true,
+      // transparent: true,
       opacity: 0.8,
     })
 
@@ -208,7 +218,9 @@ function renderPointsFromJson(
     }
   })
 
-  console.log(`已渲染 ${Object.keys(groupedByTooth).length} 个牙齿的点云`)
+  // console.log(`已渲染 ${Object.keys(groupedByTooth).length} 个牙齿的点云`)
+
+  return toothCenters
 }
 
 /**
@@ -246,7 +258,7 @@ function createToothLabel(toothLabel: number, position: THREE.Vector3, parentMes
   // 创建sprite材质
   const spriteMaterial = new THREE.SpriteMaterial({
     map: texture,
-    transparent: true,
+    // transparent: true,
     depthTest: false,
     depthWrite: false,
     sizeAttenuation: true, // 启用尺寸衰减，让标签大小随距离变化
@@ -292,9 +304,63 @@ function initScene() {
   controls.minDistance = 30
   controls.maxDistance = 300
 
-  // 可选：坐标轴辅助
-  // const axesHelper = new THREE.AxesHelper(50)
-  // scene.add(axesHelper)
+  // 初始化拖拽控制器
+  dragControls = new DragControls(draggableObjects, camera, renderer.domElement)
+  dragControls.addEventListener('dragstart', function (event: { object: THREE.Object3D }) {
+    controls.enabled = false
+    if (event.object.userData.isControlPoint) {
+      // 可能需要高亮或其他反馈
+    }
+  })
+  dragControls.addEventListener('dragend', function () {
+    controls.enabled = true
+  })
+  dragControls.addEventListener('drag', function (event: { object: THREE.Object3D }) {
+    if (event.object.userData.isControlPoint) {
+      const point = event.object
+      const curve = point.userData.curve
+      if (curve) {
+        // 简单的约束：找到曲线上最近的点
+        // 注意：这里需要将世界坐标转换为曲线所在的局部坐标（如果曲线跟随Mesh移动）
+        // 简化处理：假设曲线和点都在同一个坐标系下
+
+        // 更精确的方法是投影，这里简单演示用参数t寻找最近点比较耗时，
+        // 实际应用可能需要更高效的投影算法或者仅仅限制在切线方向移动
+
+        const pos = point.position.clone()
+        // 将位置投影到曲线上
+        // 获取曲线上的最近点（近似）
+        const t = getClosestPointTOnCurve(pos, curve)
+        const newPos = curve.getPointAt(t)
+        point.position.copy(newPos)
+
+        // 更新显示的坐标值或其他
+        console.log('Point T:', t, 'Position:', newPos)
+      }
+    }
+  })
+}
+
+// 辅助函数：寻找曲线上离目标点最近的 t 值 (0-1)
+function getClosestPointTOnCurve(
+  point: THREE.Vector3,
+  curve: THREE.Curve<THREE.Vector3>,
+  divisions = 100,
+): number {
+  let bestT = 0
+  let minDistanceSq = Infinity
+
+  for (let i = 0; i <= divisions; i++) {
+    const t = i / divisions
+    const pt = curve.getPointAt(t)
+    const distSq = point.distanceToSquared(pt)
+    if (distSq < minDistanceSq) {
+      minDistanceSq = distSq
+      bestT = t
+    }
+  }
+  // 可以进一步通过二分查找或梯度下降优化 bestT
+  return bestT
 }
 
 function loadModels() {
@@ -310,10 +376,7 @@ function loadModels() {
       reflectivity: 0.5,
     })
     const upperMesh = new THREE.Mesh(geometry, material)
-    upperMesh.scale.set(1.5, 1.5, 1.5) // 缩放比例按你的文件调整
-    // upperMesh.position.set(0, 10, 0) // 稍微上移一点
-    // 绕 Y 轴旋转 90°（相当于左右旋转）
-    // scene.rotation.y = Math.PI
+    upperMesh.scale.set(1.5, 1.5, 1.5)
 
     // 向下仰俯 45°（绕 X 轴）
     scene.rotation.x = -Math.PI / 2
@@ -328,13 +391,10 @@ function loadModels() {
       emissive: 0x333333, // 自发光颜色
       emissiveIntensity: 0.3, // 自发光强度 (0-1)
       shininess: 100, // 光泽度
-      // specular: 0xffffff, // 高光颜色
       specular: 0x555555,
-      // shininess: 30,
     })
     const lowerMesh = new THREE.Mesh(geometry, material)
     lowerMesh.scale.set(1.5, 1.5, 1.5)
-    // lowerMesh.position.set(0, -10, 0) // 稍微下移一点
     scene.rotation.x = -Math.PI / 2
     scene.rotation.z = -Math.PI / 2
     scene.add(lowerMesh)
@@ -346,23 +406,21 @@ function loadModels() {
         color: 0xffffff,
         specular: 0x555555,
         shininess: 30,
-        // depthTest: false,
-        flatShading: false, // 关键：设置为false启用平滑着色
+        flatShading: false,
       })
 
       const upperMesh = new THREE.Mesh(geometry, material)
-      upperMesh.scale.set(1.5, 1.5, 1.5) // 缩放比例按你的文件调整
-      // upperMesh.position.set(0, 10, 0) // 稍微上移一点
-      // 绕 Y 轴旋转 90°（相当于左右旋转）
-      // scene.rotation.y = Math.PI
-
-      // 向下仰俯 45°（绕 X 轴）
+      upperMesh.scale.set(1.5, 1.5, 1.5)
       scene.rotation.x = -Math.PI / 2
       scene.rotation.z = -Math.PI / 2
       scene.add(upperMesh)
 
       // 使用新的渲染方法，传入geometry和labels数组
-      renderPointsFromJson(geometry, labelsUpper, upperMesh)
+      const centers = renderPointsFromJson(geometry, labelsUpper, upperMesh)
+      if (centers) {
+        upperCentersData = centers
+        tryCreateMiddleArchCurve()
+      }
     })
     // 下颌牙齿部分
     loader.load('/models/lower_only_tooth.stl', (geometry) => {
@@ -372,23 +430,159 @@ function loadModels() {
         shininess: 100,
       })
       const downMesh = new THREE.Mesh(geometry, material)
-      downMesh.scale.set(1.5, 1.5, 1.5) // 缩放比例按你的文件调整
-      // downMesh.position.set(0, 10, 0) // 稍微上移一点
-      // 绕 Y 轴旋转 90°（相当于左右旋转）
-      // scene.rotation.y = Math.PI
-
-      // 向下仰俯 45°（绕 X 轴）
+      downMesh.scale.set(1.5, 1.5, 1.5)
       scene.rotation.x = -Math.PI / 2
       scene.rotation.z = -Math.PI / 2
       scene.add(downMesh)
 
       // 使用新的渲染方法，传入geometry和labels数组
-      renderPointsFromJson(geometry, labelsLower, downMesh)
+      const centers = renderPointsFromJson(geometry, labelsLower, downMesh)
+      if (centers) {
+        lowerCentersData = centers
+        tryCreateMiddleArchCurve()
+      }
     })
   }, 300)
   // 坐标轴辅助
   const axesHelper = new THREE.AxesHelper(100)
   scene.add(axesHelper)
+}
+
+/**
+ * 尝试创建中间牙弓线（当上下颌数据都准备好时）
+ */
+function tryCreateMiddleArchCurve() {
+  if (!upperCentersData || !lowerCentersData) return
+
+  // 定义配对的牙齿编号顺序 (从右到左)
+  // 右上-右下, ..., 左上-左下
+  const pairs = [
+    [18, 48],
+    [17, 47],
+    [16, 46],
+    [15, 45],
+    [14, 44],
+    [13, 43],
+    [12, 42],
+    [11, 41],
+    [21, 31],
+    [22, 32],
+    [23, 33],
+    [24, 34],
+    [25, 35],
+    [26, 36],
+    [27, 37],
+    [28, 38],
+  ]
+
+  const points: THREE.Vector3[] = []
+
+  pairs.forEach(([upperCode, lowerCode]) => {
+    // 确保编号存在
+    if (upperCode === undefined || lowerCode === undefined) return
+
+    // @ts-expect-error - 编号经过验证后不会为undefined
+    const pUpper = upperCentersData[upperCode]
+    // @ts-expect-error - 编号经过验证后不会为undefined
+    const pLower = lowerCentersData[lowerCode]
+
+    if (pUpper && pLower) {
+      // 如果上下都有，取中点
+      const mid = new THREE.Vector3().addVectors(pUpper, pLower).multiplyScalar(0.5)
+      points.push(mid)
+    } else if (pUpper) {
+      // 只有上牙，直接取上牙点（或者可以考虑忽略以保证平滑）
+      // points.push(pUpper.clone())
+    } else if (pLower) {
+      // 只有下牙
+      // points.push(pLower.clone())
+    }
+  })
+
+  if (points.length < 2) return
+
+  // 创建曲线
+  const curve = new THREE.CatmullRomCurve3(points)
+  curve.closed = false
+  curve.curveType = 'catmullrom'
+  curve.tension = 0.5
+
+  // 创建一个Group来存放线和控制点，并应用与牙齿模型相同的变换
+  const archGroup = new THREE.Group()
+  archGroup.scale.set(1.5, 1.5, 1.5)
+  // archGroup.rotation.copy(scene.rotation) // 不，Mesh是直接add到scene的，scene旋转了，所以Group加到scene里也会自动跟着旋转
+  scene.add(archGroup)
+
+  // Step 2: 编织绳样式
+  const tubeGeometry = new THREE.TubeGeometry(curve, 64, 0.5, 8, false)
+
+  const canvas = document.createElement('canvas')
+  canvas.width = 64
+  canvas.height = 64
+  const ctx = canvas.getContext('2d')
+  if (ctx) {
+    ctx.fillStyle = '#ddd'
+    ctx.fillRect(0, 0, 64, 64)
+    ctx.fillStyle = '#888'
+    for (let i = 0; i < 64; i += 8) {
+      ctx.beginPath()
+      ctx.moveTo(0, i)
+      ctx.lineTo(64, i + 32)
+      ctx.stroke()
+      ctx.beginPath()
+      ctx.moveTo(0, i + 4)
+      ctx.lineTo(64, i + 36)
+      ctx.stroke()
+    }
+  }
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.wrapS = THREE.RepeatWrapping
+  texture.wrapT = THREE.RepeatWrapping
+  texture.repeat.set(20, 1)
+
+  const material = new THREE.MeshStandardMaterial({
+    map: texture,
+    color: 0xffaa44,
+    roughness: 0.8,
+    metalness: 0.2,
+    depthTest: false, // 禁用深度测试，使其不被遮挡
+    transparent: true, // 配合depthTest使用
+  })
+
+  const tubeMesh = new THREE.Mesh(tubeGeometry, material)
+  tubeMesh.renderOrder = 999 // 确保最后渲染
+  tubeMesh.name = `middle_arch_wire`
+  archGroup.add(tubeMesh)
+
+  // Step 3: 添加控制点
+  const controlPointCount = 5
+  // 清空之前的控制点（如果有）
+  // 注意：如果之前有逻辑处理 draggableObjects 清理，这里最好重置一下
+  // 但这里只调用一次，所以暂时直接 push
+
+  for (let i = 0; i < controlPointCount; i++) {
+    const t = i / (controlPointCount - 1)
+    const pointPos = curve.getPointAt(t)
+
+    const sphereGeo = new THREE.SphereGeometry(1, 16, 16)
+    const sphereMat = new THREE.MeshBasicMaterial({
+      color: 0x0000ff,
+      depthTest: false, // 禁用深度测试
+      transparent: true,
+    })
+    const sphere = new THREE.Mesh(sphereGeo, sphereMat)
+    sphere.renderOrder = 999 // 确保最后渲染
+
+    sphere.position.copy(pointPos)
+    sphere.userData.isControlPoint = true
+    sphere.userData.curve = curve
+    sphere.userData.t = t
+    sphere.userData.jaw = 'middle' // 标记为中间线
+
+    archGroup.add(sphere)
+
+    draggableObjects.push(sphere)
+  }
 }
 
 async function loadJsonPoints() {
@@ -426,6 +620,29 @@ function countToothLabels(labels: number[]): Record<number, number> {
     counts[label] = (counts[label] || 0) + 1
   })
   return counts
+}
+
+// 暴露获取控制点位置的方法
+defineExpose({
+  getControlPointsData,
+})
+
+/**
+ * 获取所有控制点的位置信息
+ */
+function getControlPointsData() {
+  const data = draggableObjects.map((obj) => {
+    return {
+      id: obj.id,
+      position: obj.position.clone(),
+      // 如果需要，可以返回在曲线上的 t 值
+      t: obj.userData.t,
+      // 所在的颌 (upper/lower) - 需要在创建时存入 userData
+      jaw: obj.userData.jaw,
+    }
+  })
+  console.log('Control Points Data:', data)
+  return data
 }
 
 function animate() {
