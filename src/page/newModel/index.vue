@@ -94,6 +94,8 @@ function renderPointsFromJson(
   // 按牙齿编号分组顶点
   const groupedByTooth: Record<number, Float32Array> = {}
   const pointsPerTooth: Record<number, number> = {}
+  // 记录每颗牙齿的中心点坐标（用于放置文字标签）
+  const toothCenters: Record<number, THREE.Vector3> = {}
 
   // 先统计每个牙齿编号的点数
   for (let i = 0; i < Math.min(vertexCount, labelsArray.length); i++) {
@@ -102,6 +104,7 @@ function renderPointsFromJson(
 
     if (!pointsPerTooth[toothLabel]) {
       pointsPerTooth[toothLabel] = 0
+      toothCenters[toothLabel] = new THREE.Vector3(0, 0, 0)
     }
     pointsPerTooth[toothLabel]++
   }
@@ -121,7 +124,7 @@ function renderPointsFromJson(
     tempIndices[Number(label)] = 0
   })
 
-  // 将顶点坐标按牙齿编号分组
+  // 将顶点坐标按牙齿编号分组，同时计算中心点
   for (let i = 0; i < Math.min(vertexCount, labelsArray.length); i++) {
     const toothLabel = labelsArray[i]
     if (toothLabel === undefined) continue
@@ -140,13 +143,33 @@ function renderPointsFromJson(
     group[idx + 1] = y
     group[idx + 2] = z
 
+    // 累加坐标用于计算中心点
+    const center = toothCenters[toothLabel]
+    if (center) {
+      center.x += x
+      center.y += y
+      center.z += z
+    }
+
     const newIdx = tempIndices[toothLabel]
     if (newIdx !== undefined) {
       tempIndices[toothLabel] = newIdx + 3
     }
   }
 
-  // 为每个牙齿编号创建独立的点云对象
+  // 计算每颗牙齿的平均中心点
+  Object.keys(toothCenters).forEach((label) => {
+    const toothLabel = Number(label)
+    const center = toothCenters[toothLabel]
+    const count = pointsPerTooth[toothLabel]
+    if (center && count) {
+      center.x /= count
+      center.y /= count
+      center.z /= count
+    }
+  })
+
+  // 为每个牙齿编号创建独立的点云对象和文字标签
   Object.keys(groupedByTooth).forEach((label) => {
     const toothLabel = Number(label)
     const positionsArray = groupedByTooth[toothLabel]
@@ -177,9 +200,68 @@ function renderPointsFromJson(
 
     // 将点云添加到父网格对象中
     parentMesh.add(points)
+
+    // 创建文字标签显示牙齿编号
+    const center = toothCenters[toothLabel]
+    if (center) {
+      createToothLabel(toothLabel, center, parentMesh)
+    }
   })
 
   console.log(`已渲染 ${Object.keys(groupedByTooth).length} 个牙齿的点云`)
+}
+
+/**
+ * 创建牙齿编号文字标签
+ * @param toothLabel 牙齿编号
+ * @param position 标签位置（牙齿中心点）
+ * @param parentMesh 父网格对象
+ */
+function createToothLabel(toothLabel: number, position: THREE.Vector3, parentMesh: THREE.Mesh) {
+  // 创建canvas来绘制文字
+  const canvas = document.createElement('canvas')
+  const context = canvas.getContext('2d')
+  if (!context) return
+
+  // 设置canvas大小
+  canvas.width = 256
+  canvas.height = 256
+
+  // 设置文字样式 - 背景透明或半透明
+  context.fillStyle = 'rgba(255, 255, 255, 0.8)' // 半透明白色背景
+  context.fillRect(0, 0, canvas.width, canvas.height)
+
+  context.font = 'Bold 100px Arial'
+  context.fillStyle = '#000000'
+  context.textAlign = 'center'
+  context.textBaseline = 'middle'
+
+  // 绘制牙齿编号
+  context.fillText(toothLabel.toString(), canvas.width / 2, canvas.height / 2)
+
+  // 创建纹理
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.needsUpdate = true
+
+  // 创建sprite材质
+  const spriteMaterial = new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+    sizeAttenuation: true, // 启用尺寸衰减，让标签大小随距离变化
+  })
+
+  // 创建sprite对象
+  const sprite = new THREE.Sprite(spriteMaterial)
+  sprite.position.copy(position)
+  // 调整标签大小，使其相对于牙齿模型合适
+  // 由于模型scale为1.5，标签大小需要相应调整
+  sprite.scale.set(2, 2, 1) // 根据实际效果调整这个值
+  sprite.name = `label_${toothLabel}`
+
+  // 将标签添加到父网格对象中
+  parentMesh.add(sprite)
 }
 
 function initScene() {
