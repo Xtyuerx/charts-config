@@ -34,6 +34,7 @@ function renderPointsFromJson(
   geometry: THREE.BufferGeometry,
   pointsArray: number[],
   color: number,
+  upperMesh: THREE.Mesh,
 ) {
   const transformed = new Float32Array(pointsArray.length)
 
@@ -57,7 +58,7 @@ function renderPointsFromJson(
   })
 
   const points = new THREE.Points(geometry, material)
-  scene.add(points)
+  upperMesh.add(points)
 
   return points
 }
@@ -108,7 +109,7 @@ function loadModels() {
       reflectivity: 0.5,
     })
     const upperMesh = new THREE.Mesh(geometry, material)
-    upperMesh.scale.set(1, 1, 1) // 缩放比例按你的文件调整
+    upperMesh.scale.set(1.5, 1.5, 1.5) // 缩放比例按你的文件调整
     // upperMesh.position.set(0, 10, 0) // 稍微上移一点
     // 绕 Y 轴旋转 90°（相当于左右旋转）
     // scene.rotation.y = Math.PI
@@ -120,23 +121,23 @@ function loadModels() {
   })
 
   // 下颌
-  loader.load('/models/lower.stl', (geometry) => {
-    const material = new THREE.MeshPhongMaterial({
-      color: 0xffb6c1,
-      emissive: 0x333333, // 自发光颜色
-      emissiveIntensity: 0.3, // 自发光强度 (0-1)
-      shininess: 100, // 光泽度
-      // specular: 0xffffff, // 高光颜色
-      specular: 0x555555,
-      // shininess: 30,
-    })
-    const lowerMesh = new THREE.Mesh(geometry, material)
-    lowerMesh.scale.set(1, 1, 1)
-    // lowerMesh.position.set(0, -10, 0) // 稍微下移一点
-    scene.rotation.x = -Math.PI / 2
-    scene.rotation.z = -Math.PI / 2
-    scene.add(lowerMesh)
-  })
+  // loader.load('/models/lower.stl', (geometry) => {
+  //   const material = new THREE.MeshPhongMaterial({
+  //     color: 0xffb6c1,
+  //     emissive: 0x333333, // 自发光颜色
+  //     emissiveIntensity: 0.3, // 自发光强度 (0-1)
+  //     shininess: 100, // 光泽度
+  //     // specular: 0xffffff, // 高光颜色
+  //     specular: 0x555555,
+  //     // shininess: 30,
+  //   })
+  //   const lowerMesh = new THREE.Mesh(geometry, material)
+  //   lowerMesh.scale.set(1.5, 1.5, 1.5)
+  //   // lowerMesh.position.set(0, -10, 0) // 稍微下移一点
+  //   scene.rotation.x = -Math.PI / 2
+  //   scene.rotation.z = -Math.PI / 2
+  //   scene.add(lowerMesh)
+  // })
   setTimeout(() => {
     // 上颌
     loader.load('/models/upper_only_tooth.stl', (geometry) => {
@@ -149,7 +150,7 @@ function loadModels() {
       })
 
       const upperMesh = new THREE.Mesh(geometry, material)
-      upperMesh.scale.set(1, 1, 1) // 缩放比例按你的文件调整
+      upperMesh.scale.set(1.5, 1.5, 1.5) // 缩放比例按你的文件调整
       // upperMesh.position.set(0, 10, 0) // 稍微上移一点
       // 绕 Y 轴旋转 90°（相当于左右旋转）
       // scene.rotation.y = Math.PI
@@ -158,26 +159,26 @@ function loadModels() {
       scene.rotation.x = -Math.PI / 2
       scene.rotation.z = -Math.PI / 2
       scene.add(upperMesh)
-      renderPointsFromJson(geometry, pointsCloudUpper, 0x000000)
+      renderPointsFromJson(geometry, pointsCloudUpper, 0x000000, upperMesh)
     })
-    loader.load('/models/lower_only_tooth.stl', (geometry) => {
-      const material = new THREE.MeshPhongMaterial({
-        color: 0xffffff,
-        specular: 0x555555,
-        shininess: 100,
-      })
-      const downMesh = new THREE.Mesh(geometry, material)
-      downMesh.scale.set(1, 1, 1) // 缩放比例按你的文件调整
-      // downMesh.position.set(0, 10, 0) // 稍微上移一点
-      // 绕 Y 轴旋转 90°（相当于左右旋转）
-      // scene.rotation.y = Math.PI
+    // loader.load('/models/lower_only_tooth.stl', (geometry) => {
+    //   const material = new THREE.MeshPhongMaterial({
+    //     color: 0xffffff,
+    //     specular: 0x555555,
+    //     shininess: 100,
+    //   })
+    //   const downMesh = new THREE.Mesh(geometry, material)
+    //   downMesh.scale.set(1.5, 1.5, 1.5) // 缩放比例按你的文件调整
+    //   // downMesh.position.set(0, 10, 0) // 稍微上移一点
+    //   // 绕 Y 轴旋转 90°（相当于左右旋转）
+    //   // scene.rotation.y = Math.PI
 
-      // 向下仰俯 45°（绕 X 轴）
-      scene.rotation.x = -Math.PI / 2
-      scene.rotation.z = -Math.PI / 2
-      scene.add(downMesh)
-      renderPointsFromJson(geometry, pointsCloudLower, 0x000000)
-    })
+    //   // 向下仰俯 45°（绕 X 轴）
+    //   scene.rotation.x = -Math.PI / 2
+    //   scene.rotation.z = -Math.PI / 2
+    //   scene.add(downMesh)
+    //   renderPointsFromJson(geometry, pointsCloudLower, 0x000000, downMesh)
+    // })
   }, 300)
   // 坐标轴辅助
   const axesHelper = new THREE.AxesHelper(100)
