@@ -69,6 +69,17 @@ const showAllLabels = ref(false)
 
 //是否显示测量宽度
 const showWidths = ref(false)
+// 定义牙齿质心点的数据类型
+interface ToothCenterPoint {
+  fdi: number
+  type: string
+  type_cn: string
+  point: [number, number, number]
+}
+
+interface TeethPointsData {
+  teeth_points: ToothCenterPoint[]
+}
 
 // 为不同牙齿编号定义颜色映射
 const toothColorMap: Record<number, number> = {
@@ -109,6 +120,7 @@ const toothColorMap: Record<number, number> = {
 onMounted(async () => {
   initScene()
   await loadJsonPoints()
+  await loadTeethCenterPoints() // 加载牙齿质心点数据
   loadModels()
   animate()
 })
@@ -495,7 +507,7 @@ function loadModels() {
     scene.rotation.z = -Math.PI / 2
     scene.add(lowerMesh)
   })
-  setTimeout(() => {
+  setTimeout(async () => {
     // 上颌牙齿部分
     loader.load('/models/upper_only_tooth.stl', (geometry) => {
       const material = new THREE.MeshPhongMaterial({
@@ -547,6 +559,20 @@ function loadModels() {
       //   // tryCreateMiddleArchCurve()
       // }
     })
+
+    // 加载并渲染牙齿质心点
+    // 注意：这里需要再次调用，因为在onMounted中调用时返回的数据没有被存储
+    const teethPoints = await loadTeethCenterPoints()
+    if (teethPoints && teethPoints.length > 0) {
+      // 直接添加到场景，不依附于任何模型
+      // 但需要应用相同的变换（缩放和旋转）
+      const centerPointsGroup = new THREE.Group()
+      centerPointsGroup.name = 'teeth_center_points_group'
+      centerPointsGroup.scale.set(1.5, 1.5, 1.5)
+      scene.add(centerPointsGroup)
+
+      renderTeethCenterPoints(teethPoints, centerPointsGroup)
+    }
   }, 300)
   // 坐标轴辅助
   const axesHelper = new THREE.AxesHelper(100)
@@ -716,6 +742,132 @@ async function loadJsonPoints() {
   } catch (error) {
     console.error('加载JSON点位数据失败:', error)
   }
+}
+
+/**
+ * 加载牙齿质心点数据
+ */
+async function loadTeethCenterPoints() {
+  try {
+    // 假设数据存放在 /points/teeth_centers.json
+    // 如果数据在其他地方，请修改路径
+    const response = await fetch('/points/teeth_centers.json')
+    const data: TeethPointsData = await response.json()
+
+    console.log('牙齿质心点数据:', data.teeth_points)
+
+    // 等待场景初始化后再渲染点
+    // 由于这个函数在 initScene 之后调用，所以可以直接渲染
+    // 但为了确保模型加载完成，我们将渲染逻辑放到 loadModels 中
+    // 这里只是存储数据
+    return data.teeth_points
+  } catch (error) {
+    console.error('加载牙齿质心点数据失败:', error)
+    return null
+  }
+}
+
+/**
+ * 渲染牙齿质心点到场景中
+ * @param teethPoints 牙齿质心点数组
+ * @param parentMesh 父网格对象（可选，如果不提供则直接添加到场景）
+ */
+function renderTeethCenterPoints(teethPoints: ToothCenterPoint[], parentMesh?: THREE.Object3D) {
+  if (!teethPoints || teethPoints.length === 0) return
+
+  // 创建一个组来存放所有质心点
+  const centerPointsGroup = new THREE.Group()
+  centerPointsGroup.name = 'teeth_center_points'
+
+  teethPoints.forEach((item) => {
+    const { fdi, point } = item
+    const [x, y, z] = point
+
+    // 创建球体表示质心点
+    const sphereGeometry = new THREE.SphereGeometry(0.5, 16, 16)
+
+    // 根据牙齿编号获取颜色
+    const color = toothColorMap[fdi] || 0xffff00 // 默认黄色
+
+    const sphereMaterial = new THREE.MeshBasicMaterial({
+      color: color,
+      depthTest: false, // 确保始终可见
+      transparent: true,
+      opacity: 0.9,
+    })
+
+    const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial)
+    sphere.position.set(x, y, z)
+    sphere.name = `center_point_${fdi}`
+    sphere.userData.fdi = fdi
+    sphere.userData.type = item.type
+    sphere.userData.type_cn = item.type_cn
+
+    centerPointsGroup.add(sphere)
+
+    // 创建文字标签显示FDI编号
+    createCenterPointLabel(fdi, new THREE.Vector3(x, y, z), centerPointsGroup)
+  })
+
+  // 将质心点组添加到父网格或场景
+  if (parentMesh) {
+    parentMesh.add(centerPointsGroup)
+  } else {
+    scene.add(centerPointsGroup)
+  }
+
+  console.log(`已渲染 ${teethPoints.length} 个牙齿质心点`)
+}
+
+/**
+ * 创建质心点的文字标签
+ * @param fdi 牙齿编号
+ * @param position 标签位置
+ * @param parentGroup 父组对象
+ */
+function createCenterPointLabel(fdi: number, position: THREE.Vector3, parentGroup: THREE.Group) {
+  // 创建canvas来绘制文字
+  const canvas = document.createElement('canvas')
+  const context = canvas.getContext('2d')
+  if (!context) return
+
+  // 设置canvas大小
+  canvas.width = 128
+  canvas.height = 128
+
+  // 绘制背景圆形
+  context.fillStyle = 'rgba(0, 0, 0, 0.6)'
+  context.beginPath()
+  context.arc(64, 64, 60, 0, Math.PI * 2)
+  context.fill()
+
+  // 绘制文字
+  context.font = 'Bold 50px Arial'
+  context.fillStyle = '#ffffff'
+  context.textAlign = 'center'
+  context.textBaseline = 'middle'
+  context.fillText(fdi.toString(), 64, 64)
+
+  // 创建纹理
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.needsUpdate = true
+
+  // 创建sprite材质
+  const spriteMaterial = new THREE.SpriteMaterial({
+    map: texture,
+    depthTest: false,
+    depthWrite: false,
+    sizeAttenuation: true,
+  })
+
+  // 创建sprite对象
+  const sprite = new THREE.Sprite(spriteMaterial)
+  // 标签位置稍微偏移一点，避免与球体重叠
+  sprite.position.set(position.x, position.y, position.z + 1.5)
+  sprite.scale.set(1.5, 1.5, 1)
+  sprite.name = `center_label_${fdi}`
+
+  parentGroup.add(sprite)
 }
 
 /**
