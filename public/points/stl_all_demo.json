@@ -1,0 +1,1079 @@
+{
+  "pathology_results": [
+    {
+      "task_name": "overbite",
+      "diagnosis_result": {
+        "teeth_points": [
+          {
+            "fdi": 11,
+            "type": "incisal_edge",
+            "type_cn": "切端点",
+            "point": [32.45, 24.12, -12.34]
+          },
+          {
+            "fdi": 21,
+            "type": "incisal_edge",
+            "type_cn": "切端点",
+            "point": [28.67, 24.35, -11.98]
+          },
+          {
+            "fdi": 41,
+            "type": "incisal_edge",
+            "type_cn": "切端点",
+            "point": [29.12, 18.45, -14.67]
+          },
+          {
+            "fdi": 31,
+            "type": "incisal_edge",
+            "type_cn": "切端点",
+            "point": [33.56, 18.78, -15.01]
+          },
+          {
+            "fdi": 41,
+            "type": "gingiva_margin",
+            "type_cn": "龈缘点",
+            "point": [29.34, 16.23, -10.89]
+          },
+          {
+            "fdi": 31,
+            "type": "gingiva_margin",
+            "type_cn": "龈缘点",
+            "point": [33.21, 16.54, -11.23]
+          }
+        ],
+        "measurements": {
+          "H_total": 8.5,
+          "H_overlap": 3.2,
+          "ratio": 0.376,
+          "diagnosis": "I度深覆合",
+          "severity": "轻度"
+        }
+      }
+    },
+    {
+      "task_name": "midline-deviation",
+      "diagnosis_result": {
+        "teeth_points": [
+          {
+            "fdi": 11,
+            "type": "center_tooth",
+            "type_cn": "牙齿质心",
+            "point": [22.591771459629722, -4.412768173518532, 1.3906016379629635]
+          },
+          {
+            "fdi": 21,
+            "type": "center_tooth",
+            "type_cn": "牙齿质心",
+            "point": [22.60083543126738, 3.9793748329324656, 1.5272557637372783]
+          },
+          {
+            "fdi": 31,
+            "type": "center_tooth",
+            "type_cn": "牙齿质心",
+            "point": [19.63412479167812, 3.4649505315513855, -0.486404118489942]
+          },
+          {
+            "fdi": 41,
+            "type": "center_tooth",
+            "type_cn": "牙齿质心",
+            "point": [19.35993901337127, -1.8601984088193446, -0.42340863413940244]
+          }
+        ],
+        "measurements": {
+          "upper_midline": {
+            "category": "centered"
+          },
+          "lower_midline": {
+            "category": "right"
+          },
+          "upper_to_lower_difference_mm": -1.0190727316590535,
+          "threshold_mm": 0.5
+        }
+      }
+    },
+    {
+      "task_name": "occlusal-relationship",
+      "diagnosis_result": {
+        "teeth_points": [
+          {
+            "fdi": 16,
+            "type": "cusp_mb",
+            "type_cn": "近中颊尖",
+            "point": [-25.42, 30.18, -18.24]
+          },
+          {
+            "fdi": 46,
+            "type": "mesial_buccal_groove",
+            "type_cn": "近中颊沟点",
+            "point": [-24.87, 10.56, -17.92]
+          },
+          {
+            "fdi": 26,
+            "type": "cusp_mb",
+            "type_cn": "近中颊尖",
+            "point": [26.15, 30.25, -18.36]
+          },
+          {
+            "fdi": 36,
+            "type": "mesial_buccal_groove",
+            "type_cn": "近中颊沟点",
+            "point": [25.32, 10.48, -18.05]
+          },
+          {
+            "fdi": 13,
+            "type": "canine_cusp",
+            "type_cn": "尖牙尖点",
+            "point": [-13.24, 29.45, -16.78]
+          },
+          {
+            "fdi": 43,
+            "type": "canine_cusp",
+            "type_cn": "尖牙牙尖",
+            "point": [-12.89, 11.23, -16.54]
+          },
+          {
+            "fdi": 23,
+            "type": "canine_cusp",
+            "type_cn": "尖牙牙尖",
+            "point": [14.02, 29.38, -16.85]
+          },
+          {
+            "fdi": 33,
+            "type": "canine_cusp",
+            "type_cn": "尖牙牙尖",
+            "point": [13.56, 11.18, -16.62]
+          }
+        ],
+        "measurements": {
+          "left_side": {
+            "canine_relationship": "中性",
+            "molar_relationship": "轻度近中"
+          },
+          "right_side": {
+            "canine_relationship": "远中",
+            "molar_relationship": "中性"
+          }
+        }
+      }
+    },
+    {
+      "task_name": "crossbite",
+      "diagnosis_result": {
+        "teeth_points": [],
+        "measurements": {}
+      }
+    },
+    {
+      "task_name": "bolton",
+      "diagnosis_result": {
+        "teeth_points": [
+          {
+            "fdi": 11,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [-4.2, 28.5, -14.8]
+          },
+          {
+            "fdi": 11,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [4.3, 28.5, -14.8]
+          },
+          {
+            "fdi": 12,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [4.3, 28.6, -15.0]
+          },
+          {
+            "fdi": 12,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [12.6, 28.6, -15.0]
+          },
+          {
+            "fdi": 13,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [12.6, 28.7, -15.2]
+          },
+          {
+            "fdi": 13,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [21.3, 28.7, -15.2]
+          },
+          {
+            "fdi": 14,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [21.3, 28.3, -15.5]
+          },
+          {
+            "fdi": 14,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [29.9, 28.3, -15.5]
+          },
+          {
+            "fdi": 15,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [29.9, 27.9, -15.8]
+          },
+          {
+            "fdi": 15,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [38.3, 27.9, -15.8]
+          },
+          {
+            "fdi": 16,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [38.3, 27.5, -16.1]
+          },
+          {
+            "fdi": 16,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [46.5, 27.5, -16.1]
+          },
+          {
+            "fdi": 17,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [46.5, 27.0, -16.4]
+          },
+          {
+            "fdi": 17,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [55.3, 27.0, -16.4]
+          },
+          {
+            "fdi": 18,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [55.3, 26.5, -16.7]
+          },
+          {
+            "fdi": 18,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [64.0, 26.5, -16.7]
+          },
+          {
+            "fdi": 21,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [-4.3, 28.4, -14.8]
+          },
+          {
+            "fdi": 21,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [4.1, 28.4, -14.8]
+          },
+          {
+            "fdi": 22,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [-12.5, 28.5, -15.0]
+          },
+          {
+            "fdi": 22,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [-4.3, 28.5, -15.0]
+          },
+          {
+            "fdi": 23,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [-21.3, 28.6, -15.2]
+          },
+          {
+            "fdi": 23,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [-12.5, 28.6, -15.2]
+          },
+          {
+            "fdi": 24,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [-29.9, 28.2, -15.5]
+          },
+          {
+            "fdi": 24,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [-21.3, 28.2, -15.5]
+          },
+          {
+            "fdi": 25,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [-38.4, 27.8, -15.8]
+          },
+          {
+            "fdi": 25,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [-29.9, 27.8, -15.8]
+          },
+          {
+            "fdi": 41,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [-4.1, 11.5, -15.2]
+          },
+          {
+            "fdi": 41,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [4.2, 11.5, -15.2]
+          },
+          {
+            "fdi": 42,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [4.2, 11.6, -15.4]
+          },
+          {
+            "fdi": 42,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [12.4, 11.6, -15.4]
+          },
+          {
+            "fdi": 43,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [12.4, 11.7, -15.6]
+          },
+          {
+            "fdi": 43,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [21.1, 11.7, -15.6]
+          },
+          {
+            "fdi": 44,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [21.1, 11.3, -15.9]
+          },
+          {
+            "fdi": 44,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [29.7, 11.3, -15.9]
+          },
+          {
+            "fdi": 45,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [29.7, 10.9, -16.2]
+          },
+          {
+            "fdi": 45,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [38.1, 10.9, -16.2]
+          },
+          {
+            "fdi": 46,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [38.1, 10.5, -16.5]
+          },
+          {
+            "fdi": 46,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [46.3, 10.5, -16.5]
+          },
+          {
+            "fdi": 47,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [46.3, 10.0, -16.8]
+          },
+          {
+            "fdi": 47,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [55.1, 10.0, -16.8]
+          },
+          {
+            "fdi": 48,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [55.1, 9.5, -17.1]
+          },
+          {
+            "fdi": 48,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [63.8, 9.5, -17.1]
+          },
+          {
+            "fdi": 31,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [-4.2, 11.4, -15.2]
+          },
+          {
+            "fdi": 31,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [4.0, 11.4, -15.2]
+          },
+          {
+            "fdi": 32,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [-12.4, 11.5, -15.4]
+          },
+          {
+            "fdi": 32,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [-4.2, 11.5, -15.4]
+          },
+          {
+            "fdi": 33,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [-21.2, 11.6, -15.6]
+          },
+          {
+            "fdi": 33,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [-12.4, 11.6, -15.6]
+          },
+          {
+            "fdi": 34,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [-29.8, 11.2, -15.9]
+          },
+          {
+            "fdi": 34,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [-21.2, 11.2, -15.9]
+          },
+          {
+            "fdi": 35,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [-38.3, 10.8, -16.2]
+          },
+          {
+            "fdi": 35,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [-29.8, 10.8, -16.2]
+          },
+          {
+            "fdi": 36,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [-46.4, 10.4, -16.5]
+          },
+          {
+            "fdi": 36,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [-38.3, 10.4, -16.5]
+          },
+          {
+            "fdi": 37,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [-55.2, 9.9, -16.8]
+          },
+          {
+            "fdi": 37,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [-46.4, 9.9, -16.8]
+          },
+          {
+            "fdi": 38,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [-63.9, 9.4, -17.1]
+          },
+          {
+            "fdi": 38,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [-55.2, 9.4, -17.1]
+          }
+        ],
+        "measurements": {
+          "front_ratio_percent": 80.5,
+          "all_ratio_percent": 91.2,
+          "upper_front_sum": 32.5,
+          "lower_front_sum": 26.2,
+          "upper_all_sum": 78.3,
+          "lower_all_sum": 71.4,
+          "width": {
+            "11": 8.5,
+            "12": 8.3,
+            "13": 8.7,
+            "14": 8.6,
+            "15": 8.4,
+            "16": 8.2,
+            "17": 8.8,
+            "18": 8.7,
+            "21": 8.4,
+            "22": 8.2,
+            "23": 8.8,
+            "24": 8.7,
+            "25": 8.5,
+            "26": 8.3,
+            "27": 8.6,
+            "28": 8.4,
+            "31": 8.2,
+            "32": 8.0,
+            "33": 8.6,
+            "34": 8.5,
+            "35": 8.3,
+            "36": 8.1,
+            "37": 8.4,
+            "38": 8.3,
+            "41": 8.3,
+            "42": 8.1,
+            "43": 8.7,
+            "44": 8.6,
+            "45": 8.4,
+            "46": 8.2,
+            "47": 8.8,
+            "48": 8.7
+          }
+        }
+      }
+    },
+    {
+      "task_name": "arch-symmetry",
+      "diagnosis_result": {
+        "teeth_points": [
+          {
+            "fdi": 16,
+            "type": "center_tooth",
+            "type_cn": "牙齿质心",
+            "point": [-28.65, 27.32, -15.48]
+          },
+          {
+            "fdi": 26,
+            "type": "center_tooth",
+            "type_cn": "牙齿质心",
+            "point": [28.72, 27.41, -15.53]
+          },
+          {
+            "fdi": 36,
+            "type": "center_tooth",
+            "type_cn": "牙齿质心",
+            "point": [27.95, 8.62, -16.12]
+          },
+          {
+            "fdi": 46,
+            "type": "center_tooth",
+            "type_cn": "牙齿质心",
+            "point": [-28.12, 8.54, -16.08]
+          }
+        ],
+        "upper_midline_points": [
+          {
+            "point1": [0.2, 29.5, -14.8]
+          },
+          {
+            "point2": [0.1, 26.3, -14.6]
+          }
+        ],
+        "lower_midline_points": [
+          {
+            "point1": [0.3, 11.2, -15.2]
+          },
+          {
+            "point2": [0.2, 8.4, -15.0]
+          }
+        ],
+        "measurements": {
+          "upper": {
+            "pairs": {
+              "16-26": {
+                "left_dist": 12.5,
+                "right_dist": 12.3,
+                "symmetric": true
+              }
+            }
+          },
+          "lower": {
+            "pairs": {
+              "36-46": {
+                "left_dist": 13.2,
+                "right_dist": 13.3,
+                "symmetric": true
+              }
+            }
+          },
+          "tolerance": 0.5,
+          "shape": "尖圆形"
+        }
+      }
+    },
+    {
+      "task_name": "tooth-crowding-degree",
+      "diagnosis_result": {
+        "teeth_points": [
+          {
+            "fdi": 37,
+            "type": "mesial_buccal_groove",
+            "type_cn": "近中颊沟点",
+            "point": [100.5, 50.3, 25.1]
+          },
+          {
+            "fdi": 36,
+            "type": "mesial_buccal_groove",
+            "type_cn": "近中颊沟点",
+            "point": [95.2, 48.7, 24.8]
+          },
+          {
+            "fdi": 35,
+            "type": "buccal_cusp_p",
+            "type_cn": "前磨牙颊尖",
+            "point": [90.1, 45.2, 24.5]
+          },
+          {
+            "fdi": 34,
+            "type": "buccal_cusp_p",
+            "type_cn": "前磨牙颊尖",
+            "point": [85.3, 40.1, 24.2]
+          },
+          {
+            "fdi": 33,
+            "type": "canine_cusp",
+            "type_cn": "尖牙尖点",
+            "point": [80.7, 35.0, 23.9]
+          },
+          {
+            "fdi": 32,
+            "type": "center_crown",
+            "type_cn": "牙冠中点",
+            "point": [75.5, 30.2, 23.6]
+          },
+          {
+            "fdi": 31,
+            "type": "center_crown",
+            "type_cn": "牙冠中点",
+            "point": [70.3, 25.4, 23.3]
+          },
+          {
+            "fdi": 41,
+            "type": "center_crown",
+            "type_cn": "牙冠中点",
+            "point": [75.1, 20.8, 23.0]
+          },
+          {
+            "fdi": 42,
+            "type": "center_crown",
+            "type_cn": "牙冠中点",
+            "point": [80.2, 25.3, 22.7]
+          },
+          {
+            "fdi": 43,
+            "type": "canine_cusp",
+            "type_cn": "尖牙尖点",
+            "point": [85.4, 30.1, 22.4]
+          },
+          {
+            "fdi": 44,
+            "type": "buccal_cusp_p",
+            "type_cn": "前磨牙颊尖",
+            "point": [90.6, 35.0, 22.1]
+          },
+          {
+            "fdi": 17,
+            "type": "center_fossa",
+            "type_cn": "中央窝中心点",
+            "point": [100.8, 55.2, 30.1]
+          },
+          {
+            "fdi": 16,
+            "type": "center_fossa",
+            "type_cn": "中央窝中心点",
+            "point": [95.6, 53.8, 29.8]
+          },
+          {
+            "fdi": 15,
+            "type": "center_fossa",
+            "type_cn": "中央窝中心点",
+            "point": [90.4, 50.5, 29.5]
+          },
+          {
+            "fdi": 14,
+            "type": "center_fossa",
+            "type_cn": "中央窝中心点",
+            "point": [85.3, 45.8, 29.2]
+          },
+          {
+            "fdi": 13,
+            "type": "center_crown",
+            "type_cn": "牙冠中点",
+            "point": [80.1, 40.7, 28.9]
+          },
+          {
+            "fdi": 12,
+            "type": "center_crown",
+            "type_cn": "牙冠中点",
+            "point": [75.2, 35.6, 28.6]
+          },
+          {
+            "fdi": 11,
+            "type": "center_crown",
+            "type_cn": "牙冠中点",
+            "point": [70.4, 30.5, 28.3]
+          },
+          {
+            "fdi": 21,
+            "type": "center_crown",
+            "type_cn": "牙冠中点",
+            "point": [75.3, 25.9, 28.0]
+          },
+          {
+            "fdi": 22,
+            "type": "center_crown",
+            "type_cn": "牙冠中点",
+            "point": [80.5, 30.8, 27.7]
+          },
+          {
+            "fdi": 23,
+            "type": "center_crown",
+            "type_cn": "牙冠中点",
+            "point": [85.7, 35.9, 27.4]
+          },
+          {
+            "fdi": 24,
+            "type": "center_fossa",
+            "type_cn": "中央窝中心点",
+            "point": [90.9, 40.8, 27.1]
+          }
+        ],
+        "measurements": {
+          "lower_jaw": {
+            "grade": "I度拥挤",
+            "discrepancy_mm": 3.2,
+            "tooth_widths_sum_mm": 85.7,
+            "arch_length_mm": 82.5
+          },
+          "upper_jaw": {
+            "grade": "正常",
+            "discrepancy_mm": 0.5,
+            "tooth_widths_sum_mm": 88.2,
+            "arch_length_mm": 88.7
+          }
+        }
+      }
+    },
+    {
+      "task_name": "tooth-gap",
+      "diagnosis_result": {
+        "teeth_points": [
+          {
+            "fdi": 31,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [0.32, 10.56, -14.23]
+          },
+          {
+            "fdi": 32,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [2.54, 10.68, -14.31]
+          },
+          {
+            "fdi": 32,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [4.87, 10.72, -14.45]
+          },
+          {
+            "fdi": 33,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [6.67, 10.83, -14.56]
+          },
+          {
+            "fdi": 33,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [9.42, 10.95, -14.68]
+          },
+          {
+            "fdi": 34,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [9.92, 11.03, -14.75]
+          },
+          {
+            "fdi": 34,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [13.45, 11.12, -14.87]
+          },
+          {
+            "fdi": 35,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [15.55, 11.21, -14.95]
+          },
+          {
+            "fdi": 35,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [18.63, 11.32, -15.08]
+          },
+          {
+            "fdi": 36,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [19.83, 11.45, -15.16]
+          },
+          {
+            "fdi": 36,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [23.15, 11.58, -15.27]
+          },
+          {
+            "fdi": 37,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [25.85, 11.67, -15.35]
+          },
+          {
+            "fdi": 11,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [0.45, 27.32, -13.85]
+          },
+          {
+            "fdi": 12,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [2.75, 27.41, -13.92]
+          },
+          {
+            "fdi": 12,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [5.12, 27.54, -14.05]
+          },
+          {
+            "fdi": 13,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [5.92, 27.63, -14.12]
+          },
+          {
+            "fdi": 13,
+            "type": "boundary_distal",
+            "type_cn": "远中边缘点",
+            "point": [8.78, 27.75, -14.23]
+          },
+          {
+            "fdi": 14,
+            "type": "boundary_mesial",
+            "type_cn": "近中边缘点",
+            "point": [9.78, 27.84, -14.31]
+          }
+        ],
+        "measurements": {
+          "lower_jaw": {
+            "total_gaps": 6,
+            "total_gap_size_mm": 8.5,
+            "grade": "中度间隙",
+            "gap_details": [
+              {
+                "tooth1": 31,
+                "tooth2": 32,
+                "gap_size": 0.2
+              },
+              {
+                "tooth1": 32,
+                "tooth2": 33,
+                "gap_size": 1.8
+              },
+              {
+                "tooth1": 33,
+                "tooth2": 34,
+                "gap_size": 0.5
+              },
+              {
+                "tooth1": 34,
+                "tooth2": 35,
+                "gap_size": 2.1
+              },
+              {
+                "tooth1": 35,
+                "tooth2": 36,
+                "gap_size": 1.2
+              },
+              {
+                "tooth1": 36,
+                "tooth2": 37,
+                "gap_size": 2.7
+              }
+            ]
+          },
+          "upper_jaw": {
+            "total_gaps": 3,
+            "total_gap_size_mm": 2.1,
+            "max_gap_size": 1.0,
+            "average_gap_size": 0.7,
+            "grade": "正常",
+            "gap_details": [
+              {
+                "tooth1": 11,
+                "tooth2": 12,
+                "gap_size": 0.3
+              },
+              {
+                "tooth1": 12,
+                "tooth2": 13,
+                "gap_size": 0.8
+              },
+              {
+                "tooth1": 13,
+                "tooth2": 14,
+                "gap_size": 1.0
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "task_name": "upper-curve",
+      "diagnosis_result": {
+        "teeth_points": [],
+        "measurements": {}
+      }
+    },
+    {
+      "task_name": "lower-curve",
+      "diagnosis_result": {
+        "teeth_points": [],
+        "measurements": {}
+      }
+    },
+    {
+      "task_name": "overjet",
+      "diagnosis_result": {
+        "teeth_points": [
+          {
+            "fdi": 11,
+            "type": "incisal_edge",
+            "type_cn": "切端点",
+            "point": [0.25, 28.32, -14.65]
+          },
+          {
+            "fdi": 41,
+            "type": "incisal_edge",
+            "type_cn": "切端点",
+            "point": [4.45, 12.48, -15.32]
+          },
+          {
+            "fdi": 41,
+            "type": "gingiva_margin",
+            "type_cn": "龈缘点",
+            "point": [4.52, 12.35, -12.18]
+          }
+        ],
+        "measurements": {
+          "pair_details": [
+            {
+              "upper_fdi": 11,
+              "lower_fdi": 41,
+              "overjet": 4.2,
+              "is_crossbite": false
+            }
+          ],
+          "avg_overjet": 4.2,
+          "diagnosis": "深覆盖I度",
+          "severity": "轻度"
+        }
+      }
+    },
+    {
+      "task_name": "arch-width",
+      "diagnosis_result": {
+        "teeth_points": [
+          {
+            "fdi": 13,
+            "type": "canine_cusp",
+            "type_cn": "尖牙牙尖",
+            "point": [-17.71, 28.45, -15.23]
+          },
+          {
+            "fdi": 23,
+            "type": "canine_cusp",
+            "type_cn": "尖牙牙尖",
+            "point": [17.71, 28.45, -15.23]
+          },
+          {
+            "fdi": 16,
+            "type": "center_fossa",
+            "type_cn": "中央窝",
+            "point": [-26.09, 27.32, -16.45]
+          },
+          {
+            "fdi": 26,
+            "type": "center_fossa",
+            "type_cn": "中央窝",
+            "point": [26.09, 27.32, -16.45]
+          }
+        ],
+        "measurements": {
+          "upper_arch": {
+            "canine_width_3_3": {
+              "left_fdi": 23,
+              "right_fdi": 13,
+              "width": 35.42,
+              "unit": "mm"
+            },
+            "molar_width_6_6": {
+              "left_fdi": 26,
+              "right_fdi": 16,
+              "width": 52.18,
+              "unit": "mm"
+            }
+          },
+          "lower_arch": {
+            "canine_width_3_3": {
+              "left_fdi": 43,
+              "right_fdi": 33,
+              "width": 32.76,
+              "unit": "mm"
+            },
+            "molar_width_6_6": {
+              "left_fdi": 46,
+              "right_fdi": 36,
+              "width": 48.65,
+              "unit": "mm"
+            }
+          },
+          "diagnosis": "正常",
+          "severity": "正常"
+        }
+      }
+    }
+  ]
+}

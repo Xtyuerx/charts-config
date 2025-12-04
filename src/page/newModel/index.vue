@@ -121,7 +121,16 @@ onMounted(async () => {
   initScene()
   await loadJsonPoints()
   await loadTeethCenterPoints() // 加载牙齿质心点数据
-  loadModels()
+  const upper =
+    'http://192.168.100.123:9000/cy-stl/3D/20250807105033261/1994249841554755584/stl/20251114_0004_upper.stl?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20251203%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251203T083510Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=370f04ad97b7f0c8af15c9dbe3ab4ed0d21bcbaff7ac445c3f2aca0c324091a2'
+  const upper_only_tooth =
+    'http://192.168.100.123:9000/cy-stl/3D/20250807105033261/1994249841554755584/stl/20251114_0004_upper_only_tooth.stl?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20251203%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251203T083510Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=06af9801b23c915dcac13c3856485867a84e4eb676c2801e24e12d5786a02f1e'
+  const lower =
+    'http://192.168.100.123:9000/cy-stl/3D/20250807105033261/1994249841554755584/stl/20251114_0004_lower.stl?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20251203%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251203T083510Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=02bd9bc6acf2269fb2a990736cd14ff0c9d5497e393a319c15b12b3338a4900b'
+  const lower_only_tooth =
+    'http://192.168.100.123:9000/cy-stl/3D/20250807105033261/1994249841554755584/stl/20251114_0004_lower_only_tooth.stl?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20251203%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251203T083510Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=4c82ce72ec87c653cba13b62135079e6d3f62c7045298d4e91536b5dc332bc59'
+  loadModels(upper, upper_only_tooth, lower, lower_only_tooth)
+  // loadModels()
   animate()
 })
 
@@ -470,113 +479,98 @@ function getClosestPointTOnCurve(
   // 可以进一步通过二分查找或梯度下降优化 bestT
   return bestT
 }
-
-function loadModels() {
-  const loader = new STLLoader()
-
-  // 上颌
-  loader.load('/models/upper.stl', (geometry) => {
-    const material = new THREE.MeshPhongMaterial({
-      color: 0xffb6c1,
-      opacity: 0.5,
-      specular: 0x555555,
-      shininess: 100,
-      reflectivity: 0.5,
-    })
-    upperMesh = new THREE.Mesh(geometry, material)
-    upperMesh.scale.set(1.5, 1.5, 1.5)
-
-    // 向下仰俯 45°（绕 X 轴）
-    scene.rotation.x = -Math.PI / 2
-    scene.rotation.z = -Math.PI / 2
-    scene.add(upperMesh)
+function loadSTL(url: string) {
+  return new Promise((resolve, reject) => {
+    const loader = new STLLoader()
+    loader.load(url, resolve, undefined, reject)
   })
+}
 
-  // 下颌
-  loader.load('/models/lower.stl', (geometry) => {
-    const material = new THREE.MeshPhongMaterial({
-      color: 0xffb6c1,
-      emissive: 0x333333, // 自发光颜色
-      emissiveIntensity: 0.3, // 自发光强度 (0-1)
-      shininess: 100, // 光泽度
-      specular: 0x555555,
-    })
-    lowerMesh = new THREE.Mesh(geometry, material)
-    lowerMesh.scale.set(1.5, 1.5, 1.5)
-    scene.rotation.x = -Math.PI / 2
-    scene.rotation.z = -Math.PI / 2
-    scene.add(lowerMesh)
+async function loadModels(
+  upper: string,
+  upper_only_tooth: string,
+  lower: string,
+  lower_only_tooth: string,
+) {
+  // ---------------------------
+  // 1. 并行加载 2 个整体 STL
+  // ---------------------------
+  const [upperGeo, lowerGeo] = await Promise.all([loadSTL(upper), loadSTL(lower)])
+
+  // 渲染上颌整体
+  const upperMaterial = new THREE.MeshPhongMaterial({
+    color: 0xffb6c1,
+    opacity: 0.5,
+    specular: 0x555555,
+    shininess: 100,
+    reflectivity: 0.5,
   })
-  setTimeout(async () => {
-    // 上颌牙齿部分
-    loader.load('/models/upper_only_tooth.stl', (geometry) => {
-      const material = new THREE.MeshPhongMaterial({
-        color: 0xffffff,
-        specular: 0x555555,
-        shininess: 30,
-        flatShading: false,
-      })
+  upperMesh = new THREE.Mesh(upperGeo, upperMaterial)
+  upperMesh.scale.set(1.5, 1.5, 1.5)
+  scene.rotation.x = -Math.PI / 2
+  scene.rotation.z = -Math.PI / 2
+  scene.add(upperMesh)
 
-      upperMeshLabel = new THREE.Mesh(geometry, material)
-      upperMeshLabel.scale.set(1.5, 1.5, 1.5)
-      scene.rotation.x = -Math.PI / 2
-      scene.rotation.z = -Math.PI / 2
-      scene.add(upperMeshLabel)
+  // 渲染下颌整体
+  const lowerMaterial = new THREE.MeshPhongMaterial({
+    color: 0xffb6c1,
+    emissive: 0x333333,
+    emissiveIntensity: 0.3,
+    shininess: 100,
+    specular: 0x555555,
+  })
+  lowerMesh = new THREE.Mesh(lowerGeo, lowerMaterial)
+  lowerMesh.scale.set(1.5, 1.5, 1.5)
+  scene.add(lowerMesh)
 
-      // 使用新的渲染方法，传入geometry和labels数组
-      // renderPointsFromJson(geometry, labelsUpper, upperMeshLabel)
-      const centers = renderPointsFromJson(geometry, labelsUpper, upperMeshLabel)
-      // console.log(centers, 'centers')
-      if (centers) {
-        getLabelNumber(centers, upperMeshLabel)
-      }
+  // ---------------------------
+  // 2. 并行加载 2 个牙齿 STL
+  // ---------------------------
+  const [upperToothGeo, lowerToothGeo] = await Promise.all([
+    loadSTL(upper_only_tooth),
+    loadSTL(lower_only_tooth),
+  ])
 
-      // if (centers) {
-      //   upperCentersData = centers
-      //   // tryCreateMiddleArchCurve()
-      // }
-    })
-    // 下颌牙齿部分
-    loader.load('/models/lower_only_tooth.stl', (geometry) => {
-      const material = new THREE.MeshPhongMaterial({
-        color: 0xffffff,
-        specular: 0x555555,
-        shininess: 100,
-      })
-      lowerMeshLabel = new THREE.Mesh(geometry, material)
-      lowerMeshLabel.scale.set(1.5, 1.5, 1.5)
-      scene.rotation.x = -Math.PI / 2
-      scene.rotation.z = -Math.PI / 2
-      scene.add(lowerMeshLabel)
+  // 渲染上颌牙齿
+  const upperToothMat = new THREE.MeshPhongMaterial({
+    color: 0xffffff,
+    specular: 0x555555,
+    shininess: 30,
+    flatShading: false,
+  })
+  upperMeshLabel = new THREE.Mesh(upperToothGeo, upperToothMat)
+  upperMeshLabel.scale.set(1.5, 1.5, 1.5)
+  scene.add(upperMeshLabel)
 
-      // 使用新的渲染方法，传入geometry和labels数组
-      const centers = renderPointsFromJson(geometry, labelsLower, lowerMeshLabel)
-      if (centers) {
-        getLabelNumber(centers, lowerMeshLabel) //牙号
-      }
-      // if (centers) {
-      //   lowerCentersData = centers
-      //   // tryCreateMiddleArchCurve()
-      // }
-    })
+  const centersUpper = renderPointsFromJson(upperToothGeo, labelsUpper, upperMeshLabel)
+  if (centersUpper) getLabelNumber(centersUpper, upperMeshLabel)
 
-    // 加载并渲染牙齿质心点
-    // 注意：这里需要再次调用，因为在onMounted中调用时返回的数据没有被存储
-    const teethPoints = await loadTeethCenterPoints()
-    if (teethPoints && teethPoints.length > 0) {
-      // 直接添加到场景，不依附于任何模型
-      // 但需要应用相同的变换（缩放和旋转）
-      const centerPointsGroup = new THREE.Group()
-      centerPointsGroup.name = 'teeth_center_points_group'
-      centerPointsGroup.scale.set(1.5, 1.5, 1.5)
-      scene.add(centerPointsGroup)
+  // 渲染下颌牙齿
+  const lowerToothMat = new THREE.MeshPhongMaterial({
+    color: 0xffffff,
+    specular: 0x555555,
+    shininess: 30,
+    flatShading: false,
+  })
+  lowerMeshLabel = new THREE.Mesh(lowerToothGeo, lowerToothMat)
+  lowerMeshLabel.scale.set(1.5, 1.5, 1.5)
+  scene.add(lowerMeshLabel)
 
-      renderTeethCenterPoints(teethPoints, centerPointsGroup)
-    }
-  }, 300)
-  // 坐标轴辅助
-  const axesHelper = new THREE.AxesHelper(100)
-  scene.add(axesHelper)
+  const centersLower = renderPointsFromJson(lowerToothGeo, labelsLower, lowerMeshLabel)
+  if (centersLower) getLabelNumber(centersLower, lowerMeshLabel)
+
+  // ---------------------------
+  // 3. 四个 STL 都加载完后，再加载质心点
+  // ---------------------------
+  const teethPoints = await loadTeethCenterPoints()
+  if (teethPoints && teethPoints.length > 0) {
+    const group = new THREE.Group()
+    group.name = 'teeth_center_points_group'
+    group.scale.set(1.5, 1.5, 1.5)
+    scene.add(group)
+
+    renderTeethCenterPoints(teethPoints, group)
+  }
 }
 
 /**
