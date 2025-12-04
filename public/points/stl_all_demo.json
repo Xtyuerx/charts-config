@@ -159,8 +159,65 @@
     {
       "task_name": "crossbite",
       "diagnosis_result": {
-        "teeth_points": [],
-        "measurements": {}
+        "teeth_points": [
+          {
+            "fdi": 16,
+            "type": "cusp_ml",
+            "type_cn": "近中舌尖",
+            "point": [-28.45, 18.72, -12.36]
+          },
+          {
+            "fdi": 16,
+            "type": "center_fossa",
+            "type_cn": "中央窝",
+            "point": [-27.63, 19.85, -14.12]
+          },
+          {
+            "fdi": 46,
+            "type": "cusp_mb",
+            "type_cn": "近中颊尖",
+            "point": [-25.87, 11.23, -15.64]
+          },
+          {
+            "fdi": 46,
+            "type": "cusp_db",
+            "type_cn": "远中颊尖",
+            "point": [-29.32, 10.87, -15.23]
+          },
+          {
+            "fdi": 12,
+            "type": "center_crown",
+            "type_cn": "牙冠中点",
+            "point": [-10.76, 25.43, -14.89]
+          },
+          {
+            "fdi": 12,
+            "type": "incisal_edge",
+            "type_cn": "切端",
+            "point": [-11.23, 27.85, -14.56]
+          }
+        ],
+        "measurements": {
+          "locking": {
+            "pairs": [
+              {
+                "upper_fdi": 16,
+                "lower_fdi": 46,
+                "diagnosis": "锁𬌗"
+              }
+            ]
+          },
+          "anterior": {
+            "pairs": [
+              {
+                "upper_fdi": 12,
+                "lower_fdi": 42,
+                "diagnosis": "反𬌗"
+              }
+            ],
+            "diagnosis": "前牙反𬌗"
+          }
+        }
       }
     },
     {
@@ -963,15 +1020,95 @@
     {
       "task_name": "upper-curve",
       "diagnosis_result": {
-        "teeth_points": [],
-        "measurements": {}
+        "teeth_points": [
+          {
+            "fdi": 21,
+            "type": "incisal_edge",
+            "type_cn": "切端点",
+            "point": [0.0, 25.6, 12.3]
+          },
+          {
+            "fdi": 16,
+            "type": "cusp_mb",
+            "type_cn": "近中颂尖",
+            "point": [-28.5, -18.4, 8.7]
+          },
+          {
+            "fdi": 16,
+            "type": "cusp_db",
+            "type_cn": "远中颂尖",
+            "point": [-32.1, -20.6, 9.2]
+          },
+          {
+            "fdi": 15,
+            "type": "buccal_cusp_p",
+            "type_cn": "前磨牙颂尖",
+            "point": [-22.3, -12.8, 10.5]
+          }
+        ],
+        "measurements": {
+          "left": {
+            "side": "left",
+            "curve_type": "凸向下",
+            "curvature": 0.0023,
+            "radius": 217.39
+          },
+          "right": {
+            "side": "right",
+            "curve_type": "反向",
+            "curvature": -0.0015,
+            "radius": 333.33
+          }
+        }
       }
     },
     {
       "task_name": "lower-curve",
       "diagnosis_result": {
-        "teeth_points": [],
-        "measurements": {}
+        "teeth_points": [
+          {
+            "fdi": 31,
+            "type": "incisal_edge",
+            "type_cn": "切端",
+            "point": [-0.85, 14.67, -16.83]
+          },
+          {
+            "fdi": 33,
+            "type": "canine_cusp",
+            "type_cn": "牙尖点",
+            "point": [-14.23, 12.85, -16.42]
+          },
+          {
+            "fdi": 34,
+            "type": "buccal_cusp_p",
+            "type_cn": "颊尖",
+            "point": [-18.76, 11.54, -16.15]
+          },
+          {
+            "fdi": 36,
+            "type": "cusp_mb",
+            "type_cn": "近中颊尖",
+            "point": [-26.42, 9.87, -15.93]
+          },
+          {
+            "fdi": 46,
+            "type": "cusp_mb",
+            "type_cn": "近中颊尖",
+            "point": [25.36, 10.12, -16.05]
+          }
+        ],
+        "measurements": {
+          "left": {
+            "depth_mm": 2.1,
+            "classification": "正常",
+            "radius": 217.39
+          },
+          "right": {
+            "depth_mm": 3.2,
+            "classification": "陡",
+            "radius": 333.33
+          }
+        }
       }
     },
     {
@@ -1075,5 +1212,17 @@
         }
       }
     }
-  ]
+  ],
+  "basic_algorithm_info": {
+    "upper_stl": "http://175.154.206.51:9000/cy-stl/3D/123/case123_upper.stl?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=dsminioadmin%2F20251130%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251130T124522Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=913850303e062913a1c817979342b32a1b6883b2a9fcfa054c3b4ef769ae4edf",
+    "upper_json": "http://175.154.206.51:9000/cy-stl/3D/123/case123_upper.json?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=dsminioadmin%2F20251130%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251130T124522Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=913850303e062913a1c817979342b32a1b6883b2a9fcfa054c3b4ef769ae4edf",
+    "lower_stl": "http://175.154.206.51:9000/cy-stl/3D/123/case123_lower.stl?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=dsminioadmin%2F20251130%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251130T124522Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=913850303e062913a1c817979342b32a1b6883b2a9fcfa054c3b4ef769ae4edf",
+    "lower_json": "http://175.154.206.51:9000/cy-stl/3D/123/case123_lower.json?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=dsminioadmin%2F20251130%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251130T124522Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=913850303e062913a1c817979342b32a1b6883b2a9fcfa054c3b4ef769ae4edf",
+    "upper_only_tooth_stl": "http://175.154.206.51:9000/cy-stl/3D/123/case123_upper_only_tooth.stl?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=dsminioadmin%2F20251130%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251130T124522Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=913850303e062913a1c817979342b32a1b6883b2a9fcfa054c3b4ef769ae4edf",
+    "upper_only_tooth_json": "http://175.154.206.51:9000/cy-stl/3D/123/case123_upper_only_tooth.json?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=dsminioadmin%2F20251130%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251130T124522Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=913850303e062913a1c817979342b32a1b6883b2a9fcfa054c3b4ef769ae4edf",
+    "lower_only_tooth_stl": "http://175.154.206.51:9000/cy-stl/3D/123/case123_lower_only_tooth.stl?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=dsminioadmin%2F20251130%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251130T124522Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=913850303e062913a1c817979342b32a1b6883b2a9fcfa054c3b4ef769ae4edf",
+    "lower_only_tooth_json": "http://175.154.206.51:9000/cy-stl/3D/123/case123_lower_only_tooth.json?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=dsminioadmin%2F20251130%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251130T124522Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=913850303e062913a1c817979342b32a1b6883b2a9fcfa054c3b4ef769ae4edf",
+    "ul_stl": "http://175.154.206.51:9000/cy-stl/3D/123/case123_ul.stl?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=dsminioadmin%2F20251130%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251130T124522Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=913850303e062913a1c817979342b32a1b6883b2a9fcfa054c3b4ef769ae4edf",
+    "ul_json": "http://175.154.206.51:9000/cy-stl/3D/123/case123_ul.json?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=dsminioadmin%2F20251130%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251130T124522Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=913850303e062913a1c817979342b32a1b6883b2a9fcfa054c3b4ef769ae4edf"
+  }
 }
