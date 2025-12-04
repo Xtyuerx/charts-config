@@ -34,6 +34,7 @@ export function createJawMesh(geometry: THREE.BufferGeometry, isUpper: boolean):
     specular: MATERIAL_CONFIG.jaw.specular,
     shininess: MATERIAL_CONFIG.jaw.shininess,
     reflectivity: MATERIAL_CONFIG.jaw.reflectivity,
+    side: MATERIAL_CONFIG.jaw.side,
     ...(isUpper
       ? {}
       : {

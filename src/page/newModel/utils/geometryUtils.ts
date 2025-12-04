@@ -59,6 +59,7 @@ export function createSlicePlane(
     side: THREE.DoubleSide,
     opacity: 0.5,
     transparent: true,
+    side: THREE.DoubleSide,
   })
 
   const plane = new THREE.Mesh(planeGeometry, planeMaterial)

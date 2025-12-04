@@ -69,8 +69,8 @@ function createArrowHead(
   parent: THREE.Group,
   isStart: boolean,
 ): void {
-  // 根据是否为起点确定箭头方向
-  const arrowDir = isStart ? direction.clone() : direction.clone().negate()
+  // 箭头朝外：起点箭头朝左，终点箭头朝右
+  const arrowDir = isStart ? direction.clone().negate() : direction.clone()
 
   // 创建箭头的两条边
   // 计算垂直方向（在XY平面上）
@@ -147,7 +147,7 @@ function createMeasurementLabel(text: string): THREE.Sprite {
 }
 
 /**
- * 根据牙齿点云计算近远中边界点
+ * 根据牙齿点云计算近远中边界点（横向）
  * @param toothPoints 牙齿的所有顶点坐标
  * @returns { mesial: Vector3, distal: Vector3 } 近中点和远中点
  */
@@ -158,24 +158,24 @@ function calculateToothBoundaries(
     return null
   }
 
-  // 计算牙齿的主轴方向（Y轴方向，因为牙弓是沿Y轴的）
-  let minY = Infinity
-  let maxY = -Infinity
+  // 计算牙齿的横向边界（X轴方向）
+  let minX = Infinity
+  let maxX = -Infinity
   const mesialPoint = new THREE.Vector3()
   const distalPoint = new THREE.Vector3()
 
-  // 遍历所有点找到Y轴的最小值和最大值
+  // 遍历所有点找到X轴的最小值和最大值
   for (let i = 0; i < toothPoints.length; i += 3) {
     const x = toothPoints[i] || 0
     const y = toothPoints[i + 1] || 0
     const z = toothPoints[i + 2] || 0
 
-    if (y < minY) {
-      minY = y
+    if (x < minX) {
+      minX = x
       mesialPoint.set(x, y, z)
     }
-    if (y > maxY) {
-      maxY = y
+    if (x > maxX) {
+      maxX = x
       distalPoint.set(x, y, z)
     }
   }

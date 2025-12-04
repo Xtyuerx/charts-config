@@ -13,6 +13,9 @@
         <el-button @click="toggleBoltonDisplay" type="primary">
           {{ showBolton ? '隐藏' : '显示' }} Bolton 宽度测量
         </el-button>
+        <el-button @click="toggleOverbiteDisplay" type="success" style="margin-left: 10px">
+          {{ showOverbite ? '隐藏' : '显示' }} 深覆合分析
+        </el-button>
       </div>
       <div ref="containerRef" class="oral-3d"></div>
     </div>
@@ -39,6 +42,11 @@ import { renderPointsFromJson } from './utils/pointCloudRenderer'
 import { renderTeethCenterPoints } from './utils/labelUtils'
 import { createMiddleArchCurve } from './utils/archWireUtils'
 import { renderBoltonWidthMeasurementsFromSTL, toggleBoltonMeasurements } from './utils/boltonUtils'
+import {
+  renderOverbiteAnalysis,
+  toggleOverbiteAnalysis,
+  extractOverbiteData,
+} from './utils/overbiteUtils'
 import { useDragControls } from './hooks/useDragControls'
 import { useLabels } from './hooks/useLabels'
 import type { ViewLabel, STLModelsConfig, BoltonAnalysisData } from './types'
@@ -47,6 +55,7 @@ const containerRef = ref<HTMLDivElement | null>(null)
 const viewLabels = ref(VIEW_LABELS)
 const selectedViewType = ref(0)
 const showBolton = ref(false)
+const showOverbite = ref(false)
 
 // Three.js 核心对象
 let scene: THREE.Scene
@@ -67,6 +76,9 @@ let labelsLower: number[] = []
 
 // Bolton 数据
 let boltonGroup: THREE.Group | null = null
+
+// Overbite 数据
+let overbiteGroup: THREE.Group | null = null
 
 // 使用组合函数
 const { draggableObjects, setupDragControls, getControlPointsData } = useDragControls()
@@ -92,6 +104,9 @@ onMounted(async () => {
 
   // 加载 Bolton 数据并渲染
   await loadBoltonData()
+
+  // 加载 Overbite 数据并渲染
+  await loadOverbiteData()
 
   // 设置拖拽控制
   dragControls = setupDragControls(camera, renderer, controls, DragControls)
@@ -217,11 +232,44 @@ async function loadBoltonData() {
 }
 
 /**
+ * 加载 Overbite 深覆合数据并渲染
+ */
+async function loadOverbiteData() {
+  try {
+    // 加载完整诊断数据
+    const diagnosisData = await loadDiagnosisData('/points/stl_all_demo.json')
+
+    // 提取 Overbite 数据
+    const overbiteData = extractOverbiteData(diagnosisData)
+
+    if (overbiteData) {
+      console.log('开始渲染 Overbite 测量...')
+      overbiteGroup = renderOverbiteAnalysis(overbiteData, scene)
+
+      // 默认隐藏
+      if (overbiteGroup) {
+        overbiteGroup.visible = false
+      }
+    }
+  } catch (error) {
+    console.error('加载 Overbite 数据失败:', error)
+  }
+}
+
+/**
  * 切换 Bolton 测量线显示
  */
 function toggleBoltonDisplay() {
   showBolton.value = !showBolton.value
   toggleBoltonMeasurements(scene, showBolton.value)
+}
+
+/**
+ * 切换 Overbite 测量显示
+ */
+function toggleOverbiteDisplay() {
+  showOverbite.value = !showOverbite.value
+  toggleOverbiteAnalysis(scene, showOverbite.value)
 }
 
 /**

@@ -1,4 +1,5 @@
 import type { ViewLabel } from './types'
+import * as THREE from 'three'
 
 /**
  * 牙齿颜色映射表 - 为不同牙齿编号定义颜色
@@ -107,6 +108,7 @@ export const MATERIAL_CONFIG = {
     specular: 0x555555,
     shininess: 100,
     reflectivity: 0.5,
+    side: THREE.DoubleSide,
   },
   tooth: {
     color: 0xffffff,
