@@ -1,8 +1,8 @@
-import * as THREE from 'three'
-import { STLLoader } from 'three-stdlib'
-import { MATERIAL_CONFIG, SCENE_CONFIG } from '../constants'
-import type { STLModelsConfig, ToothCentersMap } from '../types'
-import type { RenderPointsResult } from './pointCloudRenderer'
+import * as THREE from 'three';
+import { STLLoader } from 'three-stdlib';
+import { MATERIAL_CONFIG, SCENE_CONFIG } from '../constants';
+import type { STLModelsConfig, ToothCentersMap } from '../types';
+import type { RenderPointsResult } from './pointCloudRenderer';
 
 /**
  * 加载单个STL文件
@@ -11,14 +11,14 @@ import type { RenderPointsResult } from './pointCloudRenderer'
  */
 export function loadSTL(url: string): Promise<THREE.BufferGeometry> {
   return new Promise((resolve, reject) => {
-    const loader = new STLLoader()
+    const loader = new STLLoader();
     loader.load(
       url,
-      (geometry) => resolve(geometry),
+      geometry => resolve(geometry),
       undefined,
-      (error) => reject(error),
-    )
-  })
+      error => reject(error),
+    );
+  });
 }
 
 /**
@@ -41,13 +41,13 @@ export function createJawMesh(geometry: THREE.BufferGeometry, isUpper: boolean):
           emissive: MATERIAL_CONFIG.lowerJaw.emissive,
           emissiveIntensity: MATERIAL_CONFIG.lowerJaw.emissiveIntensity,
         }),
-  })
+  });
 
-  const mesh = new THREE.Mesh(geometry, material)
-  mesh.scale.set(SCENE_CONFIG.modelScale, SCENE_CONFIG.modelScale, SCENE_CONFIG.modelScale)
-  mesh.name = isUpper ? 'upper_jaw' : 'lower_jaw'
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.scale.set(SCENE_CONFIG.modelScale, SCENE_CONFIG.modelScale, SCENE_CONFIG.modelScale);
+  mesh.name = isUpper ? 'upper_jaw' : 'lower_jaw';
 
-  return mesh
+  return mesh;
 }
 
 /**
@@ -61,14 +61,15 @@ export function createToothMesh(geometry: THREE.BufferGeometry, isUpper: boolean
     color: MATERIAL_CONFIG.tooth.color,
     specular: MATERIAL_CONFIG.tooth.specular,
     shininess: MATERIAL_CONFIG.tooth.shininess,
+    side: MATERIAL_CONFIG.tooth.side,
     flatShading: false,
-  })
+  });
 
-  const mesh = new THREE.Mesh(geometry, material)
-  mesh.scale.set(SCENE_CONFIG.modelScale, SCENE_CONFIG.modelScale, SCENE_CONFIG.modelScale)
-  mesh.name = isUpper ? 'upper_tooth' : 'lower_tooth'
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.scale.set(SCENE_CONFIG.modelScale, SCENE_CONFIG.modelScale, SCENE_CONFIG.modelScale);
+  mesh.name = isUpper ? 'upper_tooth' : 'lower_tooth';
 
-  return mesh
+  return mesh;
 }
 
 /**
@@ -91,39 +92,39 @@ export async function loadAllModels(
   labelsUpper: number[],
   labelsLower: number[],
 ): Promise<{
-  upperMesh: THREE.Mesh
-  lowerMesh: THREE.Mesh
-  upperMeshLabel: THREE.Mesh
-  lowerMeshLabel: THREE.Mesh
-  centersUpper: ToothCentersMap | null
-  centersLower: ToothCentersMap | null
-  upperToothPointsData: Record<number, Float32Array>
-  lowerToothPointsData: Record<number, Float32Array>
+  upperMesh: THREE.Mesh;
+  lowerMesh: THREE.Mesh;
+  upperMeshLabel: THREE.Mesh;
+  lowerMeshLabel: THREE.Mesh;
+  centersUpper: ToothCentersMap | null;
+  centersLower: ToothCentersMap | null;
+  upperToothPointsData: Record<number, Float32Array>;
+  lowerToothPointsData: Record<number, Float32Array>;
 }> {
   // 并行加载颌骨STL
-  const [upperGeo, lowerGeo] = await Promise.all([loadSTL(config.upper), loadSTL(config.lower)])
+  const [upperGeo, lowerGeo] = await Promise.all([loadSTL(config.upper), loadSTL(config.lower)]);
 
   // 创建颌骨网格
-  const upperMesh = createJawMesh(upperGeo, true)
-  const lowerMesh = createJawMesh(lowerGeo, false)
-  scene.add(upperMesh)
-  scene.add(lowerMesh)
+  const upperMesh = createJawMesh(upperGeo, true);
+  const lowerMesh = createJawMesh(lowerGeo, false);
+  scene.add(upperMesh);
+  scene.add(lowerMesh);
 
   // 并行加载牙齿STL
   const [upperToothGeo, lowerToothGeo] = await Promise.all([
     loadSTL(config.upper_only_tooth),
     loadSTL(config.lower_only_tooth),
-  ])
+  ]);
 
   // 创建牙齿网格
-  const upperMeshLabel = createToothMesh(upperToothGeo, true)
-  const lowerMeshLabel = createToothMesh(lowerToothGeo, false)
-  scene.add(upperMeshLabel)
-  scene.add(lowerMeshLabel)
+  const upperMeshLabel = createToothMesh(upperToothGeo, true);
+  const lowerMeshLabel = createToothMesh(lowerToothGeo, false);
+  scene.add(upperMeshLabel);
+  scene.add(lowerMeshLabel);
 
   // 渲染点云并获取中心点和点云数据
-  const upperResult = renderPointsCallback(upperToothGeo, labelsUpper, upperMeshLabel)
-  const lowerResult = renderPointsCallback(lowerToothGeo, labelsLower, lowerMeshLabel)
+  const upperResult = renderPointsCallback(upperToothGeo, labelsUpper, upperMeshLabel);
+  const lowerResult = renderPointsCallback(lowerToothGeo, labelsLower, lowerMeshLabel);
 
   return {
     upperMesh,
@@ -134,5 +135,5 @@ export async function loadAllModels(
     centersLower: lowerResult?.toothCenters || null,
     upperToothPointsData: upperResult?.toothPointsData || {},
     lowerToothPointsData: lowerResult?.toothPointsData || {},
-  }
+  };
 }

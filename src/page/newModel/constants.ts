@@ -1,5 +1,5 @@
-import type { ViewLabel } from './types'
-import * as THREE from 'three'
+import type { ViewLabel } from './types';
+import * as THREE from 'three';
 
 /**
  * 牙齿颜色映射表 - 为不同牙齿编号定义颜色
@@ -44,7 +44,7 @@ export const TOOTH_COLOR_MAP: Record<number, number> = {
   46: 0x87ceeb, // 天蓝色
   47: 0x87cefa, // 浅天蓝色
   48: 0xb0c4de, // 浅钢蓝色
-}
+};
 
 /**
  * 视角标签列表
@@ -57,7 +57,7 @@ export const VIEW_LABELS: ViewLabel[] = [
   { label: '下颌', isShow: false, type: 4, key: 'lower_angle' },
   { label: '左双颌', isShow: false, type: 5, key: 'left' },
   { label: '右双颌', isShow: false, type: 6, key: 'right' },
-]
+];
 
 /**
  * 牙齿配对关系 - 用于生成中间牙弓线
@@ -80,7 +80,7 @@ export const TOOTH_PAIRS: [number, number][] = [
   [26, 36],
   [27, 37],
   [28, 38],
-]
+];
 
 /**
  * 场景配置
@@ -96,7 +96,7 @@ export const SCENE_CONFIG = {
     x: -Math.PI / 2,
     z: -Math.PI / 2,
   },
-} as const
+} as const;
 
 /**
  * 材质配置
@@ -114,12 +114,13 @@ export const MATERIAL_CONFIG = {
     color: 0xffffff,
     specular: 0x555555,
     shininess: 30,
+    side: THREE.DoubleSide,
   },
   lowerJaw: {
     emissive: 0x333333,
     emissiveIntensity: 0.3,
   },
-} as const
+} as const;
 
 /**
  * 标签配置
@@ -129,10 +130,10 @@ export const LABEL_CONFIG = {
     width: 256,
     height: 256,
   },
-  font: '120px Arial',
+  font: '200px Arial',
   textColor: '#000000',
   scale: { x: 2, y: 2, z: 1 },
-} as const
+} as const;
 
 /**
  * 牙弓线配置
@@ -149,4 +150,4 @@ export const ARCH_WIRE_CONFIG = {
   controlPointColor: '#285e50',
   curveType: 'catmullrom' as const,
   tension: 0.5,
-} as const
+} as const;
