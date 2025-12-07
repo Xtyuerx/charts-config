@@ -42,7 +42,7 @@ export interface STLModelsConfig {
 /**
  * 渲染类型分类
  */
-export type RenderType = 'POINT_ONLY' | 'POINT_LINE' | 'POINT_SLICE' | 'POINT_CURVE'
+export type RenderType = 'LABEL_ONLY' | 'POINT_ONLY' | 'POINT_LINE' | 'POINT_SLICE' | 'POINT_CURVE'
 
 /**
  * 渲染上下文 - 包含3D场景核心对象
@@ -97,6 +97,15 @@ export interface DiagnosisData {
     lower_only_tooth_stl: string
     [key: string]: unknown
   }
+}
+
+/**
+ * 响应数据
+ */
+
+export interface ResponseData {
+  success: boolean
+  data: DiagnosisData
 }
 
 // ==================== 渲染器配置类型 ====================

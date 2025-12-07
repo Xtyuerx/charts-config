@@ -33,6 +33,12 @@ const router = createRouter({
       component: () => import('@/page/newModel/index.vue'),
       meta: { title: '数据模型' },
     },
+    {
+      path: '/oralAnalysis',
+      name: 'oralAnalysis',
+      component: () => import('@/page/oralAnalysis/index.vue'),
+      meta: { title: '口腔分析' },
+    },
   ],
 })
 

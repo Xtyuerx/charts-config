@@ -22,7 +22,7 @@ export abstract class BaseAnalysisStrategy implements IAnalysisStrategy {
 
   // ==================== 受保护的属性 ====================
   protected context!: RenderContext // 渲染上下文
-  protected group: THREE.Group // 该分析的所有3D对象容器
+  protected group: THREE.Group // 该分析的所有3D对象容器（用于非标签元素）
   protected visible = false // 是否可见
   protected data: AnalysisData | null = null // 分析数据
 
@@ -50,14 +50,15 @@ export abstract class BaseAnalysisStrategy implements IAnalysisStrategy {
    * 定义了渲染的标准步骤，子类通过重写钩子方法来定制
    */
   render(data: AnalysisData): void {
-    console.log(`🎨 开始渲染: ${this.name}`)
+    console.log(`🎨 开始渲染: ${this.name} (${this.renderType})`)
 
     // 清理旧对象
     this.cleanup()
     this.data = data
 
-    // 1. 渲染点位（所有策略都需要）
-    if (data.teeth_points && data.teeth_points.length > 0) {
+    // 1. 渲染点位（根据 renderType 决定是否渲染）
+    const shouldRenderPoints = this.shouldRenderPoints()
+    if (shouldRenderPoints && data.teeth_points && data.teeth_points.length > 0) {
       this.renderPoints(data.teeth_points)
     }
 
@@ -86,14 +87,46 @@ export abstract class BaseAnalysisStrategy implements IAnalysisStrategy {
   toggle(visible: boolean): void {
     this.visible = visible
     this.group.visible = visible
+
+    // 同时控制添加到 mesh 上的标签的可见性
+    this.toggleMeshChildren(visible)
+
     console.log(`👁️ ${this.name} 可见性: ${visible}`)
+  }
+
+  /**
+   * 切换 mesh 子对象的可见性（如标签）
+   * 子类可以重写此方法来控制特定的 mesh 子对象
+   */
+  protected toggleMeshChildren(visible: boolean): void {
+    // 默认实现：遍历所有 mesh 的子对象，找到策略创建的标签并切换可见性
+    if (!this.context) return
+
+    const meshes = [
+      this.context.upperMesh,
+      this.context.lowerMesh,
+      this.context.upperMeshLabel,
+      this.context.lowerMeshLabel,
+    ].filter(Boolean) as THREE.Mesh[]
+
+    console.log('meshes', meshes, this.taskName)
+
+    meshes.forEach((mesh) => {
+      mesh.children.forEach((child) => {
+        console.log('child', child)
+        // 根据 name 前缀识别是否为当前策略创建的对象
+        if (child.name.startsWith(`${this.taskName}_`)) {
+          child.visible = visible
+        }
+      })
+    })
   }
 
   /**
    * 清理所有3D对象和资源
    */
   cleanup(): void {
-    // 递归清理所有子对象
+    // 清理 group 中的对象
     while (this.group.children.length > 0) {
       const child = this.group.children[0]
 
@@ -120,6 +153,47 @@ export abstract class BaseAnalysisStrategy implements IAnalysisStrategy {
         }
       }
     }
+
+    // 清理添加到 mesh 上的标签
+    this.cleanupMeshChildren()
+  }
+
+  /**
+   * 清理添加到 mesh 上的子对象（如标签）
+   */
+  protected cleanupMeshChildren(): void {
+    if (!this.context) return
+
+    const meshes = [
+      this.context.upperMesh,
+      this.context.lowerMesh,
+      this.context.upperMeshLabel,
+      this.context.lowerMeshLabel,
+    ].filter(Boolean) as THREE.Mesh[]
+
+    meshes.forEach((mesh) => {
+      // 收集需要删除的子对象
+      const toRemove: THREE.Object3D[] = []
+      mesh.children.forEach((child) => {
+        if (child.name.startsWith(`${this.taskName}_`)) {
+          toRemove.push(child)
+        }
+      })
+
+      // 删除并释放资源
+      toRemove.forEach((child) => {
+        mesh.remove(child)
+
+        // 释放 Sprite 的材质和纹理
+        if (child instanceof THREE.Sprite) {
+          const material = child.material as THREE.SpriteMaterial
+          if (material.map) {
+            material.map.dispose()
+          }
+          material.dispose()
+        }
+      })
+    })
   }
 
   /**
@@ -161,6 +235,15 @@ export abstract class BaseAnalysisStrategy implements IAnalysisStrategy {
   protected abstract formatMeasurements(measurements: Record<string, unknown>): MeasurementGroup[]
 
   // ==================== 通用工具方法 ====================
+
+  /**
+   * 判断是否应该渲染点位球体
+   * 根据 renderType 决定是否渲染点位
+   * LABEL_ONLY 类型不渲染点位，只渲染标签
+   */
+  protected shouldRenderPoints(): boolean {
+    return this.renderType.includes('POINT')
+  }
 
   /**
    * 渲染点位标记

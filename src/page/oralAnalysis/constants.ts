@@ -25,7 +25,6 @@ export const SCENE_CONFIG = {
 export const MATERIAL_CONFIG = {
   jaw: {
     color: 0xffb6c1,
-    opacity: 0.5,
     specular: 0x555555,
     shininess: 100,
     reflectivity: 0.5,
@@ -148,7 +147,7 @@ export const ANALYSIS_STRATEGIES: StrategyConfig[] = [
     id: 'tooth-number',
     name: '牙号',
     taskName: 'tooth-number',
-    renderType: 'POINT_ONLY',
+    renderType: 'LABEL_ONLY',
     radioValue: '1',
   },
   {

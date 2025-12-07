@@ -48,8 +48,6 @@ export class ModelManager {
   private createJawMesh(geometry: THREE.BufferGeometry, isUpper: boolean): THREE.Mesh {
     const material = new THREE.MeshPhongMaterial({
       color: MATERIAL_CONFIG.jaw.color,
-      transparent: true,
-      opacity: MATERIAL_CONFIG.jaw.opacity,
       specular: MATERIAL_CONFIG.jaw.specular,
       shininess: MATERIAL_CONFIG.jaw.shininess,
       reflectivity: MATERIAL_CONFIG.jaw.reflectivity,
@@ -209,6 +207,81 @@ export class ModelManager {
     } catch (error) {
       console.error('❌ 标签数据加载失败:', error)
       return { labelsUpper: [], labelsLower: [] }
+    }
+  }
+
+  /**
+   * 从点云标签文件中加载牙号数据
+   * @param jsonPath - 点云标签JSON文件路径
+   * @returns 包含牙号信息的teeth_points数组
+   */
+  async loadToothNumbersFromLabels(jsonPath: string): Promise<Array<Record<string, unknown>>> {
+    try {
+      console.log(`🔄 加载点云标签数据: ${jsonPath}`)
+
+      const response = await fetch(jsonPath)
+      const data = await response.json()
+
+      const labels = data.labels || []
+
+      if (labels.length === 0) {
+        console.warn('⚠️ 标签数据为空')
+        return []
+      }
+
+      // 统计每个FDI编号的点数和位置
+      const toothData: Record<number, { points: number[][]; count: number }> = {}
+
+      // 假设点云数据按顺序存储为 [x, y, z] 坐标
+      // 需要根据实际的点云数据结构调整
+      labels.forEach((fdi: number, index: number) => {
+        if (fdi > 0) {
+          // 忽略背景点（标签为0）
+          if (!toothData[fdi]) {
+            toothData[fdi] = { points: [], count: 0 }
+          }
+          toothData[fdi].count++
+
+          // 这里需要获取实际的点坐标
+          // 如果JSON中有points数组，使用它；否则需要其他方式获取
+          // 暂时创建占位符坐标
+          if (toothData[fdi].points.length === 0) {
+            // 仅保存第一个点作为代表点
+            toothData[fdi].points.push([index % 100, Math.floor(index / 100), 0])
+          }
+        }
+      })
+
+      // 转换为teeth_points格式
+      const teethPoints = Object.entries(toothData).map(([fdi, data]) => {
+        const fdiNum = Number(fdi)
+
+        return {
+          fdi: fdiNum,
+          type: 'crown_center',
+          type_cn: '牙冠中心',
+          point: data.points[0] as [number, number, number],
+          point_count: data.count, // 额外信息：该牙齿的点数
+        }
+      })
+
+      // 按FDI排序
+      teethPoints.sort((a, b) => a.fdi - b.fdi)
+
+      const uniqueTeeth = teethPoints.length
+      const upperTeeth = teethPoints.filter((t) => Math.floor(t.fdi / 10) <= 2).length
+      const lowerTeeth = teethPoints.filter((t) => Math.floor(t.fdi / 10) >= 3).length
+
+      console.log(`✅ 牙号数据提取完成:`)
+      console.log(`   - 总牙齿数: ${uniqueTeeth}颗`)
+      console.log(`   - 上颌: ${upperTeeth}颗`)
+      console.log(`   - 下颌: ${lowerTeeth}颗`)
+      console.log(`   - FDI编号:`, teethPoints.map((t) => t.fdi).join(', '))
+
+      return teethPoints
+    } catch (error) {
+      console.error('❌ 点云标签数据加载失败:', error)
+      return []
     }
   }
 }

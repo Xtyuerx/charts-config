@@ -15,6 +15,7 @@ declare module 'vue' {
     ElButton: typeof import('element-plus/es')['ElButton']
     ElIcon: typeof import('element-plus/es')['ElIcon']
     ElPageHeader: typeof import('element-plus/es')['ElPageHeader']
+    ElProgress: typeof import('element-plus/es')['ElProgress']
     ElRadioButton: typeof import('element-plus/es')['ElRadioButton']
     ElRadioGroup: typeof import('element-plus/es')['ElRadioGroup']
     MoreConfigTab: typeof import('./src/components/ChartConfigDialog/MoreConfigTab.vue')['default']

@@ -161,36 +161,52 @@ export class SceneManager {
     upperMeshLabel.visible = false
     lowerMeshLabel.visible = false
 
+    // 控制策略组的上下颌显示
+    const updateStrategyGroups = (showUpper: boolean, showLower: boolean) => {
+      this.scene.traverse((obj) => {
+        if (obj.name === 'upper_group') {
+          obj.visible = showUpper
+        } else if (obj.name === 'lower_group') {
+          obj.visible = showLower
+        }
+      })
+    }
+
     switch (viewKey) {
       case 'full':
         upperMesh.visible = true
         lowerMesh.visible = true
         upperMeshLabel.visible = true
         lowerMeshLabel.visible = true
+        updateStrategyGroups(true, true)
         this.scene.rotation.set(-Math.PI / 2, 0, -Math.PI / 2)
         break
 
       case 'upper':
         upperMesh.visible = true
         upperMeshLabel.visible = true
+        updateStrategyGroups(true, false)
         this.scene.rotation.set(-Math.PI / 2, 0, -Math.PI / 2)
         break
 
       case 'lower':
         lowerMesh.visible = true
         lowerMeshLabel.visible = true
+        updateStrategyGroups(false, true)
         this.scene.rotation.set(-Math.PI / 2, 0, -Math.PI / 2)
         break
 
       case 'upper_angle':
         upperMesh.visible = true
         upperMeshLabel.visible = true
+        updateStrategyGroups(true, false)
         this.scene.rotation.set(-Math.PI, 0, -Math.PI / 2)
         break
 
       case 'lower_angle':
         lowerMesh.visible = true
         lowerMeshLabel.visible = true
+        updateStrategyGroups(false, true)
         this.scene.rotation.set(0, 0, -Math.PI / 2)
         break
 
@@ -199,6 +215,7 @@ export class SceneManager {
         upperMeshLabel.visible = true
         lowerMesh.visible = true
         lowerMeshLabel.visible = true
+        updateStrategyGroups(true, true)
         this.scene.rotation.set(-Math.PI / 2, 0, -Math.PI)
         break
 
@@ -207,6 +224,7 @@ export class SceneManager {
         upperMeshLabel.visible = true
         lowerMesh.visible = true
         lowerMeshLabel.visible = true
+        updateStrategyGroups(true, true)
         this.scene.rotation.set(-Math.PI / 4, 0, 0)
         break
     }
