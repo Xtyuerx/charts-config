@@ -240,7 +240,8 @@ export class LineRenderer {
     direction: THREE.Vector3,
     color: number,
   ): THREE.Mesh {
-    const dir = direction.clone().sub(position).normalize()
+    // 计算从 direction 指向 position 的方向（箭头向外）
+    const dir = position.clone().sub(direction).normalize()
 
     const geometry = new THREE.ConeGeometry(0.3, 0.8, 8)
     const material = new THREE.MeshBasicMaterial({ color })

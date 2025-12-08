@@ -30,9 +30,9 @@ export class CrossbiteAnalysisStrategy extends BaseAnalysisStrategy {
     crossbiteTeeth.forEach((fdi) => {
       const toothPoints = teeth_points.filter((p) => p.fdi === fdi)
       if (toothPoints.length > 0) {
-        const center = this.calculatePointsCenter(toothPoints.map((p) => p.point))
+        const center = this.calculatePointsCenterUnscaled(toothPoints.map((p) => p.point))
 
-        // 创建黄色警告标记
+        // 创建黄色警告标记（不缩放）
         const geometry = new THREE.SphereGeometry(1.5, 32, 32)
         const material = new THREE.MeshPhongMaterial({
           color: 0xffa500,
@@ -44,16 +44,21 @@ export class CrossbiteAnalysisStrategy extends BaseAnalysisStrategy {
         const sphere = new THREE.Mesh(geometry, material)
         sphere.position.copy(center)
         sphere.name = `crossbite_${fdi}`
-        this.group.add(sphere)
 
-        // 添加标签
+        // 使用方案2：添加到 mesh
+        this.addToMesh(sphere, fdi)
+
+        // 添加标签（不缩放）
         const label = LabelRenderer.createLabel(`锁𬌗 ${fdi}`, {
           position: center.clone().add(new THREE.Vector3(0, 3, 0)),
           fontSize: 12,
           backgroundColor: '#ffa500',
           fontColor: '#ffffff',
         })
-        this.group.add(label)
+        label.name = `label_${fdi}`
+
+        // 使用方案2：添加到 mesh
+        this.addToMesh(label, fdi)
       }
     })
 
@@ -61,9 +66,9 @@ export class CrossbiteAnalysisStrategy extends BaseAnalysisStrategy {
     reverseBiteTeeth.forEach((fdi) => {
       const toothPoints = teeth_points.filter((p) => p.fdi === fdi)
       if (toothPoints.length > 0) {
-        const center = this.calculatePointsCenter(toothPoints.map((p) => p.point))
+        const center = this.calculatePointsCenterUnscaled(toothPoints.map((p) => p.point))
 
-        // 创建红色警告标记
+        // 创建红色警告标记（不缩放）
         const geometry = new THREE.SphereGeometry(1.5, 32, 32)
         const material = new THREE.MeshPhongMaterial({
           color: 0xff0000,
@@ -75,16 +80,21 @@ export class CrossbiteAnalysisStrategy extends BaseAnalysisStrategy {
         const sphere = new THREE.Mesh(geometry, material)
         sphere.position.copy(center)
         sphere.name = `reverse_bite_${fdi}`
-        this.group.add(sphere)
 
-        // 添加标签
+        // 使用方案2：添加到 mesh
+        this.addToMesh(sphere, fdi)
+
+        // 添加标签（不缩放）
         const label = LabelRenderer.createLabel(`反𬌗 ${fdi}`, {
           position: center.clone().add(new THREE.Vector3(0, 3, 0)),
           fontSize: 12,
           backgroundColor: '#ff0000',
           fontColor: '#ffffff',
         })
-        this.group.add(label)
+        label.name = `label_${fdi}`
+
+        // 使用方案2：添加到 mesh
+        this.addToMesh(label, fdi)
       }
     })
   }
@@ -99,7 +109,7 @@ export class CrossbiteAnalysisStrategy extends BaseAnalysisStrategy {
     const reverseBiteCount = ((measurements.reverse_bite_teeth as number[]) || []).length
     const diagnosis = (measurements.diagnosis as string) || '正常'
 
-    // 创建诊断信息面板
+    // 创建诊断信息面板（添加到主 group）
     const infoData = [
       { key: '锁𬌗牙齿', value: `${crossbiteCount}颗` },
       { key: '反𬌗牙齿', value: `${reverseBiteCount}颗` },
@@ -156,29 +166,5 @@ export class CrossbiteAnalysisStrategy extends BaseAnalysisStrategy {
         ],
       },
     ]
-  }
-
-  // ==================== 私有辅助方法 ====================
-
-  /**
-   * 计算多个点的中心位置
-   */
-  private calculatePointsCenter(points: number[][]): THREE.Vector3 {
-    const scale = 1.5
-    const sum = points.reduce(
-      (acc, p) => {
-        acc.x += p[0] || 0
-        acc.y += p[1] || 0
-        acc.z += p[2] || 0
-        return acc
-      },
-      { x: 0, y: 0, z: 0 },
-    )
-
-    return new THREE.Vector3(
-      (sum.x / points.length) * scale,
-      (sum.y / points.length) * scale,
-      (sum.z / points.length) * scale,
-    )
   }
 }

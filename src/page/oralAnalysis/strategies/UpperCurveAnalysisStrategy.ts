@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { BaseAnalysisStrategy } from './base/BaseAnalysisStrategy'
 import type { AnalysisData, MeasurementGroup, RenderType } from '../types'
-import { LineRenderer, LabelRenderer } from '../renderers'
+import { LabelRenderer } from '../renderers'
 
 /**
  * 上颌补偿曲线分析策略
@@ -78,7 +78,10 @@ export class UpperCurveAnalysisStrategy extends BaseAnalysisStrategy {
           },
           {
             name: '参考牙位',
-            value: curvePoints.length > 0 ? `${curvePoints[0]}-${curvePoints[curvePoints.length - 1]}` : '未指定',
+            value:
+              curvePoints.length > 0
+                ? `${curvePoints[0]}-${curvePoints[curvePoints.length - 1]}`
+                : '未指定',
             result: '范围',
           },
           {
@@ -111,11 +114,15 @@ export class UpperCurveAnalysisStrategy extends BaseAnalysisStrategy {
       return
     }
 
-    // 将曲线数据转换为Three.js坐标
+    // 将曲线数据转换为Three.js坐标（不缩放，因为曲线添加到 group）
     const scale = 1.5
     const curvePoints = curveData.map(
       (point) =>
-        new THREE.Vector3((point[0] || 0) * scale, (point[1] || 0) * scale, (point[2] || 0) * scale),
+        new THREE.Vector3(
+          (point[0] || 0) * scale,
+          (point[1] || 0) * scale,
+          (point[2] || 0) * scale,
+        ),
     )
 
     // 根据曲率选择颜色
@@ -130,27 +137,7 @@ export class UpperCurveAnalysisStrategy extends BaseAnalysisStrategy {
     })
     const curveLine = new THREE.Line(curveGeometry, curveMaterial)
     curveLine.name = 'upper_curve'
-    this.group.add(curveLine)
-
-    // 渲染关键点
-    curvePoints.forEach((point, index) => {
-      const marker = LineRenderer.createPoint(point, {
-        color,
-        size: 0.8,
-      })
-      this.group.add(marker)
-
-      // 在起点和终点添加标签
-      if (index === 0 || index === curvePoints.length - 1) {
-        const label = LabelRenderer.createLabel(index === 0 ? '起点' : '终点', {
-          position: point.clone().add(new THREE.Vector3(0, 2, 0)),
-          fontSize: 10,
-          backgroundColor: '#00000099',
-          fontColor: '#ffffff',
-        })
-        this.group.add(label)
-      }
-    })
+    this.group.add(curveLine) // 曲线添加到主 group（跨越多个牙齿）
 
     // 渲染曲率信息
     this.renderCurvatureInfo(curvePoints, curvature)
@@ -168,13 +155,15 @@ export class UpperCurveAnalysisStrategy extends BaseAnalysisStrategy {
     if (curveTeeth.length === 0) return
 
     const curvePoints: THREE.Vector3[] = []
+    const fdis: number[] = [] // 记录每个点对应的 FDI
 
-    // 提取每颗牙齿的中心点
+    // 提取每颗牙齿的中心点（使用缩放坐标）
     curveTeeth.forEach((fdi) => {
       const toothPoints = teethPoints.filter((p) => p.fdi === fdi)
       if (toothPoints.length > 0) {
-        const center = this.calculatePointsCenter(toothPoints.map((p) => p.point))
+        const center = this.calculatePointsCenterScaled(toothPoints.map((p) => p.point))
         curvePoints.push(center)
+        fdis.push(fdi)
       }
     })
 
@@ -192,16 +181,7 @@ export class UpperCurveAnalysisStrategy extends BaseAnalysisStrategy {
     })
     const curveLine = new THREE.Line(curveGeometry, curveMaterial)
     curveLine.name = 'upper_curve_from_teeth'
-    this.group.add(curveLine)
-
-    // 渲染关键点
-    curvePoints.forEach((point, index) => {
-      const marker = LineRenderer.createPoint(point, {
-        color,
-        size: 0.7,
-      })
-      this.group.add(marker)
-    })
+    this.group.add(curveLine) // 曲线添加到主 group（跨越多个牙齿）
 
     // 渲染曲率信息
     this.renderCurvatureInfo(curvePoints, curvature)
@@ -213,15 +193,22 @@ export class UpperCurveAnalysisStrategy extends BaseAnalysisStrategy {
   private renderCurvatureInfo(curvePoints: THREE.Vector3[], curvature: number): void {
     if (curvePoints.length === 0) return
 
-    // 在曲线中点显示曲率信息
+    // 在曲线中点显示曲率信息（添加到 group）
     const midIndex = Math.floor(curvePoints.length / 2)
     const midPoint = curvePoints[midIndex]
 
-    // 高亮中点
-    const midMarker = LineRenderer.createPoint(midPoint, {
+    if (!midPoint) return
+
+    // 高亮中点（使用缩放坐标创建球体）
+    const geometry = new THREE.SphereGeometry(1.3, 16, 16)
+    const material = new THREE.MeshPhongMaterial({
       color: 0x2196f3,
-      size: 1.3,
+      emissive: 0x2196f3,
+      emissiveIntensity: 0.4,
     })
+    const midMarker = new THREE.Mesh(geometry, material)
+    midMarker.position.copy(midPoint)
+    midMarker.name = 'curve_mid_marker'
     this.group.add(midMarker)
 
     // 添加曲率标签
@@ -235,9 +222,9 @@ export class UpperCurveAnalysisStrategy extends BaseAnalysisStrategy {
   }
 
   /**
-   * 计算多个点的中心
+   * 计算多个点的中心（缩放版本，用于添加到 group）
    */
-  private calculatePointsCenter(points: number[][]): THREE.Vector3 {
+  private calculatePointsCenterScaled(points: number[][]): THREE.Vector3 {
     const scale = 1.5
     const sum = points.reduce(
       (acc, p) => {
@@ -286,4 +273,3 @@ export class UpperCurveAnalysisStrategy extends BaseAnalysisStrategy {
     return '明显异常'
   }
 }
-

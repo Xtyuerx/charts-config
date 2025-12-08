@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { BaseAnalysisStrategy } from './base/BaseAnalysisStrategy'
 import type { AnalysisData, MeasurementGroup, RenderType } from '../types'
-import { LineRenderer, LabelRenderer } from '../renderers'
+import { LabelRenderer } from '../renderers'
 
 /**
  * 下颌补偿曲线分析策略（Spee曲线）
@@ -114,7 +114,7 @@ export class LowerCurveAnalysisStrategy extends BaseAnalysisStrategy {
       return
     }
 
-    // 将曲线数据转换为Three.js坐标
+    // 将曲线数据转换为Three.js坐标（保持缩放）
     const scale = 1.5
     const curvePoints = curveData.map(
       (point) =>
@@ -137,27 +137,7 @@ export class LowerCurveAnalysisStrategy extends BaseAnalysisStrategy {
     })
     const curveLine = new THREE.Line(curveGeometry, curveMaterial)
     curveLine.name = 'spee_curve'
-    this.group.add(curveLine)
-
-    // 渲染关键点
-    curvePoints.forEach((point, index) => {
-      const marker = LineRenderer.createPoint(point, {
-        color,
-        size: 0.8,
-      })
-      this.group.add(marker)
-
-      // 在起点和终点添加标签
-      if (index === 0 || index === curvePoints.length - 1) {
-        const label = LabelRenderer.createLabel(index === 0 ? '起点' : '终点', {
-          position: point.clone().add(new THREE.Vector3(0, 2, 0)),
-          fontSize: 10,
-          backgroundColor: '#00000099',
-          fontColor: '#ffffff',
-        })
-        this.group.add(label)
-      }
-    })
+    this.group.add(curveLine) // 曲线添加到主 group（跨越多个牙齿）
 
     // 渲染最深点
     this.renderDeepestPoint(curvePoints, curveDepth)
@@ -176,11 +156,11 @@ export class LowerCurveAnalysisStrategy extends BaseAnalysisStrategy {
 
     const curvePoints: THREE.Vector3[] = []
 
-    // 提取每颗牙齿的中心点
+    // 提取每颗牙齿的中心点（使用缩放坐标）
     curveTeeth.forEach((fdi) => {
       const toothPoints = teethPoints.filter((p) => p.fdi === fdi)
       if (toothPoints.length > 0) {
-        const center = this.calculatePointsCenter(toothPoints.map((p) => p.point))
+        const center = this.calculatePointsCenterScaled(toothPoints.map((p) => p.point))
         curvePoints.push(center)
       }
     })
@@ -199,16 +179,7 @@ export class LowerCurveAnalysisStrategy extends BaseAnalysisStrategy {
     })
     const curveLine = new THREE.Line(curveGeometry, curveMaterial)
     curveLine.name = 'spee_curve_from_teeth'
-    this.group.add(curveLine)
-
-    // 渲染关键点
-    curvePoints.forEach((point, index) => {
-      const marker = LineRenderer.createPoint(point, {
-        color,
-        size: 0.7,
-      })
-      this.group.add(marker)
-    })
+    this.group.add(curveLine) // 曲线添加到主 group（跨越多个牙齿）
 
     // 渲染最深点
     this.renderDeepestPoint(curvePoints, curveDepth)
@@ -225,11 +196,16 @@ export class LowerCurveAnalysisStrategy extends BaseAnalysisStrategy {
       point.y < lowest.y ? point : lowest,
     )
 
-    // 高亮最深点
-    const deepestMarker = LineRenderer.createPoint(deepestPoint, {
+    // 高亮最深点（使用缩放坐标创建球体）
+    const geometry = new THREE.SphereGeometry(1.5, 16, 16)
+    const material = new THREE.MeshPhongMaterial({
       color: 0xff0000,
-      size: 1.5,
+      emissive: 0xff0000,
+      emissiveIntensity: 0.4,
     })
+    const deepestMarker = new THREE.Mesh(geometry, material)
+    deepestMarker.position.copy(deepestPoint)
+    deepestMarker.name = 'deepest_point'
     this.group.add(deepestMarker)
 
     // 添加深度标签
@@ -243,9 +219,9 @@ export class LowerCurveAnalysisStrategy extends BaseAnalysisStrategy {
   }
 
   /**
-   * 计算多个点的中心
+   * 计算多个点的中心（缩放版本，用于添加到 group）
    */
-  private calculatePointsCenter(points: number[][]): THREE.Vector3 {
+  private calculatePointsCenterScaled(points: number[][]): THREE.Vector3 {
     const scale = 1.5
     const sum = points.reduce(
       (acc, p) => {

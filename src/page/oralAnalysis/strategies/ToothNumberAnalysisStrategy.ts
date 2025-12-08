@@ -15,7 +15,7 @@ export class ToothNumberAnalysisStrategy extends BaseAnalysisStrategy {
 
   /**
    * 渲染特定元素
-   * 牙号分析主要渲染：每颗牙齿的编号标签和颜色标记
+   * 牙号分析主要渲染：每颗牙齿的编号标签
    */
   protected renderSpecificElements(data: AnalysisData): void {
     const { teeth_points } = data
@@ -25,35 +25,24 @@ export class ToothNumberAnalysisStrategy extends BaseAnalysisStrategy {
     // 按牙齿分组（每颗牙齿可能有多个点位）
     const toothGroups = this.groupByFDI(teeth_points)
 
-    // 为每颗牙齿创建编号标签（与 newModel 保持一致，添加到对应的 mesh 上）
+    // 为每颗牙齿创建编号标签
     Object.entries(toothGroups).forEach(([fdiStr, points]) => {
       const fdi = Number(fdiStr)
 
       // 计算牙齿中心点（所有点位的平均位置）
       const center = this.calculateCenter(points.map((p) => p.point))
 
-      // 判断是上颌还是下颌，选择对应的 mesh
-      const isUpperTooth = this.isUpper(fdi)
-      const targetMesh = isUpperTooth ? this.context.upperMeshLabel : this.context.lowerMeshLabel
-
-      if (!targetMesh) {
-        console.warn(`⚠️ 未找到目标 mesh: ${isUpperTooth ? '上颌' : '下颌'}`)
-        return
-      }
-
-      // 创建牙齿编号标签（与 newModel 一致：直接在中心点位置）
+      // 创建牙齿编号标签
       const label = LabelRenderer.createLabel(fdiStr, {
         position: center,
         fontSize: 14,
         backgroundColor: 'transparent', // 透明背景
         fontColor: '#ffffff',
       })
+      label.name = `label_${fdi}`
 
-      // 使用任务名前缀，方便后续识别和清理
-      label.name = `${this.taskName}_label_${fdi}`
-
-      // 添加到对应的 mesh 上（而不是独立的 group）
-      targetMesh.add(label)
+      // 使用方案2：直接添加到对应的 mesh
+      this.addToMesh(label, fdi)
     })
   }
 

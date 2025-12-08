@@ -31,31 +31,68 @@ export class BoltonAnalysisStrategy extends BaseAnalysisStrategy {
       const distal = points.find((p) => p.type === 'boundary_distal')
 
       if (mesial && distal) {
-        // 创建测量线（带箭头）
-        const measureLine = LineRenderer.createMeasurementLine(mesial.point, distal.point, {
-          color: this.isUpper(mesial.fdi) ? 0x00ff00 : 0x00bfff,
-          lineWidth: 2,
-          showArrows: true,
-        })
-        measureLine.name = `bolton_line_${fdiStr}`
-        console.log(measureLine, 'measureLine', this.group)
-        this.group.add(measureLine)
+        const fdi = Number(fdiStr)
+
+        // ⚠️ 重要：使用不缩放的线创建方法
+        // 因为会添加到 mesh 上，mesh 已经有 scale = 1.5
+        const color = this.isUpper(mesial.fdi) ? 0x00ff00 : 0x00bfff
+        const measureLine = this.createLineUnscaled(mesial.point, distal.point, color, 2)
+        measureLine.name = `line_${fdiStr}`
+
+        // 使用方案2：直接添加到 mesh
+        this.addToMesh(measureLine, fdi)
 
         // 添加宽度数值标签
         const width = this.getToothWidth(measurements, fdiStr)
         if (width !== null) {
-          const midPoint = this.getMidPoint(mesial.point, distal.point)
+          // 使用不缩放的中点计算
+          const midPoint = this.getMidPointUnscaled(mesial.point, distal.point)
           const label = LabelRenderer.createMeasurementLabel(width, 'mm', midPoint, {
             fontSize: 10,
             backgroundColor: '#00000080',
           })
-          this.group.add(label)
+          label.name = `label_${fdiStr}`
+
+          // 使用方案2：直接添加到 mesh
+          this.addToMesh(label, fdi)
         }
       }
     })
 
     // 绘制上下颌总宽度对比线
     this.renderTotalWidthComparison(toothGroups, measurements)
+  }
+
+  /**
+   * 重写点位渲染 - 只渲染 boundary_mesial 和 boundary_distal 点
+   */
+  protected renderPoints(teethPoints: ToothPoint[]): void {
+    // 只渲染边界点
+    const boundaryPoints = teethPoints.filter(
+      (p) => p.type === 'boundary_mesial' || p.type === 'boundary_distal',
+    )
+
+    // 渲染每个点，并添加到对应的 mesh
+    boundaryPoints.forEach((p) => {
+      const color = this.getPointColor(p.type)
+
+      // 创建球体作为点标记
+      const geometry = new THREE.SphereGeometry(0.5, 16, 16)
+      const material = new THREE.MeshPhongMaterial({
+        color,
+        emissive: color,
+        emissiveIntensity: 0.3,
+      })
+      const sphere = new THREE.Mesh(geometry, material)
+
+      // ⚠️ 重要：不应用缩放！因为 mesh 本身已经有缩放了
+      // 子对象会自动继承父 mesh 的缩放
+      sphere.position.set(p.point[0], p.point[1], p.point[2])
+      sphere.name = `point_${p.fdi}_${p.type}`
+
+      // 使用方案2：添加到对应的 mesh
+      this.addToMesh(sphere, p.fdi)
+    })
   }
 
   /**

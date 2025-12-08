@@ -23,18 +23,10 @@ export class CrowdingAnalysisStrategy extends BaseAnalysisStrategy {
     if (!teeth_points || teeth_points.length === 0) return
 
     // 渲染上颌拥挤度
-    this.renderJawCrowding(
-      teeth_points,
-      measurements?.upper as Record<string, unknown>,
-      true,
-    )
+    this.renderJawCrowding(teeth_points, measurements?.upper as Record<string, unknown>, true)
 
     // 渲染下颌拥挤度
-    this.renderJawCrowding(
-      teeth_points,
-      measurements?.lower as Record<string, unknown>,
-      false,
-    )
+    this.renderJawCrowding(teeth_points, measurements?.lower as Record<string, unknown>, false)
   }
 
   /**
@@ -59,7 +51,7 @@ export class CrowdingAnalysisStrategy extends BaseAnalysisStrategy {
         {
           position: new THREE.Vector3(-25, 30, 0),
           fontSize: 13,
-          backgroundColor: this.getCrowdingColor(upperCrowding),
+          backgroundColor: `#${this.getCrowdingColor(upperCrowding).toString(16).padStart(6, '0')}`,
           fontColor: '#ffffff',
         },
       )
@@ -79,7 +71,7 @@ export class CrowdingAnalysisStrategy extends BaseAnalysisStrategy {
         {
           position: new THREE.Vector3(25, 30, 0),
           fontSize: 13,
-          backgroundColor: this.getCrowdingColor(lowerCrowding),
+          backgroundColor: `#${this.getCrowdingColor(lowerCrowding).toString(16).padStart(6, '0')}`,
           fontColor: '#ffffff',
         },
       )
@@ -192,11 +184,11 @@ export class CrowdingAnalysisStrategy extends BaseAnalysisStrategy {
     // 按FDI分组
     const toothGroups = this.groupByFDI(jawTeeth)
 
-    // 为每颗牙齿创建拥挤度标记
+    // 为每颗牙齿创建拥挤度标记（使用不缩放坐标）
     Object.entries(toothGroups).forEach(([fdi, points]) => {
-      const center = this.calculatePointsCenter(points.map((p) => p.point))
+      const center = this.calculatePointsCenterUnscaled(points.map((p) => p.point))
 
-      // 创建小球标记（颜色根据拥挤度）
+      // 创建小球标记（颜色根据拥挤度，不缩放）
       const geometry = new THREE.SphereGeometry(0.8, 16, 16)
       const material = new THREE.MeshPhongMaterial({
         color,
@@ -208,14 +200,18 @@ export class CrowdingAnalysisStrategy extends BaseAnalysisStrategy {
       const sphere = new THREE.Mesh(geometry, material)
       sphere.position.copy(center)
       sphere.name = `crowding_${fdi}`
-      this.group.add(sphere)
+
+      // 使用方案2：添加到 mesh
+      this.addToMesh(sphere, Number(fdi))
     })
   }
 
   /**
    * 按FDI分组
    */
-  private groupByFDI(points: AnalysisData['teeth_points']): Record<string, AnalysisData['teeth_points']> {
+  private groupByFDI(
+    points: AnalysisData['teeth_points'],
+  ): Record<string, AnalysisData['teeth_points']> {
     return points.reduce(
       (acc, point) => {
         const fdi = point.fdi.toString()
@@ -226,28 +222,6 @@ export class CrowdingAnalysisStrategy extends BaseAnalysisStrategy {
         return acc
       },
       {} as Record<string, AnalysisData['teeth_points']>,
-    )
-  }
-
-  /**
-   * 计算多个点的中心
-   */
-  private calculatePointsCenter(points: number[][]): THREE.Vector3 {
-    const scale = 1.5
-    const sum = points.reduce(
-      (acc, p) => {
-        acc.x += p[0] || 0
-        acc.y += p[1] || 0
-        acc.z += p[2] || 0
-        return acc
-      },
-      { x: 0, y: 0, z: 0 },
-    )
-
-    return new THREE.Vector3(
-      (sum.x / points.length) * scale,
-      (sum.y / points.length) * scale,
-      (sum.z / points.length) * scale,
     )
   }
 

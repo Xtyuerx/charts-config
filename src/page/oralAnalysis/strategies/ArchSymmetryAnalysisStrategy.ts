@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { BaseAnalysisStrategy } from './base/BaseAnalysisStrategy'
 import type { AnalysisData, MeasurementGroup, RenderType } from '../types'
-import { LineRenderer, LabelRenderer, SliceRenderer, PointRenderer } from '../renderers'
+import { LabelRenderer, SliceRenderer } from '../renderers'
 
 /**
  * 牙弓对称性分析策略
@@ -212,27 +212,22 @@ export class ArchSymmetryAnalysisStrategy extends BaseAnalysisStrategy {
 
       if (leftPoints.length === 0 || rightPoints.length === 0) return
 
-      // 计算牙齿中心点
-      const leftCenter = this.calculatePointsCenter(leftPoints.map((p) => p.point))
-      const rightCenter = this.calculatePointsCenter(rightPoints.map((p) => p.point))
+      // 计算牙齿中心点（不缩放）
+      const leftCenter = this.calculatePointsCenterUnscaled(leftPoints.map((p) => p.point))
+      const rightCenter = this.calculatePointsCenterUnscaled(rightPoints.map((p) => p.point))
 
       // 根据偏差大小选择颜色
       const color = this.getDeviationColor(deviation)
 
-      // 渲染对称连接线
-      const line = LineRenderer.createDashedLine(leftCenter, rightCenter, {
-        color,
-        lineWidth: 2,
-        dashSize: 1.0,
-        gapSize: 0.5,
-      })
-      this.group.add(line)
+      // 渲染对称连接线（使用不缩放版本）
+      const line = this.createDashedLineUnscaled(leftCenter, rightCenter, color, 2)
+      this.addLineToMesh(line, leftFDI, rightFDI)
 
-      // 渲染端点标记
-      const leftMarker = PointRenderer.createMarker(leftCenter, { color, size: 0.8 })
-      const rightMarker = PointRenderer.createMarker(rightCenter, { color, size: 0.8 })
-      this.group.add(leftMarker)
-      this.group.add(rightMarker)
+      // 渲染端点标记（不缩放）
+      const leftMarker = this.createPointMarkerUnscaled(leftCenter, color, 0.8)
+      const rightMarker = this.createPointMarkerUnscaled(rightCenter, color, 0.8)
+      this.addToMesh(leftMarker, leftFDI)
+      this.addToMesh(rightMarker, rightFDI)
 
       // 如果偏差明显，添加偏差标签
       if (Math.abs(deviation) > 1.0) {
@@ -247,31 +242,58 @@ export class ArchSymmetryAnalysisStrategy extends BaseAnalysisStrategy {
             fontColor: '#ffffff',
           },
         )
-        this.group.add(deviationLabel)
+        deviationLabel.name = `deviation_label_${leftFDI}_${rightFDI}`
+        this.addLineToMesh(deviationLabel, leftFDI, rightFDI)
       }
     })
   }
 
   /**
-   * 计算多个点的中心
+   * 创建不缩放的虚线
    */
-  private calculatePointsCenter(points: number[][]): THREE.Vector3 {
-    const scale = 1.5
-    const sum = points.reduce(
-      (acc, p) => {
-        acc.x += p[0] || 0
-        acc.y += p[1] || 0
-        acc.z += p[2] || 0
-        return acc
-      },
-      { x: 0, y: 0, z: 0 },
-    )
+  private createDashedLineUnscaled(
+    start: THREE.Vector3,
+    end: THREE.Vector3,
+    color: number,
+    lineWidth: number,
+  ): THREE.Line {
+    const points = [start, end]
+    const geometry = new THREE.BufferGeometry().setFromPoints(points)
 
-    return new THREE.Vector3(
-      (sum.x / points.length) * scale,
-      (sum.y / points.length) * scale,
-      (sum.z / points.length) * scale,
-    )
+    const material = new THREE.LineDashedMaterial({
+      color,
+      linewidth: lineWidth,
+      dashSize: 1.0,
+      gapSize: 0.5,
+    })
+
+    const line = new THREE.Line(geometry, material)
+    line.computeLineDistances() // 虚线必须调用
+    line.name = 'dashed_line'
+
+    return line
+  }
+
+  /**
+   * 创建不缩放的点标记
+   */
+  private createPointMarkerUnscaled(
+    position: THREE.Vector3,
+    color: number,
+    size: number,
+  ): THREE.Mesh {
+    const geometry = new THREE.SphereGeometry(size, 16, 16)
+    const material = new THREE.MeshPhongMaterial({
+      color,
+      emissive: color,
+      emissiveIntensity: 0.3,
+    })
+
+    const sphere = new THREE.Mesh(geometry, material)
+    sphere.position.copy(position)
+    sphere.name = 'point_marker'
+
+    return sphere
   }
 
   /**
