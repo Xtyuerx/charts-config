@@ -1,6 +1,8 @@
 import type { RenderContext, AnalysisData, DiagnosisData } from '../types'
 import type { IAnalysisStrategy } from '../strategies/base/IAnalysisStrategy'
 import { AnalysisStrategyFactory } from '../factories/AnalysisStrategyFactory'
+import { MidlineAnalysisStrategy } from '../strategies/MidlineAnalysisStrategy'
+import { SceneManager } from '../core/SceneManager'
 import * as THREE from 'three'
 
 /**
@@ -173,7 +175,34 @@ export class AnalysisService {
     this.currentStrategy = strategy
     console.log(`✅ 切换成功: ${strategy.name}`)
 
+    // 如果是中线分析策略，注册可拖拽对象
+    if (strategy instanceof MidlineAnalysisStrategy) {
+      this.registerMidlineDraggableObjects(strategy)
+    }
+
     return true
+  }
+
+  /**
+   * 注册中线分析的可拖拽对象
+   */
+  private registerMidlineDraggableObjects(strategy: MidlineAnalysisStrategy): void {
+    const draggableObjects = strategy.getDraggableObjects()
+
+    if (draggableObjects.length > 0) {
+      console.log(`🎯 注册${draggableObjects.length}个可拖拽控制点`)
+
+      // 获取SceneManager实例并添加可拖拽对象
+      const sceneManager = SceneManager.getInstance()
+
+      draggableObjects.forEach((obj) => {
+        sceneManager.addDraggableObject(obj)
+        obj.userData.draggable = true
+      })
+
+      // 初始化拖拽控制（如果还没有初始化）
+      sceneManager.setupDragControls()
+    }
   }
 
   /**

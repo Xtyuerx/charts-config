@@ -1,4 +1,5 @@
 import { ref, onUnmounted } from 'vue'
+import * as THREE from 'three'
 import { SceneManager, ModelManager } from '../core'
 import type { STLModelsConfig } from '../types'
 
@@ -82,6 +83,28 @@ export function useScene() {
   }
 
   /**
+   * 初始化拖拽控制
+   */
+  const setupDragControls = () => {
+    sceneManager.setupDragControls()
+    console.log('🎯 拖拽控制已初始化')
+  }
+
+  /**
+   * 添加可拖拽对象
+   */
+  const addDraggableObject = (object: THREE.Object3D) => {
+    sceneManager.addDraggableObject(object)
+  }
+
+  /**
+   * 移除可拖拽对象
+   */
+  const removeDraggableObject = (object: THREE.Object3D) => {
+    sceneManager.removeDraggableObject(object)
+  }
+
+  /**
    * 停止动画循环
    */
   const stopAnimation = () => {
@@ -156,6 +179,9 @@ export function useScene() {
     loadModels,
     startAnimation,
     stopAnimation,
+    setupDragControls,
+    addDraggableObject,
+    removeDraggableObject,
     updateView,
     handleResize,
     cleanup,

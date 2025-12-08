@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { OrbitControls } from 'three-stdlib'
+import { OrbitControls, DragControls } from 'three-stdlib'
 import { SCENE_CONFIG } from '../constants'
 import { RenderContext } from './RenderContext'
 
@@ -14,6 +14,8 @@ export class SceneManager {
   private camera!: THREE.PerspectiveCamera
   private renderer!: THREE.WebGLRenderer
   private controls!: OrbitControls
+  private dragControls: DragControls | null = null
+  private draggableObjects: THREE.Object3D[] = []
   private container!: HTMLDivElement
   private animationId: number | null = null
   private renderContext!: RenderContext
@@ -105,6 +107,99 @@ export class SceneManager {
     const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.4)
     dirLight2.position.set(-100, -100, -100)
     this.scene.add(dirLight2)
+  }
+
+  /**
+   * 初始化拖拽控制
+   */
+  setupDragControls(): void {
+    if (!this.camera || !this.renderer) {
+      console.warn('相机或渲染器未初始化，无法设置拖拽控制')
+      return
+    }
+
+    // 创建拖拽控制器
+    this.dragControls = new DragControls(
+      this.draggableObjects,
+      this.camera,
+      this.renderer.domElement,
+    )
+
+    // 拖拽开始时禁用轨道控制
+    this.dragControls.addEventListener('dragstart', () => {
+      this.controls.enabled = false
+    })
+
+    // 拖拽结束时启用轨道控制
+    this.dragControls.addEventListener('dragend', () => {
+      this.controls.enabled = true
+    })
+
+    // 拖拽过程中的处理
+    this.dragControls.addEventListener('drag', (event: { object: THREE.Object3D }) => {
+      this.handleDrag(event.object)
+    })
+
+    console.log('✅ 拖拽控制已初始化')
+  }
+
+  /**
+   * 处理拖拽事件
+   */
+  private handleDrag(object: THREE.Object3D): void {
+    // 处理中线分析的控制点拖拽
+    if (object.userData.isMidlineControlPoint) {
+      const strategy = object.userData.strategy
+      const controlPointId = object.userData.controlPointId
+
+      if (strategy && typeof strategy.updatePlane === 'function') {
+        strategy.updatePlane(controlPointId)
+      }
+    }
+
+    // 其他类型的拖拽控制点可以在这里添加
+  }
+
+  /**
+   * 添加可拖拽对象
+   */
+  addDraggableObject(object: THREE.Object3D): void {
+    if (!this.draggableObjects.includes(object)) {
+      this.draggableObjects.push(object)
+
+      // 如果拖拽控制器已经初始化，更新它
+      if (this.dragControls) {
+        this.dragControls.dispose()
+        this.setupDragControls()
+      }
+    }
+  }
+
+  /**
+   * 移除可拖拽对象
+   */
+  removeDraggableObject(object: THREE.Object3D): void {
+    const index = this.draggableObjects.indexOf(object)
+    if (index > -1) {
+      this.draggableObjects.splice(index, 1)
+
+      // 如果拖拽控制器已经初始化，更新它
+      if (this.dragControls) {
+        this.dragControls.dispose()
+        this.setupDragControls()
+      }
+    }
+  }
+
+  /**
+   * 清除所有可拖拽对象
+   */
+  clearDraggableObjects(): void {
+    this.draggableObjects = []
+    if (this.dragControls) {
+      this.dragControls.dispose()
+      this.dragControls = null
+    }
   }
 
   /**
@@ -267,6 +362,14 @@ export class SceneManager {
   dispose(): void {
     this.stopAnimation()
     this.controls.dispose()
+
+    // 清理拖拽控制器
+    if (this.dragControls) {
+      this.dragControls.dispose()
+      this.dragControls = null
+    }
+
+    this.clearDraggableObjects()
     this.renderContext.dispose()
 
     // 从DOM中移除渲染器canvas

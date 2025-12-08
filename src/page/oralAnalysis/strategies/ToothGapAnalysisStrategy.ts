@@ -26,8 +26,8 @@ export class ToothGapAnalysisStrategy extends BaseAnalysisStrategy {
     const gaps = (measurements?.gaps as Array<Record<string, unknown>>) || []
 
     // 渲染每个间隙
-    gaps.forEach((gap, index) => {
-      this.renderGap(teeth_points, gap, index)
+    gaps.forEach((gap) => {
+      this.renderGap(teeth_points, gap)
     })
   }
 
@@ -110,11 +110,7 @@ export class ToothGapAnalysisStrategy extends BaseAnalysisStrategy {
   /**
    * 渲染单个间隙
    */
-  private renderGap(
-    teethPoints: AnalysisData['teeth_points'],
-    gap: Record<string, unknown>,
-    index: number,
-  ): void {
+  private renderGap(teethPoints: AnalysisData['teeth_points'], gap: Record<string, unknown>): void {
     const between = gap.between as number[]
     const size = (gap.size_mm as number) || 0
 
@@ -143,18 +139,17 @@ export class ToothGapAnalysisStrategy extends BaseAnalysisStrategy {
     this.group.add(line)
 
     // 渲染端点标记
-    const marker1 = LineRenderer.createPoint(center1, { color, size: 1.0 })
-    const marker2 = LineRenderer.createPoint(center2, { color, size: 1.0 })
+    const marker1 = LineRenderer.createLine(center1, center2, { color, lineWidth: 2 })
+    const marker2 = LineRenderer.createLine(center2, center1, { color, lineWidth: 2 })
     this.group.add(marker1)
     this.group.add(marker2)
 
     // 渲染间隙大小标签
-    const midPoint = new THREE.Vector3()
-      .addVectors(center1, center2)
-      .multiplyScalar(0.5)
+    const midPoint = new THREE.Vector3().addVectors(center1, center2).multiplyScalar(0.5)
 
     const gapLabel = LabelRenderer.createMeasurementLabel(
-      `${size.toFixed(2)}mm`,
+      size,
+      'mm',
       midPoint.clone().add(new THREE.Vector3(0, 2, 0)),
       {
         fontSize: 11,
@@ -205,4 +200,3 @@ export class ToothGapAnalysisStrategy extends BaseAnalysisStrategy {
     return 0xff0000 // 红色 - 显著间隙
   }
 }
-
