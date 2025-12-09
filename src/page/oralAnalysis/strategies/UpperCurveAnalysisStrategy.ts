@@ -180,16 +180,8 @@ export class UpperCurveAnalysisStrategy extends BaseAnalysisStrategy {
     const curveLine = new THREE.Mesh(tubeGeometry, curveMaterial)
     curveLine.renderOrder = 999 // 最后渲染，确保不被遮挡
     curveLine.name = 'upper_curve'
-
-    // ⚠️ 添加到上颌模型，而不是group
-    const upperMesh = this.context.upperMeshLabel
-    if (upperMesh) {
-      upperMesh.add(curveLine)
-      console.log('✅ 上颌补偿曲线已添加到上颌模型')
-    } else {
-      this.group.add(curveLine)
-      console.warn('⚠️ 未找到上颌mesh，上颌补偿曲线添加到group')
-    }
+    this.group.add(curveLine) // 曲线添加到主 group（跨越多个牙齿）
+    console.log('✅ UpperCurve - 曲线已添加到场景')
 
     // 渲染曲率信息
     this.renderCurvatureInfo(curvePoints, curvature)
@@ -273,12 +265,6 @@ export class UpperCurveAnalysisStrategy extends BaseAnalysisStrategy {
     // 根据曲率选择颜色
     const color = this.getCurvatureColorNum(curvature)
 
-<<<<<<< HEAD
-    // 绘制更平滑的曲线，增加采样点数到200
-    const curve = new THREE.CatmullRomCurve3(orderedPoints, false, 'catmullrom', 0.5)
-    const curveGeometry = new THREE.BufferGeometry().setFromPoints(curve.getPoints(200))
-    const curveMaterial = new THREE.LineBasicMaterial({
-=======
     console.log('🔵 UpperCurve (from teeth) - 曲线点数:', curvePoints.length)
 
     // 创建平滑曲线
@@ -297,7 +283,6 @@ export class UpperCurveAnalysisStrategy extends BaseAnalysisStrategy {
     )
 
     const curveMaterial = new THREE.MeshStandardMaterial({
->>>>>>> 93433de4ce3b41f1c3b8015b1f7bc5a133e95236
       color,
       roughness: 0.3,
       metalness: 0.6,
@@ -305,17 +290,12 @@ export class UpperCurveAnalysisStrategy extends BaseAnalysisStrategy {
       transparent: true,
       opacity: 0.9,
     })
-<<<<<<< HEAD
-    const curveLine = new THREE.Line(curveGeometry, curveMaterial)
-    curveLine.name = 'upper_curve_line'
-=======
 
     const curveLine = new THREE.Mesh(tubeGeometry, curveMaterial)
     curveLine.renderOrder = 999 // 最后渲染，确保不被遮挡
     curveLine.name = 'upper_curve_from_teeth'
     this.group.add(curveLine) // 曲线添加到主 group（跨越多个牙齿）
     console.log('✅ UpperCurve (from teeth) - 曲线已添加到场景')
->>>>>>> 93433de4ce3b41f1c3b8015b1f7bc5a133e95236
 
     // ⚠️ 添加到上颌模型，而不是group
     const upperMesh = this.context.upperMeshLabel
