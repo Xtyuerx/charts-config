@@ -6,6 +6,7 @@ import { LabelRenderer } from '../renderers'
 /**
  * 上颌补偿曲线分析策略
  * 分析上颌牙齿的补偿曲线
+ * ⚠️ 只处理上颌牙齿，不处理下颌
  */
 export class UpperCurveAnalysisStrategy extends BaseAnalysisStrategy {
   readonly id = 'upper-curve'
@@ -16,14 +17,23 @@ export class UpperCurveAnalysisStrategy extends BaseAnalysisStrategy {
   /**
    * 渲染特定元素
    * 上颌补偿曲线分析：显示曲线、关键点和曲率
+   * ⚠️ 只处理上颌牙齿，不处理下颌
    */
   protected renderSpecificElements(data: AnalysisData): void {
     const { teeth_points, measurements } = data
 
     if (!teeth_points || teeth_points.length === 0) return
 
-    // 渲染上颌补偿曲线
-    this.renderUpperCurve(teeth_points, measurements)
+    // ⚠️ 只过滤上颌牙齿（FDI 11-28），排除下颌牙齿（FDI 31-48）
+    const upperTeethPoints = teeth_points.filter((p) => p.fdi >= 11 && p.fdi <= 28)
+
+    if (upperTeethPoints.length === 0) {
+      console.warn('⚠️ 上颌补偿曲线：未找到上颌牙齿数据')
+      return
+    }
+
+    // 渲染上颌补偿曲线（只使用上颌牙齿数据）
+    this.renderUpperCurve(upperTeethPoints, measurements)
   }
 
   /**
@@ -98,6 +108,7 @@ export class UpperCurveAnalysisStrategy extends BaseAnalysisStrategy {
 
   /**
    * 渲染上颌补偿曲线
+   * ⚠️ 只处理上颌牙齿数据
    */
   private renderUpperCurve(
     teethPoints: AnalysisData['teeth_points'],
@@ -105,16 +116,24 @@ export class UpperCurveAnalysisStrategy extends BaseAnalysisStrategy {
   ): void {
     if (!measurements) return
 
+    // ⚠️ 确保只使用上颌牙齿数据
+    const upperTeethPoints = teethPoints.filter((p) => p.fdi >= 11 && p.fdi <= 28)
+
+    if (upperTeethPoints.length === 0) {
+      console.warn('⚠️ 上颌补偿曲线：未找到上颌牙齿数据')
+      return
+    }
+
     const curveData = measurements.curve_data as Array<number[]>
     const curvature = (measurements.curvature as number) || 0
 
     if (!curveData || curveData.length === 0) {
-      // 如果没有曲线数据，使用参考牙位生成曲线
-      this.renderCurveFromTeeth(teethPoints, measurements)
+      // 如果没有曲线数据，使用参考牙位生成曲线（只使用上颌数据）
+      this.renderCurveFromTeeth(upperTeethPoints, measurements)
       return
     }
 
-    // 将曲线数据转换为Three.js坐标（不缩放，因为曲线添加到 group）
+    // 将曲线数据转换为Three.js坐标（保持缩放）
     const scale = 1.5
     const curvePoints = curveData.map(
       (point) =>
@@ -137,7 +156,16 @@ export class UpperCurveAnalysisStrategy extends BaseAnalysisStrategy {
     })
     const curveLine = new THREE.Line(curveGeometry, curveMaterial)
     curveLine.name = 'upper_curve'
-    this.group.add(curveLine) // 曲线添加到主 group（跨越多个牙齿）
+
+    // ⚠️ 添加到上颌模型，而不是group
+    const upperMesh = this.context.upperMeshLabel
+    if (upperMesh) {
+      upperMesh.add(curveLine)
+      console.log('✅ 上颌补偿曲线已添加到上颌模型')
+    } else {
+      this.group.add(curveLine)
+      console.warn('⚠️ 未找到上颌mesh，上颌补偿曲线添加到group')
+    }
 
     // 渲染曲率信息
     this.renderCurvatureInfo(curvePoints, curvature)
@@ -145,59 +173,167 @@ export class UpperCurveAnalysisStrategy extends BaseAnalysisStrategy {
 
   /**
    * 从牙齿点位生成曲线
+   * ⚠️ 只处理上颌牙齿，不处理下颌
    */
   private renderCurveFromTeeth(
     teethPoints: AnalysisData['teeth_points'],
     measurements: Record<string, unknown>,
   ): void {
-    const curveTeeth = (measurements.curve_reference_teeth as number[]) || []
+    // ⚠️ 重要：只过滤上颌牙齿点位（FDI 11-28），完全排除下颌（FDI 31-48）
+    const upperTeethPoints = teethPoints.filter((p) => p.fdi >= 11 && p.fdi <= 28)
 
-    if (curveTeeth.length === 0) return
+    if (upperTeethPoints.length === 0) {
+      console.warn('⚠️ 上颌补偿曲线：未找到上颌牙齿点位')
+      return
+    }
 
-    const curvePoints: THREE.Vector3[] = []
-    const fdis: number[] = [] // 记录每个点对应的 FDI
+    // 使用上颌所有牙位：17->16->15->14->13->12->11->21->22->23->24->25->26->27 (不连接17和27)
+    const referenceFDIs = [17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27]
+    const pointsMap = new Map<number, THREE.Vector3>()
 
-    // 提取每颗牙齿的中心点（使用缩放坐标）
-    curveTeeth.forEach((fdi) => {
-      const toothPoints = teethPoints.filter((p) => p.fdi === fdi)
+    // 提取每颗牙齿的中心点（使用缩放坐标）- 只从上颌牙齿中提取
+    referenceFDIs.forEach((fdi) => {
+      const toothPoints = upperTeethPoints.filter((p) => p.fdi === fdi)
       if (toothPoints.length > 0) {
         const center = this.calculatePointsCenterScaled(toothPoints.map((p) => p.point))
-        curvePoints.push(center)
-        fdis.push(fdi)
+        pointsMap.set(fdi, center)
       }
     })
 
-    if (curvePoints.length < 2) return
+    if (pointsMap.size < 3) {
+      console.warn('上颌补偿曲线：找不到足够的参考牙位点，需要至少3个点')
+      return
+    }
 
     const curvature = (measurements.curvature as number) || 0
+
+    // 1. 渲染平滑曲线
+    this.renderUpperConnectionLine(pointsMap, referenceFDIs, curvature)
+
+    // 2. 渲染关键点标记（只标记4个上颌关键点：17, 27, 11, 21）
+    const keyFDIs = [17, 27, 11, 21]
+    const keyPointsMap = new Map<number, THREE.Vector3>()
+    keyFDIs.forEach((fdi) => {
+      const point = pointsMap.get(fdi)
+      if (point) keyPointsMap.set(fdi, point)
+    })
+    this.renderKeyPoints(keyPointsMap, keyFDIs)
+
+    // 3. 渲染曲率信息
+    const allPoints = Array.from(pointsMap.values())
+    this.renderCurvatureInfo(allPoints, curvature)
+  }
+
+  /**
+   * 渲染上颌曲线连接线
+   * 连接上颌所有牙位：17->16->...->11->21->...->27 (不连接17和27，不闭合)
+   * ⚠️ 添加到上颌模型，跟随上颌显示/隐藏
+   */
+  private renderUpperConnectionLine(
+    pointsMap: Map<number, THREE.Vector3>,
+    fdis: number[],
+    curvature: number,
+  ): void {
+    // 按照指定顺序获取点位
+    const orderedPoints: THREE.Vector3[] = []
+
+    fdis.forEach((fdi) => {
+      const point = pointsMap.get(fdi)
+      if (point) {
+        orderedPoints.push(point)
+      }
+    })
+
+    if (orderedPoints.length < 2) return
+
+    // 根据曲率选择颜色
     const color = this.getCurvatureColorNum(curvature)
 
-    // 创建平滑曲线
-    const curve = new THREE.CatmullRomCurve3(curvePoints)
-    const curveGeometry = new THREE.BufferGeometry().setFromPoints(curve.getPoints(50))
+    // 绘制更平滑的曲线，增加采样点数到200
+    const curve = new THREE.CatmullRomCurve3(orderedPoints, false, 'catmullrom', 0.5)
+    const curveGeometry = new THREE.BufferGeometry().setFromPoints(curve.getPoints(200))
     const curveMaterial = new THREE.LineBasicMaterial({
       color,
       linewidth: 3,
     })
     const curveLine = new THREE.Line(curveGeometry, curveMaterial)
-    curveLine.name = 'upper_curve_from_teeth'
-    this.group.add(curveLine) // 曲线添加到主 group（跨越多个牙齿）
+    curveLine.name = 'upper_curve_line'
 
-    // 渲染曲率信息
-    this.renderCurvatureInfo(curvePoints, curvature)
+    // ⚠️ 添加到上颌模型，而不是group
+    const upperMesh = this.context.upperMeshLabel
+    if (upperMesh) {
+      upperMesh.add(curveLine)
+      console.log('✅ 上颌补偿曲线已添加到上颌模型')
+    } else {
+      this.group.add(curveLine)
+      console.warn('⚠️ 未找到上颌mesh，上颌补偿曲线添加到group')
+    }
+  }
+
+  /**
+   * 渲染关键点标记
+   * ⚠️ 添加到上颌模型，跟随上颌显示/隐藏
+   */
+  private renderKeyPoints(pointsMap: Map<number, THREE.Vector3>, fdis: number[]): void {
+    const upperMesh = this.context.upperMeshLabel
+
+    fdis.forEach((fdi) => {
+      const point = pointsMap.get(fdi)
+      if (!point) return
+
+      // 创建球体标记
+      const geometry = new THREE.SphereGeometry(0.8, 16, 16)
+      const material = new THREE.MeshPhongMaterial({
+        color: 0x0000ff, // 蓝色
+        emissive: 0x0000ff,
+        emissiveIntensity: 0.3,
+      })
+      const marker = new THREE.Mesh(geometry, material)
+      marker.position.copy(point)
+      marker.name = `upper_curve_point_${fdi}`
+
+      // ⚠️ 添加到上颌模型
+      if (upperMesh) {
+        upperMesh.add(marker)
+      } else {
+        this.group.add(marker)
+      }
+
+      // 添加FDI标签
+      const label = LabelRenderer.createLabel(`FDI ${fdi}`, {
+        position: point.clone().add(new THREE.Vector3(0, 2, 0)),
+        fontSize: 10,
+        backgroundColor: '#0000ff',
+        fontColor: '#ffffff',
+      })
+
+      // ⚠️ 标签也添加到上颌模型
+      if (upperMesh) {
+        upperMesh.add(label)
+      } else {
+        this.group.add(label)
+      }
+    })
+
+    if (upperMesh) {
+      console.log('✅ 关键点标记已添加到上颌模型')
+    }
   }
 
   /**
    * 渲染曲率信息
+   * ⚠️ 添加到上颌模型，跟随上颌显示/隐藏
    */
   private renderCurvatureInfo(curvePoints: THREE.Vector3[], curvature: number): void {
     if (curvePoints.length === 0) return
 
-    // 在曲线中点显示曲率信息（添加到 group）
+    // 在曲线中点显示曲率信息
     const midIndex = Math.floor(curvePoints.length / 2)
     const midPoint = curvePoints[midIndex]
 
     if (!midPoint) return
+
+    const upperMesh = this.context.upperMeshLabel
 
     // 高亮中点（使用缩放坐标创建球体）
     const geometry = new THREE.SphereGeometry(1.3, 16, 16)
@@ -209,7 +345,13 @@ export class UpperCurveAnalysisStrategy extends BaseAnalysisStrategy {
     const midMarker = new THREE.Mesh(geometry, material)
     midMarker.position.copy(midPoint)
     midMarker.name = 'curve_mid_marker'
-    this.group.add(midMarker)
+
+    // ⚠️ 添加到上颌模型
+    if (upperMesh) {
+      upperMesh.add(midMarker)
+    } else {
+      this.group.add(midMarker)
+    }
 
     // 添加曲率标签
     const curvatureLabel = LabelRenderer.createLabel(`曲率: ${curvature.toFixed(3)}`, {
@@ -218,7 +360,14 @@ export class UpperCurveAnalysisStrategy extends BaseAnalysisStrategy {
       backgroundColor: '#2196f3',
       fontColor: '#ffffff',
     })
-    this.group.add(curvatureLabel)
+
+    // ⚠️ 标签也添加到上颌模型
+    if (upperMesh) {
+      upperMesh.add(curvatureLabel)
+      console.log('✅ 曲率信息已添加到上颌模型')
+    } else {
+      this.group.add(curvatureLabel)
+    }
   }
 
   /**
