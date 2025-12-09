@@ -2,8 +2,6 @@ import * as THREE from 'three'
 import { BaseAnalysisStrategy } from './base/BaseAnalysisStrategy'
 import type { AnalysisData, MeasurementGroup, RenderType } from '../types'
 import { LabelRenderer } from '../renderers'
-import { createMiddleArchWire, type ArchWireResult } from '../utils/ArchWireUtils'
-import { SCENE_CONFIG } from '../constants'
 
 /**
  * 中线偏差分析策略
@@ -17,7 +15,6 @@ export class MidlineAnalysisStrategy extends BaseAnalysisStrategy {
   readonly renderType: RenderType = 'POINT_SLICE'
 
   // 牙弓线相关
-  private archWire: ArchWireResult | null = null
   private controlPoint1: THREE.Mesh | null = null
   private controlPoint2: THREE.Mesh | null = null
   private plane1: THREE.Mesh | null = null
@@ -176,50 +173,6 @@ export class MidlineAnalysisStrategy extends BaseAnalysisStrategy {
         ],
       },
     ]
-  }
-
-  // ==================== 私有辅助方法 ====================
-
-  /**
-   * 创建牙弓线
-   * 使用模型提取的牙齿中心点（centersUpper 和 centersLower）
-   */
-  private createArchWire(): void {
-    const { centersUpper, centersLower } = this.context
-
-    if (!centersUpper || !centersLower) {
-      console.warn('⚠️ 牙齿中心点数据不可用，无法创建牙弓线')
-      return
-    }
-
-    // 由于牙齿中心点是 unscaled 的，而牙弓线需要和缩放后的模型对齐
-    // 所以需要先对中心点进行缩放（SCENE_CONFIG.modelScale）
-    const scale = SCENE_CONFIG.modelScale
-    const scaledUpperCenters: Record<number, THREE.Vector3> = {}
-    const scaledLowerCenters: Record<number, THREE.Vector3> = {}
-
-    // 缩放上颌中心点
-    Object.entries(centersUpper).forEach(([fdi, center]) => {
-      scaledUpperCenters[Number(fdi)] = center.clone().multiplyScalar(scale)
-    })
-
-    // 缩放下颌中心点
-    Object.entries(centersLower).forEach(([fdi, center]) => {
-      scaledLowerCenters[Number(fdi)] = center.clone().multiplyScalar(scale)
-    })
-
-    // 创建中间牙弓线（使用缩放后的坐标）
-    this.archWire = createMiddleArchWire(scaledUpperCenters, scaledLowerCenters)
-
-    if (!this.archWire) {
-      console.warn('⚠️ 牙弓线创建失败')
-      return
-    }
-
-    console.log('✅ 牙弓线创建成功')
-
-    // 添加到场景
-    this.group.add(this.archWire.group)
   }
 
   /**
