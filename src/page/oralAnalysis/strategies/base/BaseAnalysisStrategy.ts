@@ -523,4 +523,31 @@ export abstract class BaseAnalysisStrategy implements IAnalysisStrategy {
 
     return new THREE.Vector3(sum.x / points.length, sum.y / points.length, sum.z / points.length)
   }
+
+  /**
+   * 创建球体标记（不缩放，用于添加到 mesh）
+   * @param position 位置向量（不缩放）
+   * @param color 颜色
+   * @param radius 半径
+   * @param opacity 不透明度
+   * @returns 球体 Mesh
+   */
+  protected createSphereMarker(
+    position: THREE.Vector3,
+    color: number,
+    radius: number = 0.8,
+    opacity: number = 0.8,
+  ): THREE.Mesh {
+    const geometry = new THREE.SphereGeometry(radius, 16, 16)
+    const material = new THREE.MeshPhongMaterial({
+      color,
+      emissive: color,
+      emissiveIntensity: 0.3,
+      transparent: true,
+      opacity,
+    })
+    const sphere = new THREE.Mesh(geometry, material)
+    sphere.position.copy(position)
+    return sphere
+  }
 }

@@ -366,20 +366,22 @@ this.addLineToMesh(line, 11, 41)  // 11 是上颌，41 是下颌
 
 ### 已完成改造 ✅
 - ✅ BaseAnalysisStrategy（基类）
+- ✅ ToothNumberAnalysisStrategy（牙号）
 - ✅ BoltonAnalysisStrategy（Bolton 分析）
 - ✅ ArchWidthAnalysisStrategy（牙弓宽度）
-- ✅ ToothNumberAnalysisStrategy（牙号）
+- ✅ ArchSymmetryAnalysisStrategy（牙弓对称性）
+- ✅ CrossbiteAnalysisStrategy（反合）
+- ✅ CrowdingAnalysisStrategy（拥挤度）
+- ✅ UpperCurveAnalysisStrategy（上颌曲线）
+- ✅ LowerCurveAnalysisStrategy（下颌曲线 / Spee 曲线）
+- ✅ MidlineAnalysisStrategy（中线分析）
+- ✅ OcclusionAnalysisStrategy（咬合关系）
+- ✅ OverbiteAnalysisStrategy（覆合覆盖）
+- ✅ ToothGapAnalysisStrategy（牙间隙）
 
-### 待改造 ⏳
-- ⏳ ArchSymmetryAnalysisStrategy（牙弓对称性）
-- ⏳ CrossbiteAnalysisStrategy（反合）
-- ⏳ CrowdingAnalysisStrategy（拥挤度）
-- ⏳ LowerCurveAnalysisStrategy（下颌曲线）
-- ⏳ MidlineAnalysisStrategy（中线分析）
-- ⏳ OcclusionAnalysisStrategy（咬合）
-- ⏳ OverbiteAnalysisStrategy（覆合覆盖）
-- ⏳ ToothGapAnalysisStrategy（牙间隙）
-- ⏳ UpperCurveAnalysisStrategy（上颌曲线）
+### 🎊 **全部改造完成！**
+
+所有分析策略都已成功迁移到"直接添加到 Mesh"方案。
 
 ## 🔑 改造关键点总结
 
@@ -419,5 +421,121 @@ material.transparent = true     // 支持透明
 ---
 
 **创建时间**: 2025-12-08  
-**方案**: 方案2 - 直接添加到 Mesh
+**更新时间**: 2025-12-09  
+**方案**: 方案2 - 直接添加到 Mesh  
+**状态**: ✅ 全部完成
+
+## 📝 各策略改造要点汇总
+
+### 1. ToothNumberAnalysisStrategy（牙号）
+- 移除局部 `calculateCenter`，使用基类 `calculatePointsCenterUnscaled`
+- 标签直接通过 `addToMesh` 添加到对应颌的 mesh
+
+### 2. BoltonAnalysisStrategy（Bolton 分析）
+- 覆写 `renderPoints`，只渲染 `boundary_mesial` 和 `boundary_distal` 点
+- 测量线和标签使用 `createLineUnscaled` 和 `getMidPointUnscaled`
+- 所有元素通过 `addToMesh` 添加
+
+### 3. ArchWidthAnalysisStrategy（牙弓宽度）
+- 测量线使用 `createLineUnscaled` 避免双重缩放
+- 标签位置使用 `getMidPointUnscaled` 计算
+- 线和标签通过 `addLineToMesh` 智能添加
+
+### 4. ArchSymmetryAnalysisStrategy（牙弓对称性）
+- 中线平面保持添加到 `this.group`（全局元素）
+- 对称线、标记和偏差标签添加到对应 mesh
+- 使用 `createSphereMarker` 辅助方法创建球体标记
+
+### 5. CrossbiteAnalysisStrategy（反合）
+- 球体标记使用 `createSphereMarker`，位置不缩放
+- 标签通过 `addToMesh` 添加到对应 mesh
+- 修复 `backgroundColor` 类型（number → string）
+
+### 6. CrowdingAnalysisStrategy（拥挤度）
+- 拥挤标记（球体）使用 `createSphereMarker`
+- 位置不缩放，直接添加到 mesh
+- 修复 `backgroundColor` 类型（number → string）
+
+### 7. UpperCurveAnalysisStrategy（上颌曲线）
+- 曲线使用 `THREE.TubeGeometry` 增加粗细和可见性
+- 材质设置 `depthTest: false` 避免被遮挡
+- `renderOrder = 999` 确保最后渲染
+- 曲线点需要缩放（因为添加到 `this.group`）
+- 标记点使用 `createSphereMarker` 不缩放（添加到 `this.group`）
+
+### 8. LowerCurveAnalysisStrategy（下颌曲线 / Spee 曲线）
+- 与上颌曲线改造方法一致
+- 曲线使用 `TubeGeometry`，标记使用 `createSphereMarker`
+- 处理 Spee 曲线的特殊渲染需求
+
+### 9. MidlineAnalysisStrategy（中线分析）
+- 面部中线平面保持添加到 `this.group`（全局元素）
+- 上/下颌中线、标记和标签添加到对应 mesh
+- 偏差线为跨颌元素，添加到 `this.group`
+- 修复 `backgroundColor` 类型，添加参数重命名
+
+### 10. OcclusionAnalysisStrategy（咬合关系）
+- 球体标记使用 unscaled 位置
+- 虚线使用 `createDashedLineUnscaled`
+- 添加安全检查（`if (!start || !end)`）
+- 分类标签添加到第一颗牙的 mesh
+
+### 11. OverbiteAnalysisStrategy（覆合覆盖）
+- 虚线连接切端点和龈缘点
+- 高亮标记使用 unscaled 位置
+- 添加 `createDashedLineUnscaled` 辅助方法
+
+### 12. ToothGapAnalysisStrategy（牙间隙）
+- 间隙线使用 `createDashedLineUnscaled`
+- 端点标记使用 `createSphereMarker`
+- 标签和测量值通过 `addLineToMesh` 智能添加
+
+## 🔧 新增的 BaseAnalysisStrategy 辅助方法
+
+### 核心方法
+1. **`addToMesh(object, fdi)`** - 添加对象到对应颌的 mesh
+2. **`addLineToMesh(line, fdi1, fdi2)`** - 智能添加线（支持跨颌检测）
+3. **`addMultipleToMesh(objects, fdi)`** - 批量添加对象
+
+### 坐标计算方法（Unscaled）
+1. **`calculatePointsCenterUnscaled(points)`** - 计算点云中心（不缩放）
+2. **`getMidPointUnscaled(p1, p2)`** - 计算两点中点（不缩放）
+3. **`createLineUnscaled(start, end, color, lineWidth)`** - 创建线（不缩放）
+
+### 辅助工具方法
+1. **`createSphereMarker(position, color, radius, opacity?)`** - 创建球体标记
+2. **各策略独立的 `createDashedLineUnscaled`** - 创建虚线（不缩放）
+
+## ⚠️ 常见问题和解决方案
+
+### 问题1: 元素位置不对，飘在牙齿外围
+**原因**: 双重缩放 - 坐标计算时缩放了，mesh 本身也有缩放  
+**解决**: 使用 `Unscaled` 系列方法，不要手动应用 `* 1.5` 缩放
+
+### 问题2: 元素被牙齿遮挡
+**原因**: 深度测试问题  
+**解决**: `addToMesh` 自动设置 `depthTest: false`, `renderOrder: 999`
+
+### 问题3: 曲线不显示
+**原因**: `THREE.Line` 太细，或者深度测试问题  
+**解决**: 使用 `THREE.TubeGeometry` 替代，设置 `depthTest: false`, `renderOrder: 999`
+
+### 问题4: 箭头方向反了
+**原因**: `LineRenderer.createArrow` 的方向计算有误  
+**解决**: 已在 `LineRenderer.ts` 中修复
+
+### 问题5: TypeScript 类型错误
+**原因**: `backgroundColor` 类型不匹配，或数组元素可能 undefined  
+**解决**: 添加类型转换和安全检查
+
+## ✅ 测试清单
+
+- [x] 所有策略的元素都能正确显示
+- [x] 上颌/下颌视图切换正常
+- [x] 元素贴合在牙齿上，不飘浮
+- [x] 元素不被牙齿遮挡
+- [x] 曲线正常渲染且粗细适中
+- [x] 箭头方向正确（向外）
+- [x] 无 TypeScript 编译错误
+- [x] 无 ESLint 警告
 

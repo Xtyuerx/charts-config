@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { BaseAnalysisStrategy } from './base/BaseAnalysisStrategy'
 import type { AnalysisData, MeasurementGroup, RenderType } from '../types'
-import { LineRenderer, LabelRenderer } from '../renderers'
+import { LabelRenderer } from '../renderers'
 
 /**
  * 覆盖度分析策略
@@ -30,15 +30,12 @@ export class OverbiteAnalysisStrategy extends BaseAnalysisStrategy {
     incisalPoints.forEach((ip) => {
       const gp = gingivaPoints.find((g) => g.fdi === ip.fdi)
       if (gp) {
-        // 创建虚线连接
-        const line = LineRenderer.createDashedLine(ip.point, gp.point, {
-          color: 0xff6b6b,
-          dashSize: 0.5,
-          gapSize: 0.3,
-          lineWidth: 1,
-        })
+        // 创建虚线连接（使用 unscaled 坐标）
+        const startVec = new THREE.Vector3(ip.point[0], ip.point[1], ip.point[2])
+        const endVec = new THREE.Vector3(gp.point[0], gp.point[1], gp.point[2])
+        const line = this.createDashedLineUnscaled(startVec, endVec, 0xff6b6b, 1)
         line.name = `overbite_line_${ip.fdi}`
-        this.group.add(line)
+        this.addToMesh(line, ip.fdi) // 添加到对应的 mesh
       }
     })
 
@@ -47,7 +44,7 @@ export class OverbiteAnalysisStrategy extends BaseAnalysisStrategy {
     incisalPoints
       .filter((p) => anteriorTeeth.includes(p.fdi))
       .forEach((p) => {
-        // 给前牙切端点添加更大的标记
+        // 给前牙切端点添加更大的标记（使用 unscaled 位置）
         const geometry = new THREE.SphereGeometry(0.7, 16, 16)
         const material = new THREE.MeshPhongMaterial({
           color: 0xff0000,
@@ -57,12 +54,34 @@ export class OverbiteAnalysisStrategy extends BaseAnalysisStrategy {
           opacity: 0.8,
         })
         const sphere = new THREE.Mesh(geometry, material)
-
-        const scale = 1.5
-        sphere.position.set(p.point[0] * scale, p.point[1] * scale, p.point[2] * scale)
+        sphere.position.set(p.point[0], p.point[1], p.point[2]) // 不再应用缩放
         sphere.name = `highlight_${p.fdi}`
-        this.group.add(sphere)
+        this.addToMesh(sphere, p.fdi) // 添加到对应的 mesh
       })
+  }
+
+  /**
+   * 创建虚线（不应用缩放）
+   */
+  private createDashedLineUnscaled(
+    start: THREE.Vector3,
+    end: THREE.Vector3,
+    color: number,
+    lineWidth: number = 1,
+  ): THREE.Line {
+    const geometry = new THREE.BufferGeometry().setFromPoints([start, end])
+    const material = new THREE.LineDashedMaterial({
+      color,
+      linewidth: lineWidth,
+      dashSize: 0.5,
+      gapSize: 0.3,
+      depthTest: false,
+      depthWrite: false,
+      transparent: true,
+    })
+    const line = new THREE.Line(geometry, material)
+    line.computeLineDistances() // 虚线需要计算距离
+    return line
   }
 
   /**

@@ -63,6 +63,12 @@ export function useScene() {
         lowerMeshLabel: result.lowerMeshLabel,
       })
 
+      // 设置牙齿中心点到渲染上下文
+      renderContext.setToothCenters({
+        centersUpper: result.centersUpper,
+        centersLower: result.centersLower,
+      })
+
       return result
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : '模型加载失败'
@@ -194,4 +200,3 @@ export function useScene() {
     getRenderContext,
   }
 }
-

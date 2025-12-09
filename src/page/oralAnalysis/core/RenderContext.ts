@@ -13,6 +13,8 @@ export class RenderContext implements IRenderContext {
   lowerMesh: THREE.Mesh | null = null
   upperMeshLabel: THREE.Mesh | null = null
   lowerMeshLabel: THREE.Mesh | null = null
+  centersUpper: Record<number, THREE.Vector3> | null = null
+  centersLower: Record<number, THREE.Vector3> | null = null
 
   constructor(scene: THREE.Scene, camera: THREE.PerspectiveCamera, renderer: THREE.WebGLRenderer) {
     this.scene = scene
@@ -33,6 +35,17 @@ export class RenderContext implements IRenderContext {
     this.lowerMesh = meshes.lowerMesh
     this.upperMeshLabel = meshes.upperMeshLabel
     this.lowerMeshLabel = meshes.lowerMeshLabel
+  }
+
+  /**
+   * 设置牙齿中心点
+   */
+  setToothCenters(centers: {
+    centersUpper: Record<number, THREE.Vector3> | null
+    centersLower: Record<number, THREE.Vector3> | null
+  }): void {
+    this.centersUpper = centers.centersUpper
+    this.centersLower = centers.centersLower
   }
 
   /**
