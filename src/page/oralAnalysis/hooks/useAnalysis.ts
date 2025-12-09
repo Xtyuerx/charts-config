@@ -41,6 +41,40 @@ export function useAnalysis() {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
       const data: ResponseData = await response.json()
+
+      // 🔍 详细打印数据结构
+      console.log('📊 诊断数据结构:')
+      if (data.data) {
+        Object.keys(data.data).forEach((taskName) => {
+          const taskData = (data.data as Record<string, any>)[taskName]
+          console.log(`  - ${taskName}:`, {
+            hasMeasurements: !!taskData.measurements,
+            hasTeethPoints: !!taskData.teeth_points,
+            teethPointsCount: taskData.teeth_points?.length || 0,
+            measurementKeys: taskData.measurements ? Object.keys(taskData.measurements) : [],
+          })
+
+          // 特别关注曲线数据
+          if (taskName === 'upper-curve' || taskName === 'lower-curve') {
+            console.log(`    🔵 ${taskName} 详细数据:`, {
+              measurements: taskData.measurements,
+              curve_data_exists: !!taskData.measurements?.curve_data,
+              curve_data_length: taskData.measurements?.curve_data?.length || 0,
+              curve_reference_teeth: taskData.measurements?.curve_reference_teeth,
+            })
+          }
+
+          // 特别关注中线数据
+          if (taskName === 'midline-deviation') {
+            console.log(`    🔵 ${taskName} 详细数据:`, {
+              measurements: taskData.measurements,
+              upper: taskData.measurements?.upper,
+              lower: taskData.measurements?.lower,
+            })
+          }
+        })
+      }
+
       analysisService.loadData(data.data)
       console.log('✅ 诊断数据加载完成')
       return data.data

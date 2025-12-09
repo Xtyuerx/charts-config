@@ -7,7 +7,8 @@ import type {
   RenderType,
 } from '../../types'
 import type { IAnalysisStrategy } from './IAnalysisStrategy'
-import { POINT_TYPE_COLORS } from '../../constants'
+import { POINT_TYPE_COLORS, SCENE_CONFIG } from '../../constants'
+import { createMiddleArchWire, type ArchWireResult } from '../../utils/ArchWireUtils'
 
 /**
  * 分析策略抽象基类
@@ -25,6 +26,7 @@ export abstract class BaseAnalysisStrategy implements IAnalysisStrategy {
   protected group: THREE.Group // 该分析的所有3D对象容器（用于非标签元素）
   protected visible = false // 是否可见
   protected data: AnalysisData | null = null // 分析数据
+  protected archWire: ArchWireResult | null = null // 牙弓线
 
   constructor() {
     this.group = new THREE.Group()
@@ -522,5 +524,73 @@ export abstract class BaseAnalysisStrategy implements IAnalysisStrategy {
     )
 
     return new THREE.Vector3(sum.x / points.length, sum.y / points.length, sum.z / points.length)
+  }
+
+  /**
+   * 创建球体标记（不缩放，用于添加到 mesh）
+   * @param position 位置向量（不缩放）
+   * @param color 颜色
+   * @param radius 半径
+   * @param opacity 不透明度
+   * @returns 球体 Mesh
+   */
+  protected createSphereMarker(
+    position: THREE.Vector3,
+    color: number,
+    radius: number = 0.8,
+    opacity: number = 0.8,
+  ): THREE.Mesh {
+    const geometry = new THREE.SphereGeometry(radius, 16, 16)
+    const material = new THREE.MeshPhongMaterial({
+      color,
+      emissive: color,
+      emissiveIntensity: 0.3,
+      transparent: true,
+      opacity,
+    })
+    const sphere = new THREE.Mesh(geometry, material)
+    sphere.position.copy(position)
+    return sphere
+  }
+  /**
+   * 创建牙弓线
+   * 使用模型提取的牙齿中心点（centersUpper 和 centersLower）
+   */
+  protected createArchWire(): void {
+    const { centersUpper, centersLower } = this.context
+
+    if (!centersUpper || !centersLower) {
+      console.warn('⚠️ 牙齿中心点数据不可用，无法创建牙弓线')
+      return
+    }
+
+    // 由于牙齿中心点是 unscaled 的，而牙弓线需要和缩放后的模型对齐
+    // 所以需要先对中心点进行缩放（SCENE_CONFIG.modelScale）
+    const scale = SCENE_CONFIG.modelScale
+    const scaledUpperCenters: Record<number, THREE.Vector3> = {}
+    const scaledLowerCenters: Record<number, THREE.Vector3> = {}
+
+    // 缩放上颌中心点
+    Object.entries(centersUpper).forEach(([fdi, center]) => {
+      scaledUpperCenters[Number(fdi)] = center.clone().multiplyScalar(scale)
+    })
+
+    // 缩放下颌中心点
+    Object.entries(centersLower).forEach(([fdi, center]) => {
+      scaledLowerCenters[Number(fdi)] = center.clone().multiplyScalar(scale)
+    })
+
+    // 创建中间牙弓线（使用缩放后的坐标）
+    this.archWire = createMiddleArchWire(scaledUpperCenters, scaledLowerCenters)
+
+    if (!this.archWire) {
+      console.warn('⚠️ 牙弓线创建失败')
+      return
+    }
+
+    console.log('✅ 牙弓线创建成功')
+
+    // 添加到场景
+    this.group.add(this.archWire.group)
   }
 }

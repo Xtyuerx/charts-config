@@ -55,6 +55,8 @@ export interface RenderContext {
   lowerMesh: THREE.Mesh | null
   upperMeshLabel: THREE.Mesh | null
   lowerMeshLabel: THREE.Mesh | null
+  centersUpper: Record<number, THREE.Vector3> | null // 上颌牙齿中心点
+  centersLower: Record<number, THREE.Vector3> | null // 下颌牙齿中心点
 }
 
 /**

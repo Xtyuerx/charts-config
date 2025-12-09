@@ -153,7 +153,8 @@ export class SceneManager {
       const controlPointId = object.userData.controlPointId
 
       if (strategy && typeof strategy.updatePlane === 'function') {
-        strategy.updatePlane(controlPointId)
+        // 传入拖拽后的新位置，让策略约束到曲线上
+        strategy.updatePlane(controlPointId, object.position)
       }
     }
 

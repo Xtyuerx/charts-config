@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { BaseAnalysisStrategy } from './base/BaseAnalysisStrategy'
 import type { AnalysisData, MeasurementGroup, RenderType } from '../types'
-import { LineRenderer, LabelRenderer } from '../renderers'
+import { LabelRenderer } from '../renderers'
 
 /**
  * 牙齿间隙分析策略
@@ -122,30 +122,28 @@ export class ToothGapAnalysisStrategy extends BaseAnalysisStrategy {
 
     if (tooth1Points.length === 0 || tooth2Points.length === 0) return
 
-    // 计算牙齿中心点
-    const center1 = this.calculatePointsCenter(tooth1Points.map((p) => p.point))
-    const center2 = this.calculatePointsCenter(tooth2Points.map((p) => p.point))
+    // 计算牙齿中心点（使用 unscaled）
+    const center1 = this.calculatePointsCenterUnscaled(tooth1Points.map((p) => p.point))
+    const center2 = this.calculatePointsCenterUnscaled(tooth2Points.map((p) => p.point))
 
     // 根据间隙大小选择颜色
     const color = this.getGapColor(size)
 
-    // 渲染间隙线（虚线）
-    const line = LineRenderer.createDashedLine(center1, center2, {
-      color,
-      lineWidth: 2,
-      dashSize: 0.5,
-      gapSize: 0.3,
-    })
-    this.group.add(line)
+    // 渲染间隙线（虚线，使用 unscaled 坐标）
+    const line = this.createDashedLineUnscaled(center1, center2, color, 2)
+    line.name = `gap_line_${between[0]}_${between[1]}`
+    this.addLineToMesh(line, between[0], between[1]) // 智能添加
 
-    // 渲染端点标记
-    const marker1 = LineRenderer.createLine(center1, center2, { color, lineWidth: 2 })
-    const marker2 = LineRenderer.createLine(center2, center1, { color, lineWidth: 2 })
-    this.group.add(marker1)
-    this.group.add(marker2)
+    // 渲染端点标记（球体）
+    const marker1 = this.createSphereMarker(center1, color, 0.8)
+    const marker2 = this.createSphereMarker(center2, color, 0.8)
+    marker1.name = `gap_marker_${between[0]}`
+    marker2.name = `gap_marker_${between[1]}`
+    this.addToMesh(marker1, between[0])
+    this.addToMesh(marker2, between[1])
 
     // 渲染间隙大小标签
-    const midPoint = new THREE.Vector3().addVectors(center1, center2).multiplyScalar(0.5)
+    const midPoint = this.getMidPointUnscaled(center1.toArray(), center2.toArray())
 
     const gapLabel = LabelRenderer.createMeasurementLabel(
       size,
@@ -157,7 +155,8 @@ export class ToothGapAnalysisStrategy extends BaseAnalysisStrategy {
         fontColor: '#ffffff',
       },
     )
-    this.group.add(gapLabel)
+    gapLabel.name = `gap_label_${between[0]}_${between[1]}`
+    this.addLineToMesh(gapLabel, between[0], between[1]) // 智能添加
 
     // 渲染牙位标签
     const toothLabel = LabelRenderer.createLabel(`${between[0]}-${between[1]}`, {
@@ -166,29 +165,32 @@ export class ToothGapAnalysisStrategy extends BaseAnalysisStrategy {
       backgroundColor: '#00000099',
       fontColor: '#ffffff',
     })
-    this.group.add(toothLabel)
+    toothLabel.name = `tooth_label_${between[0]}_${between[1]}`
+    this.addLineToMesh(toothLabel, between[0], between[1]) // 智能添加
   }
 
   /**
-   * 计算多个点的中心
+   * 创建虚线（不应用缩放）
    */
-  private calculatePointsCenter(points: number[][]): THREE.Vector3 {
-    const scale = 1.5
-    const sum = points.reduce(
-      (acc, p) => {
-        acc.x += p[0] || 0
-        acc.y += p[1] || 0
-        acc.z += p[2] || 0
-        return acc
-      },
-      { x: 0, y: 0, z: 0 },
-    )
-
-    return new THREE.Vector3(
-      (sum.x / points.length) * scale,
-      (sum.y / points.length) * scale,
-      (sum.z / points.length) * scale,
-    )
+  private createDashedLineUnscaled(
+    start: THREE.Vector3,
+    end: THREE.Vector3,
+    color: number,
+    lineWidth: number = 2,
+  ): THREE.Line {
+    const geometry = new THREE.BufferGeometry().setFromPoints([start, end])
+    const material = new THREE.LineDashedMaterial({
+      color,
+      linewidth: lineWidth,
+      dashSize: 0.5,
+      gapSize: 0.3,
+      depthTest: false,
+      depthWrite: false,
+      transparent: true,
+    })
+    const line = new THREE.Line(geometry, material)
+    line.computeLineDistances() // 虚线需要计算距离
+    return line
   }
 
   /**

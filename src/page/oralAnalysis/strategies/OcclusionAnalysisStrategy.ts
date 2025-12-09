@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { BaseAnalysisStrategy } from './base/BaseAnalysisStrategy'
 import type { AnalysisData, MeasurementGroup, RenderType } from '../types'
-import { LineRenderer, LabelRenderer } from '../renderers'
+import { LabelRenderer } from '../renderers'
 
 /**
  * 咬合关系分析策略
@@ -239,9 +239,9 @@ export class OcclusionAnalysisStrategy extends BaseAnalysisStrategy {
       const toothPoints = teethPoints.filter((p) => p.fdi === fdi)
       if (toothPoints.length === 0) return
 
-      const center = this.calculatePointsCenter(toothPoints.map((p) => p.point))
+      const center = this.calculatePointsCenterUnscaled(toothPoints.map((p) => p.point))
 
-      // 创建标记球体
+      // 创建标记球体（使用 unscaled 位置）
       const geometry = new THREE.SphereGeometry(1.2, 32, 32)
       const material = new THREE.MeshPhongMaterial({
         color,
@@ -253,7 +253,7 @@ export class OcclusionAnalysisStrategy extends BaseAnalysisStrategy {
       const sphere = new THREE.Mesh(geometry, material)
       sphere.position.copy(center)
       sphere.name = `occlusion_${fdi}`
-      this.group.add(sphere)
+      this.addToMesh(sphere, fdi) // 添加到对应的 mesh
 
       // 添加牙位标签
       const toothLabel = LabelRenderer.createLabel(fdi.toString(), {
@@ -262,64 +262,77 @@ export class OcclusionAnalysisStrategy extends BaseAnalysisStrategy {
         backgroundColor: '#00000099',
         fontColor: '#ffffff',
       })
-      this.group.add(toothLabel)
+      toothLabel.name = `tooth_label_${fdi}`
+      this.addToMesh(toothLabel, fdi) // 添加到对应的 mesh
     })
 
     // 如果有多颗牙齿，连接它们
     if (teeth.length > 1) {
-      const centers = teeth
+      const centersWithFdi = teeth
         .map((fdi) => {
           const toothPoints = teethPoints.filter((p) => p.fdi === fdi)
           if (toothPoints.length === 0) return null
-          return this.calculatePointsCenter(toothPoints.map((p) => p.point))
+          return {
+            fdi,
+            center: this.calculatePointsCenterUnscaled(toothPoints.map((p) => p.point)),
+          }
         })
-        .filter((c): c is THREE.Vector3 => c !== null)
+        .filter((c): c is { fdi: number; center: THREE.Vector3 } => c !== null)
 
-      for (let i = 0; i < centers.length - 1; i++) {
-        const line = LineRenderer.createDashedLine(centers[i], centers[i + 1], {
-          color,
-          lineWidth: 2,
-          dashSize: 0.5,
-          gapSize: 0.3,
-        })
-        this.group.add(line)
+      for (let i = 0; i < centersWithFdi.length - 1; i++) {
+        const start = centersWithFdi[i]
+        const end = centersWithFdi[i + 1]
+
+        if (!start || !end) continue // 安全检查
+
+        // 创建虚线（使用 unscaled 坐标）
+        const line = this.createDashedLineUnscaled(start.center, end.center, color, 2)
+        line.name = `occlusion_line_${start.fdi}_${end.fdi}`
+        this.addLineToMesh(line, start.fdi, end.fdi) // 智能添加
       }
     }
 
     // 添加分类标签
-    const firstTooth = teethPoints.filter((p) => p.fdi === teeth[0])
+    if (teeth.length === 0) return // 安全检查
+    const firstToothFdi = teeth[0]
+    if (firstToothFdi === undefined) return // 安全检查
+
+    const firstTooth = teethPoints.filter((p) => p.fdi === firstToothFdi)
     if (firstTooth.length > 0) {
-      const center = this.calculatePointsCenter(firstTooth.map((p) => p.point))
+      const center = this.calculatePointsCenterUnscaled(firstTooth.map((p) => p.point))
       const classLabel = LabelRenderer.createLabel(`${type}: ${classification}`, {
         position: center.clone().add(new THREE.Vector3(xOffset, 5, 0)),
         fontSize: 12,
         backgroundColor: `#${color.toString(16).padStart(6, '0')}`,
         fontColor: '#ffffff',
       })
-      this.group.add(classLabel)
+      classLabel.name = `class_label_${firstToothFdi}`
+      this.addToMesh(classLabel, firstToothFdi) // 添加到第一颗牙的 mesh
     }
   }
 
   /**
-   * 计算多个点的中心
+   * 创建虚线（不应用缩放）
    */
-  private calculatePointsCenter(points: number[][]): THREE.Vector3 {
-    const scale = 1.5
-    const sum = points.reduce(
-      (acc, p) => {
-        acc.x += p[0] || 0
-        acc.y += p[1] || 0
-        acc.z += p[2] || 0
-        return acc
-      },
-      { x: 0, y: 0, z: 0 },
-    )
-
-    return new THREE.Vector3(
-      (sum.x / points.length) * scale,
-      (sum.y / points.length) * scale,
-      (sum.z / points.length) * scale,
-    )
+  private createDashedLineUnscaled(
+    start: THREE.Vector3,
+    end: THREE.Vector3,
+    color: number,
+    lineWidth: number = 2,
+  ): THREE.Line {
+    const geometry = new THREE.BufferGeometry().setFromPoints([start, end])
+    const material = new THREE.LineDashedMaterial({
+      color,
+      linewidth: lineWidth,
+      dashSize: 0.5,
+      gapSize: 0.3,
+      depthTest: false,
+      depthWrite: false,
+      transparent: true,
+    })
+    const line = new THREE.Line(geometry, material)
+    line.computeLineDistances() // 虚线需要计算距离
+    return line
   }
 
   /**
@@ -350,4 +363,3 @@ export class OcclusionAnalysisStrategy extends BaseAnalysisStrategy {
     return '需要关注'
   }
 }
-

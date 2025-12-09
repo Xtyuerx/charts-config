@@ -140,7 +140,9 @@ onMounted(async () => {
     initAnalysis(context)
 
     // 5. 加载诊断数据
+    console.log('📥 开始加载诊断数据...')
     await loadDiagnosisData('/points/stl_all_demo.json')
+    console.log('✅ 诊断数据加载完成')
 
     // 6. 从模型中提取的中心点生成牙号数据
     if (modelResult) {

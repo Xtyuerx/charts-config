@@ -1,12 +1,7 @@
 import * as THREE from 'three'
 import { BaseAnalysisStrategy } from './base/BaseAnalysisStrategy'
 import type { AnalysisData, MeasurementGroup, RenderType } from '../types'
-import { LineRenderer, LabelRenderer, SliceRenderer } from '../renderers'
-import {
-  calculateToothCenters,
-  createMiddleArchWire,
-  type ArchWireResult,
-} from '../utils/ArchWireUtils'
+import { LabelRenderer } from '../renderers'
 
 /**
  * 中线偏差分析策略
@@ -20,7 +15,6 @@ export class MidlineAnalysisStrategy extends BaseAnalysisStrategy {
   readonly renderType: RenderType = 'POINT_SLICE'
 
   // 牙弓线相关
-  private archWire: ArchWireResult | null = null
   private controlPoint1: THREE.Mesh | null = null
   private controlPoint2: THREE.Mesh | null = null
   private plane1: THREE.Mesh | null = null
@@ -84,7 +78,7 @@ export class MidlineAnalysisStrategy extends BaseAnalysisStrategy {
     if (!teeth_points || teeth_points.length === 0) return
 
     // 1. 创建牙弓线
-    this.createArchWire(teeth_points)
+    this.createArchWire()
 
     // 2. 创建两个可拖拽控制点
     this.createDraggableControlPoints()
@@ -92,16 +86,13 @@ export class MidlineAnalysisStrategy extends BaseAnalysisStrategy {
     // 3. 创建垂直于牙弓线的两个面
     this.createVerticalPlanes()
 
-    // 4. 渲染面部中线参考面
-    this.renderFacialMidline()
-
-    // 5. 渲染上颌中线
+    // 4. 渲染上颌中线
     this.renderJawMidline(teeth_points, measurements?.upper as Record<string, unknown>, true)
 
-    // 6. 渲染下颌中线
+    // 5. 渲染下颌中线
     this.renderJawMidline(teeth_points, measurements?.lower as Record<string, unknown>, false)
 
-    // 7. 渲染偏差指示
+    // 6. 渲染偏差指示
     this.renderDeviationIndicators(measurements)
   }
 
@@ -184,24 +175,6 @@ export class MidlineAnalysisStrategy extends BaseAnalysisStrategy {
     ]
   }
 
-  // ==================== 私有辅助方法 ====================
-
-  /**
-   * 创建牙弓线
-   */
-  private createArchWire(teethPoints: AnalysisData['teeth_points']): void {
-    // 计算牙齿中心点
-    const { upper, lower } = calculateToothCenters(teethPoints, false)
-
-    // 创建中间牙弓线
-    this.archWire = createMiddleArchWire(upper, lower)
-
-    if (!this.archWire) return
-
-    // 添加到场景
-    this.group.add(this.archWire.group)
-  }
-
   /**
    * 创建两个可拖拽控制点
    */
@@ -268,16 +241,9 @@ export class MidlineAnalysisStrategy extends BaseAnalysisStrategy {
 
   /**
    * 创建单个垂直面
+   * 平面始终保持垂直方向（不随曲线旋转），只跟随控制点平移
    */
   private createVerticalPlane(controlPoint: THREE.Mesh, id: number): THREE.Mesh {
-    const t = controlPoint.userData.t as number
-    const curve = this.archWire!.curve
-
-    // 获取曲线在该点的切线方向
-    const tangent = curve.getTangentAt(t).normalize()
-
-    // 创建一个垂直于切线的平面
-    // 平面法线 = 切线方向
     const planeWidth = 30
     const planeHeight = 50
 
@@ -299,19 +265,11 @@ export class MidlineAnalysisStrategy extends BaseAnalysisStrategy {
     // 设置平面位置
     plane.position.copy(controlPoint.position)
 
-    // 计算平面的旋转：平面法线应该与切线方向一致
-    const normal = tangent.clone()
-    const up = new THREE.Vector3(0, 1, 0)
-
-    // 使用四元数设置旋转
-    const quaternion = new THREE.Quaternion()
-    const targetUp = new THREE.Vector3().crossVectors(normal, up).normalize()
-    const finalUp = new THREE.Vector3().crossVectors(targetUp, normal).normalize()
-
-    const rotationMatrix = new THREE.Matrix4()
-    rotationMatrix.makeBasis(targetUp, finalUp, normal)
-    quaternion.setFromRotationMatrix(rotationMatrix)
-    plane.quaternion.copy(quaternion)
+    // 平面保持垂直方向（不旋转）
+    // 默认情况下，PlaneGeometry 的法线沿着 Z 轴
+    // 我们需要让它垂直于 XZ 平面（即沿着 Y 轴方向竖立）
+    // 绕 X 轴旋转 90 度
+    plane.rotation.x = Math.PI / 2
 
     plane.userData.controlPointId = id
     plane.name = `midline_vertical_plane_${id}`
@@ -322,8 +280,11 @@ export class MidlineAnalysisStrategy extends BaseAnalysisStrategy {
   /**
    * 更新垂直面的位置和方向
    * 当控制点被拖拽时调用
+   * 平面只做平移，不旋转（始终保持垂直方向）
+   * @param controlPointId 控制点ID
+   * @param newPosition 拖拽后的新位置（可选，如果不提供则使用控制点当前位置）
    */
-  public updatePlane(controlPointId: number): void {
+  public updatePlane(controlPointId: number, newPosition?: THREE.Vector3): void {
     if (!this.archWire) return
 
     const controlPoint = controlPointId === 1 ? this.controlPoint1 : this.controlPoint2
@@ -331,52 +292,70 @@ export class MidlineAnalysisStrategy extends BaseAnalysisStrategy {
 
     if (!controlPoint || !plane) return
 
-    const t = controlPoint.userData.t as number
-    const curve = this.archWire.curve
+    // 如果提供了新位置，先约束到曲线上
+    if (newPosition) {
+      const constrainedData = this.constrainPointToCurve(newPosition)
+      controlPoint.position.copy(constrainedData.position)
+      controlPoint.userData.t = constrainedData.t
+    }
 
-    // 获取曲线在该点的切线方向
-    const tangent = curve.getTangentAt(t).normalize()
-
-    // 更新平面位置
+    // 只更新平面位置（不更新旋转，保持垂直方向）
     plane.position.copy(controlPoint.position)
 
-    // 更新平面旋转
-    const normal = tangent.clone()
-    const up = new THREE.Vector3(0, 1, 0)
-
-    const quaternion = new THREE.Quaternion()
-    const targetUp = new THREE.Vector3().crossVectors(normal, up).normalize()
-    const finalUp = new THREE.Vector3().crossVectors(targetUp, normal).normalize()
-
-    const rotationMatrix = new THREE.Matrix4()
-    rotationMatrix.makeBasis(targetUp, finalUp, normal)
-    quaternion.setFromRotationMatrix(rotationMatrix)
-    plane.quaternion.copy(quaternion)
+    const t = controlPoint.userData.t as number
+    console.log(`🔄 更新控制点${controlPointId} - t: ${t.toFixed(3)} (平面保持垂直)`)
   }
 
   /**
-   * 渲染面部中线参考面
+   * 将点约束到曲线上
+   * 找到曲线上距离给定点最近的点
+   * @param point 要约束的点
+   * @returns 曲线上最近的点和对应的 t 值
    */
-  private renderFacialMidline(): void {
-    // TODO: 创建半透明的中线参考面（垂直于X轴）
-    const midlinePlane = SliceRenderer.createMidlinePlane([0, 0, 0], [100, 100, 0], {
-      width: 100,
-      height: 100,
-      color: 0x2196f3,
-      opacity: 0.1,
-      showBorder: true,
-    })
+  private constrainPointToCurve(point: THREE.Vector3): { position: THREE.Vector3; t: number } {
+    if (!this.archWire) {
+      return { position: point.clone(), t: 0.5 }
+    }
 
-    this.group.add(midlinePlane)
+    const curve = this.archWire.curve
+    let minDistance = Infinity
+    let closestT = 0.5
+    let closestPoint = point.clone()
 
-    // 添加面部中线标识
-    const facialMidlineLabel = LabelRenderer.createLabel('面部中线', {
-      position: new THREE.Vector3(0, 45, 0),
-      fontSize: 13,
-      backgroundColor: '#2196f3',
-      fontColor: '#ffffff',
-    })
-    this.group.add(facialMidlineLabel)
+    // 在曲线上采样，找到最近的点
+    // 采样数量越多，精度越高，但计算量也越大
+    const samples = 100
+    for (let i = 0; i <= samples; i++) {
+      const t = i / samples
+      const curvePoint = curve.getPointAt(t)
+      const distance = point.distanceTo(curvePoint)
+
+      if (distance < minDistance) {
+        minDistance = distance
+        closestT = t
+        closestPoint = curvePoint
+      }
+    }
+
+    // 在找到的最近点附近进行更精细的搜索
+    const refineRange = 1 / samples
+    const refineSteps = 20
+    for (let i = 0; i <= refineSteps; i++) {
+      const t = Math.max(
+        0,
+        Math.min(1, closestT - refineRange + (i / refineSteps) * refineRange * 2),
+      )
+      const curvePoint = curve.getPointAt(t)
+      const distance = point.distanceTo(curvePoint)
+
+      if (distance < minDistance) {
+        minDistance = distance
+        closestT = t
+        closestPoint = curvePoint
+      }
+    }
+
+    return { position: closestPoint, t: closestT }
   }
 
   /**
@@ -400,58 +379,73 @@ export class MidlineAnalysisStrategy extends BaseAnalysisStrategy {
 
     if (tooth1Points.length === 0 || tooth2Points.length === 0) return
 
-    // 计算两颗中切牙的中心点
-    const center1 = this.calculatePointsCenter(tooth1Points.map((p) => p.point))
-    const center2 = this.calculatePointsCenter(tooth2Points.map((p) => p.point))
+    // 计算两颗中切牙的中心点（使用 unscaled）
+    const center1 = this.calculatePointsCenterUnscaled(tooth1Points.map((p) => p.point))
+    const center2 = this.calculatePointsCenterUnscaled(tooth2Points.map((p) => p.point))
 
-    // 计算中点（中线位置）
-    const midPoint = new THREE.Vector3().addVectors(center1, center2).multiplyScalar(0.5)
+    // 计算中点（中线位置）- unscaled 方式
+    const midPoint = this.getMidPointUnscaled(center1.toArray(), center2.toArray())
 
     // 根据偏差选择颜色
-    const color = this.getDeviationColor(Math.abs(midlinePosition))
+    const colorNum = this.getDeviationColor(Math.abs(midlinePosition))
+    const colorStr = this.getDeviationColorString(Math.abs(midlinePosition))
 
-    // 渲染中线（垂直线）
+    // 渲染中线（垂直线）- 使用 unscaled
     const lineStart = midPoint.clone().add(new THREE.Vector3(0, -10, 0))
     const lineEnd = midPoint.clone().add(new THREE.Vector3(0, 10, 0))
+    const midline = this.createLineUnscaled(lineStart, lineEnd, colorNum, 3)
+    midline.name = `${isUpper ? 'upper' : 'lower'}_midline`
 
-    const midline = LineRenderer.createLine(lineStart, lineEnd, {
-      color,
-      lineWidth: 3,
-    })
-    this.group.add(midline)
+    const firstFdi = midlinePoints[0]
+    if (firstFdi !== undefined) {
+      this.addToMesh(midline, isUpper ? firstFdi : (midlinePoints[1] ?? firstFdi)) // 添加到对应 mesh
+    }
 
-    // 渲染中点标记（使用简单的球体）
-    const sphereGeo = new THREE.SphereGeometry(1.2, 16, 16)
-    const sphereMat = new THREE.MeshBasicMaterial({ color })
-    const marker = new THREE.Mesh(sphereGeo, sphereMat)
-    marker.position.copy(midPoint)
-    this.group.add(marker)
+    // 渲染中点标记 - 使用 unscaled
+    const marker = this.createSphereMarker(midPoint, colorNum, 1.2)
+    marker.name = `${isUpper ? 'upper' : 'lower'}_midline_marker`
+
+    if (firstFdi !== undefined) {
+      this.addToMesh(marker, isUpper ? firstFdi : (midlinePoints[1] ?? firstFdi)) // 添加到对应 mesh
+    }
 
     // 渲染中线标签
     const jawType = isUpper ? '上颌' : '下颌'
     const midlineLabel = LabelRenderer.createLabel(`${jawType}中线`, {
       position: midPoint.clone().add(new THREE.Vector3(0, isUpper ? 12 : -12, 0)),
       fontSize: 11,
-      backgroundColor: `#${color.toString(16).padStart(6, '0')}`,
+      backgroundColor: colorStr,
       fontColor: '#ffffff',
     })
-    this.group.add(midlineLabel)
+    midlineLabel.name = `${isUpper ? 'upper' : 'lower'}_midline_label`
 
-    // 如果有明显偏差，渲染偏差指示线
+    if (firstFdi !== undefined) {
+      this.addToMesh(midlineLabel, isUpper ? firstFdi : (midlinePoints[1] ?? firstFdi)) // 添加到对应 mesh
+    }
+
+    // 如果有明显偏差，渲染偏差指示线（跨颌元素，添加到 this.group）
     if (Math.abs(midlinePosition) > 0.5) {
       const facialMidPoint = new THREE.Vector3(0, midPoint.y, midPoint.z)
-      const deviationLine = LineRenderer.createMeasurementLine(facialMidPoint, midPoint, {
+
+      // 创建偏差线（使用 LineCurve3）
+      const deviationCurve = new THREE.LineCurve3(facialMidPoint, midPoint)
+      const deviationGeometry = new THREE.BufferGeometry().setFromPoints(
+        deviationCurve.getPoints(2),
+      )
+      const deviationMaterial = new THREE.LineBasicMaterial({
         color: 0xff0000,
-        lineWidth: 2,
-        showArrows: true,
+        linewidth: 2,
+        depthTest: false,
+        depthWrite: false,
+        transparent: true,
       })
-      this.group.add(deviationLine)
+      const deviationLine = new THREE.Line(deviationGeometry, deviationMaterial)
+      deviationLine.name = `${isUpper ? 'upper' : 'lower'}_deviation_line`
+      deviationLine.renderOrder = 999
+      this.group.add(deviationLine) // 跨颌元素，添加到主 group
 
       // 添加偏差数值标签
-      const deviationMid = new THREE.Vector3()
-        .addVectors(facialMidPoint, midPoint)
-        .multiplyScalar(0.5)
-
+      const deviationMid = this.getMidPointUnscaled(facialMidPoint.toArray(), midPoint.toArray())
       const deviationValueLabel = LabelRenderer.createLabel(
         `${Math.abs(midlinePosition).toFixed(2)}mm`,
         {
@@ -461,7 +455,8 @@ export class MidlineAnalysisStrategy extends BaseAnalysisStrategy {
           fontColor: '#ffffff',
         },
       )
-      this.group.add(deviationValueLabel)
+      deviationValueLabel.name = `${isUpper ? 'upper' : 'lower'}_deviation_label`
+      this.group.add(deviationValueLabel) // 跨颌元素，添加到主 group
     }
   }
 
@@ -479,28 +474,6 @@ export class MidlineAnalysisStrategy extends BaseAnalysisStrategy {
       // 可以添加额外的视觉指示器
       // 例如：在参考面上标注偏差方向
     }
-  }
-
-  /**
-   * 计算多个点的中心
-   */
-  private calculatePointsCenter(points: number[][]): THREE.Vector3 {
-    const scale = 1.5
-    const sum = points.reduce(
-      (acc, p) => {
-        acc.x += p[0] || 0
-        acc.y += p[1] || 0
-        acc.z += p[2] || 0
-        return acc
-      },
-      { x: 0, y: 0, z: 0 },
-    )
-
-    return new THREE.Vector3(
-      (sum.x / points.length) * scale,
-      (sum.y / points.length) * scale,
-      (sum.z / points.length) * scale,
-    )
   }
 
   /**
