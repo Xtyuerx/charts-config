@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { BaseAnalysisStrategy } from './base/BaseAnalysisStrategy'
-import type { AnalysisData, MeasurementGroup, RenderType } from '../types'
+import type { AnalysisData, MeasurementGroup, RenderType, ToothPoint } from '../types'
 import { LabelRenderer } from '../renderers'
 
 /**
@@ -12,6 +12,38 @@ export class CrossbiteAnalysisStrategy extends BaseAnalysisStrategy {
   readonly name = '锁𬌗与反𬌗分析'
   readonly taskName = 'crossbite'
   readonly renderType: RenderType = 'POINT_ONLY'
+
+  /**
+   * 重写点位渲染 - 将点位添加到对应的 mesh，跟随上下颌显示/隐藏
+   */
+  protected renderPoints(teethPoints: ToothPoint[]): void {
+    teethPoints.forEach((p) => {
+      const color = this.getPointColor(p.type)
+
+      // 解析 point（可能是字符串或数组）
+      let pointCoords: number[]
+      if (typeof p.point === 'string') {
+        pointCoords = JSON.parse(p.point) as number[]
+      } else {
+        pointCoords = p.point
+      }
+
+      // 创建球体作为点标记
+      const geometry = new THREE.SphereGeometry(0.5, 16, 16)
+      const material = new THREE.MeshPhongMaterial({
+        color,
+        emissiveIntensity: 0.3,
+      })
+      const sphere = new THREE.Mesh(geometry, material)
+
+      // 不应用缩放，因为 mesh 本身已经有缩放了
+      sphere.position.set(pointCoords[0] ?? 0, pointCoords[1] ?? 0, pointCoords[2] ?? 0)
+      sphere.name = `${this.taskName}_point_${p.fdi}_${p.type}`
+
+      // 添加到对应的 mesh（上颌或下颌）
+      this.addToMesh(sphere, p.fdi)
+    })
+  }
 
   /**
    * 渲染特定元素
@@ -30,7 +62,15 @@ export class CrossbiteAnalysisStrategy extends BaseAnalysisStrategy {
     crossbiteTeeth.forEach((fdi) => {
       const toothPoints = teeth_points.filter((p) => p.fdi === fdi)
       if (toothPoints.length > 0) {
-        const center = this.calculatePointsCenterUnscaled(toothPoints.map((p) => p.point))
+        // 解析点位坐标
+        const parsedPoints = toothPoints.map((p) => {
+          if (typeof p.point === 'string') {
+            return JSON.parse(p.point) as number[]
+          }
+          return p.point
+        })
+
+        const center = this.calculatePointsCenterUnscaled(parsedPoints)
 
         // 创建黄色警告标记（不缩放）
         const geometry = new THREE.SphereGeometry(1.5, 32, 32)
@@ -43,7 +83,7 @@ export class CrossbiteAnalysisStrategy extends BaseAnalysisStrategy {
         })
         const sphere = new THREE.Mesh(geometry, material)
         sphere.position.copy(center)
-        sphere.name = `crossbite_${fdi}`
+        sphere.name = `${this.taskName}_crossbite_${fdi}`
 
         // 使用方案2：添加到 mesh
         this.addToMesh(sphere, fdi)
@@ -55,7 +95,7 @@ export class CrossbiteAnalysisStrategy extends BaseAnalysisStrategy {
           backgroundColor: '#ffa500',
           fontColor: '#ffffff',
         })
-        label.name = `label_${fdi}`
+        label.name = `${this.taskName}_label_${fdi}`
 
         // 使用方案2：添加到 mesh
         this.addToMesh(label, fdi)
@@ -66,7 +106,15 @@ export class CrossbiteAnalysisStrategy extends BaseAnalysisStrategy {
     reverseBiteTeeth.forEach((fdi) => {
       const toothPoints = teeth_points.filter((p) => p.fdi === fdi)
       if (toothPoints.length > 0) {
-        const center = this.calculatePointsCenterUnscaled(toothPoints.map((p) => p.point))
+        // 解析点位坐标
+        const parsedPoints = toothPoints.map((p) => {
+          if (typeof p.point === 'string') {
+            return JSON.parse(p.point) as number[]
+          }
+          return p.point
+        })
+
+        const center = this.calculatePointsCenterUnscaled(parsedPoints)
 
         // 创建红色警告标记（不缩放）
         const geometry = new THREE.SphereGeometry(1.5, 32, 32)
@@ -79,7 +127,7 @@ export class CrossbiteAnalysisStrategy extends BaseAnalysisStrategy {
         })
         const sphere = new THREE.Mesh(geometry, material)
         sphere.position.copy(center)
-        sphere.name = `reverse_bite_${fdi}`
+        sphere.name = `${this.taskName}_reverse_bite_${fdi}`
 
         // 使用方案2：添加到 mesh
         this.addToMesh(sphere, fdi)
@@ -91,7 +139,7 @@ export class CrossbiteAnalysisStrategy extends BaseAnalysisStrategy {
           backgroundColor: '#ff0000',
           fontColor: '#ffffff',
         })
-        label.name = `label_${fdi}`
+        label.name = `${this.taskName}_label_${fdi}`
 
         // 使用方案2：添加到 mesh
         this.addToMesh(label, fdi)

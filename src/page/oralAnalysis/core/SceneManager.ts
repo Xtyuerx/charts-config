@@ -158,6 +158,15 @@ export class SceneManager {
       }
     }
 
+    // 处理拥挤度分析的点位拖拽
+    if (object.userData.isCrowdingPoint) {
+      const strategy = object.userData.strategy
+
+      if (strategy && typeof strategy.updateOnDrag === 'function') {
+        strategy.updateOnDrag(object)
+      }
+    }
+
     // 其他类型的拖拽控制点可以在这里添加
   }
 

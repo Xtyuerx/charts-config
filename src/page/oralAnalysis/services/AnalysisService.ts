@@ -2,6 +2,7 @@ import type { RenderContext, AnalysisData, DiagnosisData } from '../types'
 import type { IAnalysisStrategy } from '../strategies/base/IAnalysisStrategy'
 import { AnalysisStrategyFactory } from '../factories/AnalysisStrategyFactory'
 import { MidlineAnalysisStrategy } from '../strategies/MidlineAnalysisStrategy'
+import { CrowdingAnalysisStrategy } from '../strategies/CrowdingAnalysisStrategy'
 import { SceneManager } from '../core/SceneManager'
 import * as THREE from 'three'
 
@@ -180,6 +181,11 @@ export class AnalysisService {
       this.registerMidlineDraggableObjects(strategy)
     }
 
+    // 如果是拥挤度分析策略，注册可拖拽对象
+    if (strategy instanceof CrowdingAnalysisStrategy) {
+      this.registerCrowdingDraggableObjects(strategy)
+    }
+
     return true
   }
 
@@ -191,6 +197,28 @@ export class AnalysisService {
 
     if (draggableObjects.length > 0) {
       console.log(`🎯 注册${draggableObjects.length}个可拖拽控制点`)
+
+      // 获取SceneManager实例并添加可拖拽对象
+      const sceneManager = SceneManager.getInstance()
+
+      draggableObjects.forEach((obj) => {
+        sceneManager.addDraggableObject(obj)
+        obj.userData.draggable = true
+      })
+
+      // 初始化拖拽控制（如果还没有初始化）
+      sceneManager.setupDragControls()
+    }
+  }
+
+  /**
+   * 注册拥挤度分析的可拖拽对象
+   */
+  private registerCrowdingDraggableObjects(strategy: CrowdingAnalysisStrategy): void {
+    const draggableObjects = strategy.getDraggableObjects()
+
+    if (draggableObjects.length > 0) {
+      console.log(`🎯 注册${draggableObjects.length}个可拖拽点位`)
 
       // 获取SceneManager实例并添加可拖拽对象
       const sceneManager = SceneManager.getInstance()

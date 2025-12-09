@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { BaseAnalysisStrategy } from './base/BaseAnalysisStrategy'
-import type { AnalysisData, MeasurementGroup, RenderType } from '../types'
+import type { AnalysisData, MeasurementGroup, RenderType, ToothPoint } from '../types'
 import { LabelRenderer } from '../renderers'
 
 /**
@@ -107,6 +107,42 @@ export class UpperCurveAnalysisStrategy extends BaseAnalysisStrategy {
   // ==================== 私有辅助方法 ====================
 
   /**
+   * 重写点位渲染 - 将点位添加到上颌 mesh，跟随上颌显示/隐藏
+   */
+  protected renderPoints(teethPoints: ToothPoint[]): void {
+    // 只渲染上颌点位
+    const upperPoints = teethPoints.filter((p) => this.isUpper(p.fdi))
+
+    upperPoints.forEach((p) => {
+      const color = this.getPointColor(p.type)
+
+      // 解析 point（可能是字符串或数组）
+      let pointCoords: number[]
+      if (typeof p.point === 'string') {
+        pointCoords = JSON.parse(p.point) as number[]
+      } else {
+        pointCoords = p.point
+      }
+
+      // 创建球体作为点标记
+      const geometry = new THREE.SphereGeometry(0.5, 16, 16)
+      const material = new THREE.MeshPhongMaterial({
+        color,
+        emissive: color,
+        emissiveIntensity: 0.3,
+      })
+      const sphere = new THREE.Mesh(geometry, material)
+
+      // 不应用缩放，因为 mesh 本身已经有缩放了
+      sphere.position.set(pointCoords[0] ?? 0, pointCoords[1] ?? 0, pointCoords[2] ?? 0)
+      sphere.name = `${this.taskName}_point_${p.fdi}_${p.type}`
+
+      // 添加到上颌 mesh
+      this.addToMesh(sphere, p.fdi)
+    })
+  }
+
+  /**
    * 渲染上颌补偿曲线
    * ⚠️ 只处理上颌牙齿数据
    */
@@ -179,7 +215,7 @@ export class UpperCurveAnalysisStrategy extends BaseAnalysisStrategy {
 
     const curveLine = new THREE.Mesh(tubeGeometry, curveMaterial)
     curveLine.renderOrder = 999 // 最后渲染，确保不被遮挡
-    curveLine.name = 'upper_curve'
+    curveLine.name = `${this.taskName}_upper_curve`
     this.group.add(curveLine) // 曲线添加到主 group（跨越多个牙齿）
     console.log('✅ UpperCurve - 曲线已添加到场景')
 
@@ -265,10 +301,10 @@ export class UpperCurveAnalysisStrategy extends BaseAnalysisStrategy {
     // 根据曲率选择颜色
     const color = this.getCurvatureColorNum(curvature)
 
-    console.log('🔵 UpperCurve (from teeth) - 曲线点数:', curvePoints.length)
+    console.log('🔵 UpperCurve (from teeth) - 曲线点数:', orderedPoints.length)
 
     // 创建平滑曲线
-    const curve = new THREE.CatmullRomCurve3(curvePoints)
+    const curve = new THREE.CatmullRomCurve3(orderedPoints)
     curve.closed = false
     curve.curveType = 'catmullrom'
     curve.tension = 0.5
@@ -293,9 +329,7 @@ export class UpperCurveAnalysisStrategy extends BaseAnalysisStrategy {
 
     const curveLine = new THREE.Mesh(tubeGeometry, curveMaterial)
     curveLine.renderOrder = 999 // 最后渲染，确保不被遮挡
-    curveLine.name = 'upper_curve_from_teeth'
-    this.group.add(curveLine) // 曲线添加到主 group（跨越多个牙齿）
-    console.log('✅ UpperCurve (from teeth) - 曲线已添加到场景')
+    curveLine.name = `${this.taskName}_upper_curve_from_teeth`
 
     // ⚠️ 添加到上颌模型，而不是group
     const upperMesh = this.context.upperMeshLabel
@@ -328,7 +362,7 @@ export class UpperCurveAnalysisStrategy extends BaseAnalysisStrategy {
       })
       const marker = new THREE.Mesh(geometry, material)
       marker.position.copy(point)
-      marker.name = `upper_curve_point_${fdi}`
+      marker.name = `${this.taskName}_point_${fdi}`
 
       // ⚠️ 添加到上颌模型
       if (upperMesh) {
@@ -344,6 +378,7 @@ export class UpperCurveAnalysisStrategy extends BaseAnalysisStrategy {
         backgroundColor: '#0000ff',
         fontColor: '#ffffff',
       })
+      label.name = `${this.taskName}_label_${fdi}`
 
       // ⚠️ 标签也添加到上颌模型
       if (upperMesh) {
@@ -382,7 +417,7 @@ export class UpperCurveAnalysisStrategy extends BaseAnalysisStrategy {
     })
     const midMarker = new THREE.Mesh(geometry, material)
     midMarker.position.copy(midPoint)
-    midMarker.name = 'curve_mid_marker'
+    midMarker.name = `${this.taskName}_curve_mid_marker`
 
     // ⚠️ 添加到上颌模型
     if (upperMesh) {
@@ -398,6 +433,7 @@ export class UpperCurveAnalysisStrategy extends BaseAnalysisStrategy {
       backgroundColor: '#2196f3',
       fontColor: '#ffffff',
     })
+    curvatureLabel.name = `${this.taskName}_curvature_label`
 
     // ⚠️ 标签也添加到上颌模型
     if (upperMesh) {

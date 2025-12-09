@@ -132,15 +132,15 @@ export class ToothGapAnalysisStrategy extends BaseAnalysisStrategy {
     // 渲染间隙线（虚线，使用 unscaled 坐标）
     const line = this.createDashedLineUnscaled(center1, center2, color, 2)
     line.name = `gap_line_${between[0]}_${between[1]}`
-    this.addLineToMesh(line, between[0], between[1]) // 智能添加
+    this.addLineToMesh(line, between[0] ?? 0, between[1] ?? 0) // 智能添加
 
     // 渲染端点标记（球体）
     const marker1 = this.createSphereMarker(center1, color, 0.8)
     const marker2 = this.createSphereMarker(center2, color, 0.8)
     marker1.name = `gap_marker_${between[0]}`
     marker2.name = `gap_marker_${between[1]}`
-    this.addToMesh(marker1, between[0])
-    this.addToMesh(marker2, between[1])
+    this.addToMesh(marker1, between[0] ?? 0)
+    this.addToMesh(marker2, between[1] ?? 0)
 
     // 渲染间隙大小标签
     const midPoint = this.getMidPointUnscaled(center1.toArray(), center2.toArray())
@@ -156,7 +156,7 @@ export class ToothGapAnalysisStrategy extends BaseAnalysisStrategy {
       },
     )
     gapLabel.name = `gap_label_${between[0]}_${between[1]}`
-    this.addLineToMesh(gapLabel, between[0], between[1]) // 智能添加
+    this.addLineToMesh(gapLabel, between[0] ?? 0, between[1] ?? 0) // 智能添加
 
     // 渲染牙位标签
     const toothLabel = LabelRenderer.createLabel(`${between[0]}-${between[1]}`, {
@@ -166,7 +166,7 @@ export class ToothGapAnalysisStrategy extends BaseAnalysisStrategy {
       fontColor: '#ffffff',
     })
     toothLabel.name = `tooth_label_${between[0]}_${between[1]}`
-    this.addLineToMesh(toothLabel, between[0], between[1]) // 智能添加
+    this.addLineToMesh(toothLabel, between[0] ?? 0, between[1] ?? 0) // 智能添加
   }
 
   /**

@@ -664,7 +664,6 @@ export abstract class BaseAnalysisStrategy implements IAnalysisStrategy {
 
     meshes.forEach((mesh) => {
       mesh.children.forEach((child) => {
-        console.log('child', child)
         // 根据 name 前缀识别是否为当前策略创建的对象
         if (child.name.startsWith(`${this.taskName}_`)) {
           child.visible = visible
@@ -1033,7 +1032,6 @@ export abstract class BaseAnalysisStrategy implements IAnalysisStrategy {
 
     meshes.forEach((mesh) => {
       mesh.children.forEach((child) => {
-        console.log('child', child)
         // 根据 name 前缀识别是否为当前策略创建的对象
         if (child.name.startsWith(`${this.taskName}_`)) {
           child.visible = visible
@@ -1402,7 +1400,6 @@ export abstract class BaseAnalysisStrategy implements IAnalysisStrategy {
 
     meshes.forEach((mesh) => {
       mesh.children.forEach((child) => {
-        console.log('child', child)
         // 根据 name 前缀识别是否为当前策略创建的对象
         if (child.name.startsWith(`${this.taskName}_`)) {
           child.visible = visible
@@ -1775,7 +1772,6 @@ export abstract class BaseAnalysisStrategy implements IAnalysisStrategy {
 
     meshes.forEach((mesh) => {
       mesh.children.forEach((child) => {
-        console.log('child', child)
         // 根据 name 前缀识别是否为当前策略创建的对象
         if (child.name.startsWith(`${this.taskName}_`)) {
           child.visible = visible
@@ -6650,7 +6646,6 @@ export abstract class BaseAnalysisStrategy implements IAnalysisStrategy {
 
     meshes.forEach((mesh) => {
       mesh.children.forEach((child) => {
-        console.log('child', child)
         // 根据 name 前缀识别是否为当前策略创建的对象
         if (child.name.startsWith(`${this.taskName}_`)) {
           child.visible = visible
@@ -11563,7 +11558,6 @@ export abstract class BaseAnalysisStrategy implements IAnalysisStrategy {
 
     meshes.forEach((mesh) => {
       mesh.children.forEach((child) => {
-        console.log('child', child)
         // 根据 name 前缀识别是否为当前策略创建的对象
         if (child.name.startsWith(`${this.taskName}_`)) {
           child.visible = visible
@@ -12012,7 +12006,6 @@ export abstract class BaseAnalysisStrategy implements IAnalysisStrategy {
 
     meshes.forEach((mesh) => {
       mesh.children.forEach((child) => {
-        console.log('child', child)
         // 根据 name 前缀识别是否为当前策略创建的对象
         if (child.name.startsWith(`${this.taskName}_`)) {
           child.visible = visible
@@ -12998,7 +12991,6 @@ export abstract class BaseAnalysisStrategy implements IAnalysisStrategy {
 
     meshes.forEach((mesh) => {
       mesh.children.forEach((child) => {
-        console.log('child', child)
         // 根据 name 前缀识别是否为当前策略创建的对象
         if (child.name.startsWith(`${this.taskName}_`)) {
           child.visible = visible
@@ -13941,7 +13933,6 @@ export abstract class BaseAnalysisStrategy implements IAnalysisStrategy {
 
     meshes.forEach((mesh) => {
       mesh.children.forEach((child) => {
-        console.log('child', child)
         // 根据 name 前缀识别是否为当前策略创建的对象
         if (child.name.startsWith(`${this.taskName}_`)) {
           child.visible = visible
@@ -14956,7 +14947,6 @@ export abstract class BaseAnalysisStrategy implements IAnalysisStrategy {
 
     meshes.forEach((mesh) => {
       mesh.children.forEach((child) => {
-        console.log('child', child)
         // 根据 name 前缀识别是否为当前策略创建的对象
         if (child.name.startsWith(`${this.taskName}_`)) {
           child.visible = visible
@@ -17804,7 +17794,6 @@ export abstract class BaseAnalysisStrategy implements IAnalysisStrategy {
 
     meshes.forEach((mesh) => {
       mesh.children.forEach((child) => {
-        console.log('child', child)
         // 根据 name 前缀识别是否为当前策略创建的对象
         if (child.name.startsWith(`${this.taskName}_`)) {
           child.visible = visible

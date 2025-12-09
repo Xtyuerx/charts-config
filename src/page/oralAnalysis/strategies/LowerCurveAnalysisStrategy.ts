@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { BaseAnalysisStrategy } from './base/BaseAnalysisStrategy'
-import type { AnalysisData, MeasurementGroup, RenderType } from '../types'
+import type { AnalysisData, MeasurementGroup, RenderType, ToothPoint } from '../types'
 import { LabelRenderer } from '../renderers'
 
 /**
@@ -107,6 +107,42 @@ export class LowerCurveAnalysisStrategy extends BaseAnalysisStrategy {
   // ==================== 私有辅助方法 ====================
 
   /**
+   * 重写点位渲染 - 将点位添加到下颌 mesh，跟随下颌显示/隐藏
+   */
+  protected renderPoints(teethPoints: ToothPoint[]): void {
+    // 只渲染下颌点位
+    const lowerPoints = teethPoints.filter((p) => this.isLower(p.fdi))
+
+    lowerPoints.forEach((p) => {
+      const color = this.getPointColor(p.type)
+
+      // 解析 point（可能是字符串或数组）
+      let pointCoords: number[]
+      if (typeof p.point === 'string') {
+        pointCoords = JSON.parse(p.point) as number[]
+      } else {
+        pointCoords = p.point
+      }
+
+      // 创建球体作为点标记
+      const geometry = new THREE.SphereGeometry(0.5, 16, 16)
+      const material = new THREE.MeshPhongMaterial({
+        color,
+        emissive: color,
+        emissiveIntensity: 0.3,
+      })
+      const sphere = new THREE.Mesh(geometry, material)
+
+      // 不应用缩放，因为 mesh 本身已经有缩放了
+      sphere.position.set(pointCoords[0] ?? 0, pointCoords[1] ?? 0, pointCoords[2] ?? 0)
+      sphere.name = `${this.taskName}_point_${p.fdi}_${p.type}`
+
+      // 添加到下颌 mesh
+      this.addToMesh(sphere, p.fdi)
+    })
+  }
+
+  /**
    * 渲染Spee曲线
    * ⚠️ 只处理下颌牙齿数据
    */
@@ -179,7 +215,7 @@ export class LowerCurveAnalysisStrategy extends BaseAnalysisStrategy {
 
     const curveLine = new THREE.Mesh(tubeGeometry, curveMaterial)
     curveLine.renderOrder = 999 // 最后渲染，确保不被遮挡
-    curveLine.name = 'spee_curve'
+    curveLine.name = `${this.taskName}_spee_curve`
 
     // 添加到下颌模型
     const lowerMesh = this.context.lowerMeshLabel
@@ -275,7 +311,7 @@ export class LowerCurveAnalysisStrategy extends BaseAnalysisStrategy {
       linewidth: 3,
     })
     const curveLine = new THREE.Line(curveGeometry, curveMaterial)
-    curveLine.name = 'spee_curve_line'
+    curveLine.name = `${this.taskName}_spee_curve_line`
 
     // ⚠️ 添加到下颌模型，而不是group
     const lowerMesh = this.context.lowerMeshLabel
@@ -372,7 +408,7 @@ export class LowerCurveAnalysisStrategy extends BaseAnalysisStrategy {
     })
 
     const planeMesh = new THREE.Mesh(planeGeometry, planeMaterial)
-    planeMesh.name = 'spee_full_lower_plane'
+    planeMesh.name = `${this.taskName}_spee_full_lower_plane`
 
     // 将平面添加到下颌模型mesh中，这样会跟随下颌一起显示/隐藏
     const lowerMesh = this.context.lowerMeshLabel
@@ -401,7 +437,7 @@ export class LowerCurveAnalysisStrategy extends BaseAnalysisStrategy {
       opacity: 0.6,
     })
     const edgeLines = new THREE.Line(edgeGeometry, edgeMaterial)
-    edgeLines.name = 'spee_plane_border'
+    edgeLines.name = `${this.taskName}_spee_plane_border`
 
     // 边框也添加到下颌mesh
     if (lowerMesh) {
@@ -448,7 +484,7 @@ export class LowerCurveAnalysisStrategy extends BaseAnalysisStrategy {
       })
       const marker = new THREE.Mesh(geometry, material)
       marker.position.copy(point)
-      marker.name = `spee_point_${fdi}`
+      marker.name = `${this.taskName}_spee_point_${fdi}`
 
       // ⚠️ 添加到下颌模型
       if (lowerMesh) {
@@ -464,6 +500,7 @@ export class LowerCurveAnalysisStrategy extends BaseAnalysisStrategy {
         backgroundColor: '#0000ff',
         fontColor: '#ffffff',
       })
+      label.name = `${this.taskName}_label_${fdi}`
 
       // ⚠️ 标签也添加到下颌模型
       if (lowerMesh) {
@@ -501,7 +538,7 @@ export class LowerCurveAnalysisStrategy extends BaseAnalysisStrategy {
     })
     const deepestMarker = new THREE.Mesh(geometry, material)
     deepestMarker.position.copy(deepestPoint)
-    deepestMarker.name = 'deepest_point'
+    deepestMarker.name = `${this.taskName}_deepest_point`
 
     // ⚠️ 添加到下颌模型
     if (lowerMesh) {
@@ -517,6 +554,7 @@ export class LowerCurveAnalysisStrategy extends BaseAnalysisStrategy {
       backgroundColor: '#ff0000',
       fontColor: '#ffffff',
     })
+    depthLabel.name = `${this.taskName}_depth_label`
 
     // ⚠️ 标签也添加到下颌模型
     if (lowerMesh) {
