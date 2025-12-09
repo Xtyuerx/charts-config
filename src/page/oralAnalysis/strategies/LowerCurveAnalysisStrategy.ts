@@ -125,19 +125,44 @@ export class LowerCurveAnalysisStrategy extends BaseAnalysisStrategy {
         ),
     )
 
+    console.log('🔵 LowerCurve - 曲线点数:', curvePoints.length)
+    if (curvePoints.length < 2) {
+      console.warn('⚠️ LowerCurve - 曲线点数不足，至少需要2个点')
+      return
+    }
+
     // 根据深度选择颜色
     const color = this.getCurveColorNum(curveDepth)
 
     // 使用CatmullRomCurve3创建平滑曲线
     const curve = new THREE.CatmullRomCurve3(curvePoints)
-    const curveGeometry = new THREE.BufferGeometry().setFromPoints(curve.getPoints(50))
-    const curveMaterial = new THREE.LineBasicMaterial({
+    curve.closed = false
+    curve.curveType = 'catmullrom'
+    curve.tension = 0.5
+
+    // 使用TubeGeometry创建有厚度的曲线（参考牙弓线样式）
+    const tubeGeometry = new THREE.TubeGeometry(
+      curve,
+      64, // tubularSegments
+      0.3, // radius - 曲线粗细
+      8, // radialSegments
+      false, // closed
+    )
+
+    const curveMaterial = new THREE.MeshStandardMaterial({
       color,
-      linewidth: 3,
+      roughness: 0.3,
+      metalness: 0.6,
+      depthTest: false, // 不进行深度测试，始终显示在前面
+      transparent: true,
+      opacity: 0.9,
     })
-    const curveLine = new THREE.Line(curveGeometry, curveMaterial)
+
+    const curveLine = new THREE.Mesh(tubeGeometry, curveMaterial)
+    curveLine.renderOrder = 999 // 最后渲染，确保不被遮挡
     curveLine.name = 'spee_curve'
     this.group.add(curveLine) // 曲线添加到主 group（跨越多个牙齿）
+    console.log('✅ LowerCurve - 曲线已添加到场景')
 
     // 渲染最深点
     this.renderDeepestPoint(curvePoints, curveDepth)
@@ -170,16 +195,37 @@ export class LowerCurveAnalysisStrategy extends BaseAnalysisStrategy {
     const curveDepth = (measurements.curve_depth_mm as number) || 0
     const color = this.getCurveColorNum(curveDepth)
 
+    console.log('🔵 LowerCurve (from teeth) - 曲线点数:', curvePoints.length)
+
     // 创建平滑曲线
     const curve = new THREE.CatmullRomCurve3(curvePoints)
-    const curveGeometry = new THREE.BufferGeometry().setFromPoints(curve.getPoints(50))
-    const curveMaterial = new THREE.LineBasicMaterial({
+    curve.closed = false
+    curve.curveType = 'catmullrom'
+    curve.tension = 0.5
+
+    // 使用TubeGeometry创建有厚度的曲线（参考牙弓线样式）
+    const tubeGeometry = new THREE.TubeGeometry(
+      curve,
+      64, // tubularSegments
+      0.3, // radius - 曲线粗细
+      8, // radialSegments
+      false, // closed
+    )
+
+    const curveMaterial = new THREE.MeshStandardMaterial({
       color,
-      linewidth: 3,
+      roughness: 0.3,
+      metalness: 0.6,
+      depthTest: false, // 不进行深度测试，始终显示在前面
+      transparent: true,
+      opacity: 0.9,
     })
-    const curveLine = new THREE.Line(curveGeometry, curveMaterial)
+
+    const curveLine = new THREE.Mesh(tubeGeometry, curveMaterial)
+    curveLine.renderOrder = 999 // 最后渲染，确保不被遮挡
     curveLine.name = 'spee_curve_from_teeth'
     this.group.add(curveLine) // 曲线添加到主 group（跨越多个牙齿）
+    console.log('✅ LowerCurve (from teeth) - 曲线已添加到场景')
 
     // 渲染最深点
     this.renderDeepestPoint(curvePoints, curveDepth)
