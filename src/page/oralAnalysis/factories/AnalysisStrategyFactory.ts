@@ -14,6 +14,7 @@ import { MidlineAnalysisStrategy } from '../strategies/MidlineAnalysisStrategy'
 import { OcclusionAnalysisStrategy } from '../strategies/OcclusionAnalysisStrategy'
 import { LowerCurveAnalysisStrategy } from '../strategies/LowerCurveAnalysisStrategy'
 import { UpperCurveAnalysisStrategy } from '../strategies/UpperCurveAnalysisStrategy'
+import { OverbiteAnalysisStrategy } from '../strategies/OverbiteAnalysisStrategy'
 
 /**
  * 分析策略工厂（单例模式）
@@ -58,6 +59,7 @@ export class AnalysisStrategyFactory {
       new LowerCurveAnalysisStrategy(), // 11. Spee曲线
       new UpperCurveAnalysisStrategy(), // 12. 上颌补偿曲线
       new OverjetAnalysisStrategy(), // 13. 覆盖度分析
+      new OverbiteAnalysisStrategy(), // 14. 深覆合分析
     ]
 
     strategies.forEach((strategy) => {
