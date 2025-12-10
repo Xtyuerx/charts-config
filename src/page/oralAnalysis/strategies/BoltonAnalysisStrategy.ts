@@ -21,7 +21,6 @@ export class BoltonAnalysisStrategy extends BaseAnalysisStrategy {
     const { teeth_points, measurements } = data
 
     if (!teeth_points || teeth_points.length === 0) return
-
     // 按牙齿分组
     const toothGroups = this.groupPointsByTooth(teeth_points)
 

@@ -15,10 +15,12 @@ export class CrossbiteAnalysisStrategy extends BaseAnalysisStrategy {
 
   /**
    * 重写点位渲染 - 将点位添加到对应的 mesh，跟随上下颌显示/隐藏
+   * 上颌使用红色，下颌使用绿色
    */
   protected renderPoints(teethPoints: ToothPoint[]): void {
     teethPoints.forEach((p) => {
-      const color = this.getPointColor(p.type)
+      // 根据上下颌选择颜色：上颌用红色，下颌用绿色
+      const color = this.isUpper(p.fdi) ? 0xff0000 : 0x00ff00
 
       // 解析 point（可能是字符串或数组）
       let pointCoords: number[]
@@ -29,20 +31,25 @@ export class CrossbiteAnalysisStrategy extends BaseAnalysisStrategy {
       }
 
       // 创建球体作为点标记
-      const geometry = new THREE.SphereGeometry(0.5, 16, 16)
+      const geometry = new THREE.SphereGeometry(0.6, 16, 16)
       const material = new THREE.MeshPhongMaterial({
         color,
+        emissive: color,
         emissiveIntensity: 0.3,
+        transparent: true,
+        opacity: 0.8,
       })
       const sphere = new THREE.Mesh(geometry, material)
 
       // 不应用缩放，因为 mesh 本身已经有缩放了
       sphere.position.set(pointCoords[0] ?? 0, pointCoords[1] ?? 0, pointCoords[2] ?? 0)
-      sphere.name = `${this.taskName}_point_${p.fdi}_${p.type}`
+      sphere.name = `point_${p.fdi}_${p.type}` // 使用统一的命名格式
 
       // 添加到对应的 mesh（上颌或下颌）
       this.addToMesh(sphere, p.fdi)
     })
+
+    console.log(`✅ 渲染了 ${teethPoints.length} 个锁𬌗与反𬌗点位，已添加到对应 mesh`)
   }
 
   /**
@@ -171,7 +178,31 @@ export class CrossbiteAnalysisStrategy extends BaseAnalysisStrategy {
       fontColor: '#ffffff',
     })
 
-    this.group.add(infoPanel)
+    // this.group.add(infoPanel)
+  }
+
+  /**
+   * 重写 toggleMeshChildren 方法，确保点位能正确跟随模型显示/隐藏
+   */
+  protected toggleMeshChildren(visible: boolean): void {
+    if (!this.context) return
+
+    const meshes = [
+      this.context.upperMeshLabel,
+      this.context.lowerMeshLabel,
+    ].filter(Boolean) as THREE.Mesh[]
+
+    console.log(`🔄 切换锁𬌗与反𬌗分析点位可见性: ${visible}`)
+
+    meshes.forEach((mesh) => {
+      mesh.children.forEach((child) => {
+        // 查找所有属于当前策略的对象（以 taskName 开头）
+        if (child.name.startsWith(`${this.taskName}_`)) {
+          child.visible = visible
+          console.log(`  - ${child.name}: ${visible}`)
+        }
+      })
+    })
   }
 
   /**

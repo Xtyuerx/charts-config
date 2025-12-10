@@ -43,10 +43,10 @@ export function useAnalysis() {
       const data: ResponseData = await response.json()
 
       // 🔍 详细打印数据结构
-      console.log('📊 诊断数据结构:')
-      if (data.data) {
-        Object.keys(data.data).forEach((taskName) => {
-          const taskData = (data.data as Record<string, any>)[taskName]
+      console.log('📊 诊断数据结构:', data)
+      if (data) {
+        Object.keys(data).forEach((taskName) => {
+          const taskData = (data as Record<string, any>)[taskName]
           console.log(`  - ${taskName}:`, {
             hasMeasurements: !!taskData.measurements,
             hasTeethPoints: !!taskData.teeth_points,
@@ -75,9 +75,9 @@ export function useAnalysis() {
         })
       }
 
-      analysisService.loadData(data.data)
+      analysisService.loadData(data)
       console.log('✅ 诊断数据加载完成')
-      return data.data
+      return data
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : '诊断数据加载失败'
       error.value = errorMsg

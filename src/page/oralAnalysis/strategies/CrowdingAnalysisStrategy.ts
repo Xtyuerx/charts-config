@@ -66,7 +66,7 @@ export class CrowdingAnalysisStrategy extends BaseAnalysisStrategy {
           fontColor: '#ffffff',
         },
       )
-      this.group.add(upperPanel)
+      // this.group.add(upperPanel)
     }
 
     // 下颌信息面板
@@ -86,7 +86,7 @@ export class CrowdingAnalysisStrategy extends BaseAnalysisStrategy {
           fontColor: '#ffffff',
         },
       )
-      this.group.add(lowerPanel)
+      // this.group.add(lowerPanel)
     }
   }
 
@@ -177,7 +177,8 @@ export class CrowdingAnalysisStrategy extends BaseAnalysisStrategy {
    */
   protected renderPoints(teethPoints: import('../types').ToothPoint[]): void {
     teethPoints.forEach((p) => {
-      const color = this.getPointColor(p.type)
+      // 根据上下颌选择颜色：上颌红色，下颌绿色
+      const color = this.isUpper(p.fdi) ? 0xff0000 : 0x00ff00
 
       // 解析 point（可能是字符串或数组）
       let pointCoords: number[]
@@ -210,7 +211,7 @@ export class CrowdingAnalysisStrategy extends BaseAnalysisStrategy {
       sphere.userData.pointType = p.type
       sphere.userData.originalPosition = sphere.position.clone()
 
-      // 添加到对应的 mesh 和可拖动点位数组
+      // 添加到对应的 mesh，点位会随模型的隐藏而隐藏
       this.addToMesh(sphere, p.fdi)
       this.draggablePoints.push(sphere)
     })
@@ -344,8 +345,8 @@ export class CrowdingAnalysisStrategy extends BaseAnalysisStrategy {
 
     const discrepancy = (jawData.discrepancy_mm as number) || 0
 
-    // 根据拥挤度选择颜色
-    const color = this.getCrowdingColor(discrepancy)
+    // 根据上下颌选择颜色：上颌红色，下颌绿色
+    const color = isUpper ? 0xff0000 : 0x00ff00
 
     // 筛选对应颌的牙齿
     const jawTeeth = teethPoints.filter((p) =>
@@ -367,7 +368,7 @@ export class CrowdingAnalysisStrategy extends BaseAnalysisStrategy {
 
       const center = this.calculatePointsCenterUnscaled(parsedPoints)
 
-      // 创建小球标记（颜色根据拥挤度，不缩放）
+      // 创建小球标记（上颌红色，下颌绿色）
       const geometry = new THREE.SphereGeometry(0.8, 16, 16)
       const material = new THREE.MeshPhongMaterial({
         color,
@@ -380,7 +381,7 @@ export class CrowdingAnalysisStrategy extends BaseAnalysisStrategy {
       sphere.position.copy(center)
       sphere.name = `crowding_${fdi}`
 
-      // 使用方案2：添加到 mesh
+      // 使用方案2：添加到 mesh，点位会随模型的隐藏而隐藏
       this.addToMesh(sphere, Number(fdi))
     })
   }

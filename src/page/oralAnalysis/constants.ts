@@ -158,6 +158,13 @@ export const ANALYSIS_STRATEGIES: StrategyConfig[] = [
     radioValue: '2',
   },
   {
+    id: 'overbite',
+    name: '深覆合分析',
+    taskName: 'overbite',
+    renderType: 'POINT_ONLY',
+    radioValue: '14',
+  },
+  {
     id: 'midline',
     name: '中线关系',
     taskName: 'midline-deviation',
@@ -228,9 +235,9 @@ export const ANALYSIS_STRATEGIES: StrategyConfig[] = [
     radioValue: '12',
   },
   {
-    id: 'overbite',
+    id: 'overjet',
     name: '覆盖度分析',
-    taskName: 'overbite',
+    taskName: 'overjet',
     renderType: 'POINT_ONLY',
     radioValue: '13',
   },

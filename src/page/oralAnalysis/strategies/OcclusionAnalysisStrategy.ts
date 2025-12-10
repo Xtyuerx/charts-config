@@ -113,7 +113,7 @@ export class OcclusionAnalysisStrategy extends BaseAnalysisStrategy {
           fontColor: '#ffffff',
         },
       )
-      this.group.add(leftPanel)
+      // this.group.add(leftPanel)
     }
 
     // 右侧关系信息面板
@@ -134,7 +134,7 @@ export class OcclusionAnalysisStrategy extends BaseAnalysisStrategy {
           fontColor: '#ffffff',
         },
       )
-      this.group.add(rightPanel)
+      // this.group.add(rightPanel)
     }
   }
 

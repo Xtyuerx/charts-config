@@ -2,7 +2,7 @@ import type { IAnalysisStrategy } from '../strategies/base/IAnalysisStrategy'
 import type { StrategyConfig, RenderType } from '../types'
 
 // 导入具体策略
-import { OverbiteAnalysisStrategy } from '../strategies/OverbiteAnalysisStrategy'
+import { OverjetAnalysisStrategy } from '../strategies/OverjetAnalysisStrategy'
 import { BoltonAnalysisStrategy } from '../strategies/BoltonAnalysisStrategy'
 import { ToothNumberAnalysisStrategy } from '../strategies/ToothNumberAnalysisStrategy'
 import { CrossbiteAnalysisStrategy } from '../strategies/CrossbiteAnalysisStrategy'
@@ -57,7 +57,7 @@ export class AnalysisStrategyFactory {
       new ToothGapAnalysisStrategy(), // 10. 牙齿间隙
       new LowerCurveAnalysisStrategy(), // 11. Spee曲线
       new UpperCurveAnalysisStrategy(), // 12. 上颌补偿曲线
-      new OverbiteAnalysisStrategy(), // 13. 覆盖度分析
+      new OverjetAnalysisStrategy(), // 13. 覆盖度分析
     ]
 
     strategies.forEach((strategy) => {

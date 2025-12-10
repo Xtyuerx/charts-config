@@ -47,6 +47,7 @@ export class AnalysisService {
    * 加载诊断数据
    */
   loadData(diagnosisData: DiagnosisData): void {
+    console.log(diagnosisData, 'diagnosisData')
     this.diagnosisData = diagnosisData
     console.log(`📦 加载诊断数据: ${diagnosisData.pathology_results?.length || 0}个分析结果`)
   }

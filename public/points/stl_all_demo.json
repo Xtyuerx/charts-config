@@ -1,1832 +1,1915 @@
 {
-  "success": true,
-  "data": {
-    "pathology_results": [
-      {
-        "task_name": "overbite",
-        "diagnosis_result": {
-          "teeth_points": [
-            {
-              "fdi": 11,
-              "type": "center_crown",
-              "type_cn": "牙冠中心",
-              "point": [23.624239, -4.280602, -1.267112]
-            },
-            {
-              "fdi": 21,
-              "type": "center_crown",
-              "type_cn": "牙冠中心",
-              "point": [23.570139, 3.621685, -1.109911]
-            },
-            {
-              "fdi": 41,
-              "type": "center_crown",
-              "type_cn": "牙冠中心",
-              "point": [19.580215, -1.990754, 2.434265]
-            },
-            {
-              "fdi": 31,
-              "type": "center_crown",
-              "type_cn": "牙冠中心",
-              "point": [19.865915, 3.185551, 2.227694]
-            },
-            {
-              "fdi": 41,
-              "type": "max_buccal_bulge",
-              "type_cn": "颊侧龈根最深点",
-              "point": [21.38287, -1.766834, -5.567528]
-            },
-            {
-              "fdi": 31,
-              "type": "max_buccal_bulge",
-              "type_cn": "颊侧龈根最深点",
-              "point": [21.798061, 3.222147, -5.339346]
-            }
-          ],
-          "measurements": {
-            "H_total": 7.8498,
-            "H_overlap": 3.6774,
-            "ratio": 0.4681,
-            "diagnosis": "I度深覆合",
-            "severity": "轻度"
+  "pathology_results": [
+    {
+      "task_name": "overbite",
+      "diagnosis_result": {
+        "teeth_points": [
+          {
+            "type_cn": "牙冠中心",
+            "fdi": 11,
+            "type": "center_crown",
+            "point": [31.254257, -1.139836, -0.310273]
+          },
+          {
+            "type_cn": "牙冠中心",
+            "fdi": 21,
+            "type": "center_crown",
+            "point": [29.916153, 7.306551, -0.475388]
+          },
+          {
+            "type_cn": "牙冠中心",
+            "fdi": 41,
+            "type": "center_crown",
+            "point": [30.017826, 0.885459, -0.155349]
+          },
+          {
+            "type_cn": "牙冠中心",
+            "fdi": 31,
+            "type": "center_crown",
+            "point": [26.980824, 4.622759, 1.585805]
+          },
+          {
+            "type_cn": "颊侧龈根最深点",
+            "fdi": 41,
+            "type": "max_buccal_bulge",
+            "point": [29.970123, 1.092886, -7.914598]
+          },
+          {
+            "type_cn": "颊侧龈根最深点",
+            "fdi": 31,
+            "type": "max_buccal_bulge",
+            "point": [28.393982, 4.598293, -4.593624]
           }
+        ],
+        "measurements": {
+          "severity": "正常",
+          "H_overlap": 0.9346,
+          "diagnosis": "正常",
+          "H_total": 6.8904,
+          "ratio": 0.1538
         }
-      },
-      {
-        "task_name": "midline-deviation",
-        "diagnosis_result": {
-          "teeth_points": [
-            {
-              "fdi": 11,
-              "type": "center_tooth",
-              "type_cn": "牙齿质心",
-              "point": [22.591771459629722, -4.412768173518532, 1.3906016379629635]
-            },
-            {
-              "fdi": 21,
-              "type": "center_tooth",
-              "type_cn": "牙齿质心",
-              "point": [22.60083543126738, 3.9793748329324656, 1.5272557637372783]
-            },
-            {
-              "fdi": 31,
-              "type": "center_tooth",
-              "type_cn": "牙齿质心",
-              "point": [19.63412479167812, 3.4649505315513855, -0.486404118489942]
-            },
-            {
-              "fdi": 41,
-              "type": "center_tooth",
-              "type_cn": "牙齿质心",
-              "point": [19.35993901337127, -1.8601984088193446, -0.42340863413940244]
-            }
-          ],
-          "measurements": {
-            "upper_midline": {
-              "category": "centered"
-            },
-            "lower_midline": {
-              "category": "right"
-            },
-            "upper_to_lower_difference_mm": -1.0190727316590535,
-            "threshold_mm": 0.5
+      }
+    },
+    {
+      "task_name": "midline-deviation",
+      "diagnosis_result": {
+        "teeth_points": [
+          {
+            "type_cn": "牙齿质心",
+            "fdi": 11,
+            "type": "center_tooth",
+            "point": [30.609286836852817, -1.2342138709864061, 2.684248121781891]
+          },
+          {
+            "type_cn": "牙齿质心",
+            "fdi": 21,
+            "type": "center_tooth",
+            "point": [29.44039200482629, 7.457264920527661, 2.2280885537323027]
+          },
+          {
+            "type_cn": "牙齿质心",
+            "fdi": 31,
+            "type": "center_tooth",
+            "point": [26.665360671832666, 4.349481990701273, -1.0817340918248737]
+          },
+          {
+            "type_cn": "牙齿质心",
+            "fdi": 41,
+            "type": "center_tooth",
+            "point": [29.72811064211841, 0.8838640285477861, -2.5766504609019476]
           }
+        ],
+        "measurements": {
+          "upper_to_lower_difference_mm": 0.4948525151460976,
+          "threshold_mm": 0.5,
+          "lower_midline": { "category": "right" },
+          "upper_midline": { "category": "right" }
         }
-      },
-      {
-        "task_name": "occlusal-relationship",
-        "diagnosis_result": {
-          "teeth_points": [
-            {
-              "fdi": 16,
-              "type": "cusp_mb",
-              "type_cn": "近中颊尖",
-              "point": [-3.945216, -23.526585, -1.868326]
-            },
-            {
-              "fdi": 46,
-              "type": "mesial_buccal_groove",
-              "type_cn": "近中颊沟点",
-              "point": [-5.472755, -24.435349, -3.164542]
-            },
-            {
-              "fdi": 26,
-              "type": "cusp_mb",
-              "type_cn": "近中颊尖",
-              "point": [-4.760372, 24.868225, -2.456557]
-            },
-            {
-              "fdi": 36,
-              "type": "mesial_buccal_groove",
-              "type_cn": "近中颊沟点",
-              "point": [-7.724172, 19.746716, -3.297248]
-            },
-            {
-              "fdi": 13,
-              "type": "canine_cusp",
-              "type_cn": "尖牙牙尖",
-              "point": [14.312166, -18.456556, -0.03459]
-            },
-            {
-              "fdi": 43,
-              "type": "canine_cusp",
-              "type_cn": "尖牙牙尖",
-              "point": [15.616444, -12.845527, 1.149659]
-            },
-            {
-              "fdi": 23,
-              "type": "canine_cusp",
-              "type_cn": "尖牙牙尖",
-              "point": [14.762629, 15.837118, -1.586723]
-            },
-            {
-              "fdi": 33,
-              "type": "canine_cusp",
-              "type_cn": "尖牙牙尖",
-              "point": [15.435625, 11.754643, 0.958512]
-            }
-          ],
-          "measurements": {
-            "left_side": {
-              "canine_relationship": "中性",
-              "molar_relationship": "远中"
-            },
-            "right_side": {
-              "canine_relationship": "中性",
-              "molar_relationship": "远中"
-            }
+      }
+    },
+    {
+      "task_name": "occlusal-relationship",
+      "diagnosis_result": {
+        "teeth_points": [
+          {
+            "type_cn": "近中颊尖",
+            "fdi": 16,
+            "type": "cusp_mb",
+            "point": [7.179356, -22.817028, -1.670632]
+          },
+          {
+            "type_cn": "近中颊沟点",
+            "fdi": 46,
+            "type": "mesial_buccal_groove",
+            "point": [7.881483, -22.401642, -3.084886]
+          },
+          {
+            "type_cn": "近中颊尖点",
+            "fdi": 46,
+            "type": "cusp_mb",
+            "point": [8.365293, -18.930687, -0.302013]
+          },
+          {
+            "type_cn": "远中颊尖点",
+            "fdi": 46,
+            "type": "cusp_db",
+            "point": [4.412195, -20.743076, 0.203426]
+          },
+          {
+            "type_cn": "近中颊尖",
+            "fdi": 26,
+            "type": "cusp_mb",
+            "point": [2.874228, 25.392052, -1.520004]
+          },
+          {
+            "type_cn": "近中颊沟点",
+            "fdi": 36,
+            "type": "mesial_buccal_groove",
+            "point": [1.819287, 25.074829, -2.398566]
+          },
+          {
+            "type_cn": "近中颊尖点",
+            "fdi": 36,
+            "type": "cusp_mb",
+            "point": [1.768614, 22.315178, 0.200262]
+          },
+          {
+            "type_cn": "远中颊尖点",
+            "fdi": 36,
+            "type": "cusp_db",
+            "point": [1.054982, 22.481461, 0.304853]
+          },
+          {
+            "type_cn": "尖牙牙尖",
+            "fdi": 13,
+            "type": "canine_cusp",
+            "point": [25.83639, -12.820726, -1.400627]
+          },
+          {
+            "type_cn": "尖牙牙尖",
+            "fdi": 43,
+            "type": "canine_cusp",
+            "point": [26.275702, -8.604141, 1.211208]
+          },
+          {
+            "type_cn": "前磨牙颊尖",
+            "fdi": 44,
+            "type": "buccal_cusp_p",
+            "point": [20.895216, -13.541241, 0.664616]
+          },
+          {
+            "type_cn": "尖牙牙尖",
+            "fdi": 23,
+            "type": "canine_cusp",
+            "point": [22.79763, 18.343533, -1.567172]
+          },
+          {
+            "type_cn": "尖牙牙尖",
+            "fdi": 33,
+            "type": "canine_cusp",
+            "point": [24.560247, 14.051693, 1.488797]
+          },
+          {
+            "type_cn": "前磨牙颊尖",
+            "fdi": 34,
+            "type": "buccal_cusp_p",
+            "point": [17.92062, 17.251118, 1.180699]
           }
+        ],
+        "measurements": {
+          "right_side": { "canine_relationship": "完全远中", "molar_relationship": "轻度近中" },
+          "left_side": { "canine_relationship": "完全远中", "molar_relationship": "完全近中" }
         }
-      },
-      {
-        "task_name": "crossbite",
-        "diagnosis_result": {
-          "teeth_points": [
-            {
-              "fdi": 16,
-              "type": "cusp_ml",
-              "type_cn": "近中舌尖",
-              "point": [-9.130013, -26.100189, -1.433025]
-            },
-            {
-              "fdi": 16,
-              "type": "center_fossa",
-              "type_cn": "中央窝",
-              "point": [-6.5715975116279095, -23.3801593096695, -1.579331997552018]
-            },
-            {
-              "fdi": 46,
-              "type": "cusp_mb",
-              "type_cn": "近中颊尖",
-              "point": [-7.992444, -23.440248, -1.119049]
-            },
-            {
-              "fdi": 46,
-              "type": "cusp_db",
-              "type_cn": "远中颊尖",
-              "point": [-3.442863, -19.538269, -0.974815]
-            },
-            {
-              "fdi": 26,
-              "type": "cusp_ml",
-              "type_cn": "近中舌尖",
-              "point": [-7.873065, 18.289932, -1.842826]
-            },
-            {
-              "fdi": 26,
-              "type": "center_fossa",
-              "type_cn": "中央窝",
-              "point": [-6.405201140825047, 22.891855324324332, -2.0515240611664316]
-            },
-            {
-              "fdi": 36,
-              "type": "cusp_mb",
-              "type_cn": "近中颊尖",
-              "point": [-16.651176, 20.616253, -1.921613]
-            },
-            {
-              "fdi": 36,
-              "type": "cusp_db",
-              "type_cn": "远中颊尖",
-              "point": [-7.693515, 24.077435, -1.607721]
-            },
-            {
-              "fdi": 13,
-              "type": "center_crown",
-              "type_cn": "牙冠中点",
-              "point": [15.40388554106276, -17.637533016526806, 2.3811661932367163]
-            },
-            {
-              "fdi": 13,
-              "type": "incisal_edge",
-              "type_cn": "切端",
-              "point": [14.126854, -18.97781, -0.108366]
-            },
-            {
-              "fdi": 43,
-              "type": "center_crown",
-              "type_cn": "牙冠中点",
-              "point": [15.054556369214769, -12.572247879875196, -1.9349358731149224]
-            },
-            {
-              "fdi": 43,
-              "type": "incisal_edge",
-              "type_cn": "切端",
-              "point": [14.214708, -13.079611, 0.430486]
-            },
-            {
-              "fdi": 12,
-              "type": "center_crown",
-              "type_cn": "牙冠中点",
-              "point": [18.879735516098677, -10.883508260399555, 1.2384403720329027]
-            },
-            {
-              "fdi": 12,
-              "type": "incisal_edge",
-              "type_cn": "切端",
-              "point": [18.956512, -13.148332, -0.954664]
-            },
-            {
-              "fdi": 42,
-              "type": "center_crown",
-              "type_cn": "牙冠中点",
-              "point": [17.375988697946337, -6.7044171431279675, -1.0369029064770923]
-            },
-            {
-              "fdi": 42,
-              "type": "incisal_edge",
-              "type_cn": "切端",
-              "point": [17.044207, -7.363585, 1.072153]
-            },
-            {
-              "fdi": 11,
-              "type": "center_crown",
-              "type_cn": "牙冠中点",
-              "point": [22.591771459629722, -4.412768173518532, 1.3906016379629635]
-            },
-            {
-              "fdi": 11,
-              "type": "incisal_edge",
-              "type_cn": "切端",
-              "point": [22.894903, -7.365322, -0.973727]
-            },
-            {
-              "fdi": 41,
-              "type": "center_crown",
-              "type_cn": "牙冠中点",
-              "point": [19.35993901337127, -1.8601984088193446, -0.42340863413940244]
-            },
-            {
-              "fdi": 41,
-              "type": "incisal_edge",
-              "type_cn": "切端",
-              "point": [19.090212, -0.140759, 2.052943]
-            },
-            {
-              "fdi": 21,
-              "type": "center_crown",
-              "type_cn": "牙冠中点",
-              "point": [22.60083543126738, 3.9793748329324656, 1.5272557637372783]
-            },
-            {
-              "fdi": 21,
-              "type": "incisal_edge",
-              "type_cn": "切端",
-              "point": [22.943361, 6.521655, -1.0666]
-            },
-            {
-              "fdi": 31,
-              "type": "center_crown",
-              "type_cn": "牙冠中点",
-              "point": [19.63412479167812, 3.4649505315513855, -0.486404118489942]
-            },
-            {
-              "fdi": 31,
-              "type": "incisal_edge",
-              "type_cn": "切端",
-              "point": [19.271908, 5.042473, 1.862442]
-            },
-            {
-              "fdi": 22,
-              "type": "center_crown",
-              "type_cn": "牙冠中点",
-              "point": [18.20417152374183, 10.009575116007943, 0.7609715061131656]
-            },
-            {
-              "fdi": 22,
-              "type": "incisal_edge",
-              "type_cn": "切端",
-              "point": [18.255352, 11.969043, -1.417698]
-            },
-            {
-              "fdi": 32,
-              "type": "center_crown",
-              "type_cn": "牙冠中点",
-              "point": [20.17689752097314, 8.815656530760624, -2.367009376118565]
-            },
-            {
-              "fdi": 32,
-              "type": "incisal_edge",
-              "type_cn": "切端",
-              "point": [20.045595, 9.543303, -0.223813]
-            },
-            {
-              "fdi": 23,
-              "type": "center_crown",
-              "type_cn": "牙冠中点",
-              "point": [14.670739290705626, 16.261600933774833, 0.8193395697647868]
-            },
-            {
-              "fdi": 23,
-              "type": "incisal_edge",
-              "type_cn": "切端",
-              "point": [13.038736, 17.265036, -1.754341]
-            },
-            {
-              "fdi": 33,
-              "type": "center_crown",
-              "type_cn": "牙冠中点",
-              "point": [15.295456569384443, 12.1275281325594, -2.1419655942224587]
-            },
-            {
-              "fdi": 33,
-              "type": "incisal_edge",
-              "type_cn": "切端",
-              "point": [14.06321, 12.430095, 0.091951]
-            }
-          ],
-          "measurements": {
-            "locking": {
-              "pairs": [
-                {
-                  "upper_fdi": 16,
-                  "lower_fdi": 46,
-                  "diagnosis": "正常"
-                },
-                {
-                  "upper_fdi": 26,
-                  "lower_fdi": 36,
-                  "diagnosis": "正常"
-                }
-              ]
-            },
-            "anterior": {
-              "pairs": [
-                {
-                  "upper_fdi": 13,
-                  "lower_fdi": 43,
-                  "diagnosis": "正常"
-                },
-                {
-                  "upper_fdi": 12,
-                  "lower_fdi": 42,
-                  "diagnosis": "反𬌗"
-                },
-                {
-                  "upper_fdi": 11,
-                  "lower_fdi": 41,
-                  "diagnosis": "反𬌗"
-                },
-                {
-                  "upper_fdi": 21,
-                  "lower_fdi": 31,
-                  "diagnosis": "反𬌗"
-                },
-                {
-                  "upper_fdi": 22,
-                  "lower_fdi": 32,
-                  "diagnosis": "正常"
-                },
-                {
-                  "upper_fdi": 23,
-                  "lower_fdi": 33,
-                  "diagnosis": "正常"
-                }
-              ],
-              "diagnosis": "前牙反𬌗"
-            }
+      }
+    },
+    {
+      "task_name": "crossbite",
+      "diagnosis_result": {
+        "teeth_points": [
+          {
+            "type_cn": "近中舌尖",
+            "fdi": 16,
+            "type": "cusp_ml",
+            "point": [3.558806, -16.906609, -1.406599]
+          },
+          {
+            "type_cn": "中央窝",
+            "fdi": 16,
+            "type": "center_fossa",
+            "point": [1.863693165951359, -21.913516726752505, -1.5479940586552234]
+          },
+          {
+            "type_cn": "近中颊尖",
+            "fdi": 46,
+            "type": "cusp_mb",
+            "point": [9.342547, -17.349377, -0.953795]
+          },
+          {
+            "type_cn": "远中颊尖",
+            "fdi": 46,
+            "type": "cusp_db",
+            "point": [4.837672, -22.153671, -0.576922]
+          },
+          {
+            "type_cn": "近中舌尖",
+            "fdi": 17,
+            "type": "cusp_ml",
+            "point": [-6.534122, -19.462206, -0.906321]
+          },
+          {
+            "type_cn": "中央窝",
+            "fdi": 17,
+            "type": "center_fossa",
+            "point": [-6.74069275502743, -21.8214839725777, -1.3388326892138966]
+          },
+          {
+            "type_cn": "近中颊尖",
+            "fdi": 47,
+            "type": "cusp_mb",
+            "point": [-1.08586, -21.322557, -0.476339]
+          },
+          {
+            "type_cn": "远中颊尖",
+            "fdi": 47,
+            "type": "cusp_db",
+            "point": [-5.696552, -25.88422, -0.102145]
+          },
+          {
+            "type_cn": "近中舌尖",
+            "fdi": 18,
+            "type": "cusp_ml",
+            "point": [-15.053472, -23.227995, 0.076785]
+          },
+          {
+            "type_cn": "中央窝",
+            "fdi": 18,
+            "type": "center_fossa",
+            "point": [-14.311516717616565, -24.508822821243527, -0.12210109585492224]
+          },
+          {
+            "type_cn": "近中颊尖",
+            "fdi": 48,
+            "type": "cusp_mb",
+            "point": [-12.91894, -26.112865, 0.304588]
+          },
+          {
+            "type_cn": "远中颊尖",
+            "fdi": 48,
+            "type": "cusp_db",
+            "point": [-12.408931, -29.23325, 0.290696]
+          },
+          {
+            "type_cn": "近中舌尖",
+            "fdi": 26,
+            "type": "cusp_ml",
+            "point": [-2.583544, 26.070557, -1.227843]
+          },
+          {
+            "type_cn": "中央窝",
+            "fdi": 26,
+            "type": "center_fossa",
+            "point": [-2.147628224913494, 22.711005999999983, -1.5378156885813148]
+          },
+          {
+            "type_cn": "近中颊尖",
+            "fdi": 36,
+            "type": "cusp_mb",
+            "point": [1.037185, 23.962486, -0.479463]
+          },
+          {
+            "type_cn": "远中颊尖",
+            "fdi": 36,
+            "type": "cusp_db",
+            "point": [5.766183, 18.933987, -0.881136]
+          },
+          {
+            "type_cn": "近中舌尖",
+            "fdi": 27,
+            "type": "cusp_ml",
+            "point": [-11.378663, 26.340879, -1.021397]
+          },
+          {
+            "type_cn": "中央窝",
+            "fdi": 27,
+            "type": "center_fossa",
+            "point": [-11.075400918685121, 21.281029842560557, -1.371150060553634]
+          },
+          {
+            "type_cn": "近中颊尖",
+            "fdi": 37,
+            "type": "cusp_mb",
+            "point": [-10.031127, 24.329874, -0.402235]
+          },
+          {
+            "type_cn": "远中颊尖",
+            "fdi": 37,
+            "type": "cusp_db",
+            "point": [-5.12853, 20.193111, -0.820239]
+          },
+          {
+            "type_cn": "近中舌尖",
+            "fdi": 28,
+            "type": "cusp_ml",
+            "point": [-17.219687, 24.42469, 0.379717]
+          },
+          {
+            "type_cn": "中央窝",
+            "fdi": 28,
+            "type": "center_fossa",
+            "point": [-18.635161258126193, 22.733264374760992, 0.04800358126195027]
+          },
+          {
+            "type_cn": "牙冠中点",
+            "fdi": 13,
+            "type": "center_crown",
+            "point": [24.5870836947447, -12.452104111442445, 1.478288687290346]
+          },
+          {
+            "type_cn": "切端",
+            "fdi": 13,
+            "type": "incisal_edge",
+            "point": [26.684183, -12.333838, -1.055627]
+          },
+          {
+            "type_cn": "牙冠中点",
+            "fdi": 43,
+            "type": "center_crown",
+            "point": [25.719092890516308, -8.803160689857195, -2.018838785426583]
+          },
+          {
+            "type_cn": "切端",
+            "fdi": 43,
+            "type": "incisal_edge",
+            "point": [27.69352, -7.281522, 0.358132]
+          },
+          {
+            "type_cn": "牙冠中点",
+            "fdi": 12,
+            "type": "center_crown",
+            "point": [28.74258567470448, -7.021122930023636, 2.1926403886524826]
+          },
+          {
+            "type_cn": "切端",
+            "fdi": 12,
+            "type": "incisal_edge",
+            "point": [30.199547, -6.550584, -0.117617]
+          },
+          {
+            "type_cn": "牙冠中点",
+            "fdi": 42,
+            "type": "center_crown",
+            "point": [28.08624778109454, -3.108249221393033, -1.8266285891376481]
+          },
+          {
+            "type_cn": "切端",
+            "fdi": 42,
+            "type": "incisal_edge",
+            "point": [29.608377, -2.967656, 0.487297]
+          },
+          {
+            "type_cn": "牙冠中点",
+            "fdi": 11,
+            "type": "center_crown",
+            "point": [30.609286836852817, -1.2342138709864061, 2.684248121781891]
+          },
+          {
+            "type_cn": "切端",
+            "fdi": 11,
+            "type": "incisal_edge",
+            "point": [31.916742, -0.711642, -0.121625]
+          },
+          {
+            "type_cn": "牙冠中点",
+            "fdi": 41,
+            "type": "center_crown",
+            "point": [29.72811064211841, 0.8838640285477861, -2.5766504609019476]
+          },
+          {
+            "type_cn": "切端",
+            "fdi": 41,
+            "type": "incisal_edge",
+            "point": [30.910301, 1.142012, -0.33309]
+          },
+          {
+            "type_cn": "牙冠中点",
+            "fdi": 21,
+            "type": "center_crown",
+            "point": [29.44039200482629, 7.457264920527661, 2.2280885537323027]
+          },
+          {
+            "type_cn": "切端",
+            "fdi": 21,
+            "type": "incisal_edge",
+            "point": [30.780237, 7.839231, -0.218481]
+          },
+          {
+            "type_cn": "牙冠中点",
+            "fdi": 31,
+            "type": "center_crown",
+            "point": [26.665360671832666, 4.349481990701273, -1.0817340918248737]
+          },
+          {
+            "type_cn": "切端",
+            "fdi": 31,
+            "type": "incisal_edge",
+            "point": [27.690195, 4.997093, 1.372348]
+          },
+          {
+            "type_cn": "牙冠中点",
+            "fdi": 22,
+            "type": "center_crown",
+            "point": [26.88907860170179, 13.599917772285254, 2.2271651580226903]
+          },
+          {
+            "type_cn": "切端",
+            "fdi": 22,
+            "type": "incisal_edge",
+            "point": [28.625507, 12.98004, -0.01311]
+          },
+          {
+            "type_cn": "牙冠中点",
+            "fdi": 32,
+            "type": "center_crown",
+            "point": [27.51093960349742, 9.349871793818622, -1.6329937116714122]
+          },
+          {
+            "type_cn": "切端",
+            "fdi": 32,
+            "type": "incisal_edge",
+            "point": [28.892481, 9.495248, 0.705862]
+          },
+          {
+            "type_cn": "牙冠中点",
+            "fdi": 23,
+            "type": "center_crown",
+            "point": [21.929434870802858, 17.872573666058376, 1.3862220208029195]
+          },
+          {
+            "type_cn": "切端",
+            "fdi": 23,
+            "type": "incisal_edge",
+            "point": [23.646255, 18.552353, -1.201978]
+          },
+          {
+            "type_cn": "牙冠中点",
+            "fdi": 33,
+            "type": "center_crown",
+            "point": [24.217278029158376, 13.984082591451264, -1.7222982070907875]
+          },
+          {
+            "type_cn": "切端",
+            "fdi": 33,
+            "type": "incisal_edge",
+            "point": [26.10915, 12.785336, 0.764172]
           }
-        }
-      },
-      {
-        "task_name": "bolton",
-        "diagnosis_result": {
-          "teeth_points": [
-            {
-              "fdi": 11,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": [24.253731, -0.363609, 1.620693]
-            },
-            {
-              "fdi": 11,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": [21.128828, -8.664665, 2.756882]
-            },
-            {
-              "fdi": 12,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": [21.182621, -8.567431, 1.923784]
-            },
-            {
-              "fdi": 12,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": [15.551992, -13.283177, 2.469007]
-            },
-            {
-              "fdi": 13,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": [17.398252, -14.046519, 3.529555]
-            },
-            {
-              "fdi": 13,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": [11.053173, -19.197973, 2.833431]
-            },
-            {
-              "fdi": 14,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": [11.503912, -16.731167, 1.633234]
-            },
-            {
-              "fdi": 14,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": [4.311483, -19.595808, 0.236196]
-            },
-            {
-              "fdi": 15,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": [4.372814, -19.784952, 0.427628]
-            },
-            {
-              "fdi": 15,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": [-2.009328, -22.24243, -0.199069]
-            },
-            {
-              "fdi": 16,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": [-1.623953, -23.112539, 1.456667]
-            },
-            {
-              "fdi": 16,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": [-13.769999, -22.039965, 0.333455]
-            },
-            {
-              "fdi": 21,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": [18.954767, -1.850733, 2.839114]
-            },
-            {
-              "fdi": 21,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": [20.071316, 7.855504, 2.460692]
-            },
-            {
-              "fdi": 22,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": [19.933603, 7.404874, 1.632289]
-            },
-            {
-              "fdi": 22,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": [15.194546, 12.339362, 1.986852]
-            },
-            {
-              "fdi": 23,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": [17.781847, 14.74093, 1.927177]
-            },
-            {
-              "fdi": 23,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": [10.416279, 18.405214, 1.956282]
-            },
-            {
-              "fdi": 24,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": [9.805403, 16.25473, 0.830567]
-            },
-            {
-              "fdi": 24,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": [3.567745, 20.774082, -0.243222]
-            },
-            {
-              "fdi": 25,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": [3.310514, 18.53257, -0.292931]
-            },
-            {
-              "fdi": 25,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": [-2.621761, 22.345234, -0.743187]
-            },
-            {
-              "fdi": 26,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": [-3.252429, 20.339243, 0.050494]
-            },
-            {
-              "fdi": 26,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": [-13.685654, 23.515745, 0.345711]
-            },
-            {
-              "fdi": 31,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": [20.194847, 0.668912, -0.661251]
-            },
-            {
-              "fdi": 31,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": [19.366127, 6.363602, -1.48151]
-            },
-            {
-              "fdi": 32,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": [20.753695, 5.668282, -3.02922]
-            },
-            {
-              "fdi": 32,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": [18.639126, 11.485755, -2.534245]
-            },
-            {
-              "fdi": 33,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": [17.1252, 9.268909, -3.946477]
-            },
-            {
-              "fdi": 33,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": [12.645226, 14.618531, -3.371738]
-            },
-            {
-              "fdi": 34,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": [12.447193, 11.182488, -3.977182]
-            },
-            {
-              "fdi": 34,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": [5.472092, 16.778948, -3.769246]
-            },
-            {
-              "fdi": 35,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": [4.971142, 14.44675, -4.11347]
-            },
-            {
-              "fdi": 35,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": [-2.907214, 16.088226, -5.941424]
-            },
-            {
-              "fdi": 36,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": [-1.687387, 18.856874, -4.856542]
-            },
-            {
-              "fdi": 36,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": [-16.737738, 21.116566, -1.830414]
-            },
-            {
-              "fdi": 37,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": [-12.403099, 23.569242, -2.839582]
-            },
-            {
-              "fdi": 37,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": [-19.43475, 25.946289, 1.689465]
-            },
-            {
-              "fdi": 41,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": [18.109659, 0.944228, -1.989636]
-            },
-            {
-              "fdi": 41,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": [19.209484, -4.706398, -0.793293]
-            },
-            {
-              "fdi": 42,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": [19.269535, -4.454887, -2.38772]
-            },
-            {
-              "fdi": 42,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": [15.587839, -9.383533, -1.466631]
-            },
-            {
-              "fdi": 43,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": [17.806877, -10.762219, -4.574927]
-            },
-            {
-              "fdi": 43,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": [11.828491, -14.638159, -3.56682]
-            },
-            {
-              "fdi": 44,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": [11.12903, -12.246142, -3.814022]
-            },
-            {
-              "fdi": 44,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": [5.203829, -17.238123, -4.377144]
-            },
-            {
-              "fdi": 45,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": [4.279774, -13.202649, -4.418886]
-            },
-            {
-              "fdi": 45,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": [-3.153446, -15.022599, -4.440521]
-            },
-            {
-              "fdi": 46,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": [-1.478745, -18.342962, -3.616921]
-            },
-            {
-              "fdi": 46,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": [-13.301161, -21.270716, -2.903692]
-            },
-            {
-              "fdi": 47,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": [-10.865958, -24.705557, -3.716105]
-            },
-            {
-              "fdi": 47,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": [-19.921318, -25.670795, 0.622589]
-            }
-          ],
-          "measurements": {
-            "front_ratio_percent": 77.63,
-            "all_ratio_percent": 96.63,
-            "upper_front_sum": 49.36,
-            "lower_front_sum": 38.32,
-            "upper_all_sum": 102.1,
-            "lower_all_sum": 98.66,
-            "width": {
-              "11": 8.9422,
-              "12": 7.3647,
-              "13": 8.2026,
-              "14": 7.867,
-              "15": 6.8676,
-              "16": 12.2449,
-              "21": 9.7776,
-              "22": 6.8508,
-              "23": 8.2268,
-              "24": 7.7773,
-              "25": 7.0662,
-              "26": 10.9101,
-              "31": 5.8128,
-              "32": 6.2096,
-              "33": 7.0014,
-              "34": 8.9451,
-              "35": 8.2525,
-              "36": 15.517,
-              "37": 8.6952,
-              "41": 5.8797,
-              "42": 6.2205,
-              "43": 7.1959,
-              "44": 7.7682,
-              "45": 7.6528,
-              "46": 12.2004,
-              "47": 10.0874
-            }
-          }
-        }
-      },
-      {
-        "task_name": "arch-symmetry",
-        "diagnosis_result": {
-          "teeth_points": [
-            {
-              "fdi": 16,
-              "type": "center_tooth",
-              "type_cn": "牙齿质心",
-              "point": [-7.607872788680626, -21.99624652211202, -0.22172735673159424]
-            },
-            {
-              "fdi": 26,
-              "type": "center_tooth",
-              "type_cn": "牙齿质心",
-              "point": [-7.952455276029043, 22.502847011679297, -0.7958022268907529]
-            },
-            {
-              "fdi": 36,
-              "type": "center_tooth",
-              "type_cn": "牙齿质心",
-              "point": [-7.310056675044115, 19.56725938425921, -3.390389826829801]
-            },
-            {
-              "fdi": 46,
-              "type": "center_tooth",
-              "type_cn": "牙齿质心",
-              "point": [-7.238092359721689, -19.383060826316463, -2.694854736116102]
-            }
-          ],
-          "upper_midline_points": [
-            {
-              "point1": [22.59630344544855, -0.2166966702930332, 1.4589287008501208]
-            },
-            {
-              "point2": [23.59630344544855, -0.2166966702930332, 1.4589287008501208]
-            }
-          ],
-          "lower_midline_points": [
-            {
-              "point1": [19.497031902524697, 0.8023760613660204, -0.4549063763146722]
-            },
-            {
-              "point2": [20.497031902524697, 0.8023760613660204, -0.4549063763146722]
-            }
-          ],
-          "measurements": {
-            "upper": {
-              "pairs": {
-                "16-26": {
-                  "left_dist": 21.84429894802761,
-                  "right_dist": 22.831151453058986,
-                  "symmetric": "false"
-                }
-              }
-            },
-            "lower": {
-              "pairs": {
-                "36-46": {
-                  "left_dist": 18.993101621623616,
-                  "right_dist": 20.309338517055764,
-                  "symmetric": "false"
-                }
-              }
-            },
-            "tolerance": 0.5,
-            "shape": "尖圆形"
-          }
-        },
-        "message": "分析成功"
-      },
-      {
-        "task_name": "tooth-crowding-degree",
-        "diagnosis_result": {
-          "teeth_points": [
-            {
-              "fdi": 46,
-              "type": "mesial_buccal_groove",
-              "type_cn": "近中颊沟点",
-              "point": "[-5.4728, -24.4353, -3.1645]"
-            },
-            {
-              "fdi": 45,
-              "type": "buccal_cusp_p",
-              "type_cn": "前磨牙颊尖",
-              "point": "[2.3491, -16.5478, -1.0790]"
-            },
-            {
-              "fdi": 44,
-              "type": "buccal_cusp_p",
-              "type_cn": "前磨牙颊尖",
-              "point": "[8.7287, -15.5317, 0.3044]"
-            },
-            {
-              "fdi": 43,
-              "type": "canine_cusp",
-              "type_cn": "尖牙尖点",
-              "point": "[15.6164, -12.8455, 1.1497]"
-            },
-            {
-              "fdi": 42,
-              "type": "center_crown",
-              "type_cn": "牙冠中点",
-              "point": "[17.8226, -6.7241, 1.4497]"
-            },
-            {
-              "fdi": 41,
-              "type": "center_crown",
-              "type_cn": "牙冠中点",
-              "point": "[19.5802, -1.9908, 2.4343]"
-            },
-            {
-              "fdi": 31,
-              "type": "center_crown",
-              "type_cn": "牙冠中点",
-              "point": "[19.8659, 3.1856, 2.2277]"
-            },
-            {
-              "fdi": 32,
-              "type": "center_crown",
-              "type_cn": "牙冠中点",
-              "point": "[20.6614, 8.4819, 0.4109]"
-            },
-            {
-              "fdi": 33,
-              "type": "canine_cusp",
-              "type_cn": "尖牙尖点",
-              "point": "[15.4356, 11.7546, 0.9585]"
-            },
-            {
-              "fdi": 34,
-              "type": "buccal_cusp_p",
-              "type_cn": "前磨牙颊尖",
-              "point": "[9.5016, 15.6980, 0.0973]"
-            },
-            {
-              "fdi": 35,
-              "type": "buccal_cusp_p",
-              "type_cn": "前磨牙颊尖",
-              "point": "[3.2082, 16.0778, -1.5774]"
-            },
-            {
-              "fdi": 36,
-              "type": "mesial_buccal_groove",
-              "type_cn": "近中颊沟点",
-              "point": "[-7.7242, 19.7467, -3.2972]"
-            },
-            {
-              "fdi": 16,
-              "type": "center_fossa",
-              "type_cn": "中央窝中心点",
-              "point": "[-7.5142, -21.9706, 0.1147]"
-            },
-            {
-              "fdi": 15,
-              "type": "buccal_cusp_p",
-              "type_cn": "前磨牙颊尖",
-              "point": "[3.4012, -21.9646, -1.3574]"
-            },
-            {
-              "fdi": 14,
-              "type": "buccal_cusp_p",
-              "type_cn": "前磨牙颊尖",
-              "point": "[8.3916, -20.2181, -1.5828]"
-            },
-            {
-              "fdi": 13,
-              "type": "canine_cusp",
-              "type_cn": "尖牙尖点",
-              "point": "[14.3122, -18.4566, -0.0346]"
-            },
-            {
-              "fdi": 12,
-              "type": "center_crown",
-              "type_cn": "牙冠中点",
-              "point": "[19.7746, -10.8925, -1.1144]"
-            },
-            {
-              "fdi": 11,
-              "type": "center_crown",
-              "type_cn": "牙冠中点",
-              "point": "[23.6242, -4.2806, -1.2671]"
-            },
-            {
-              "fdi": 21,
-              "type": "center_crown",
-              "type_cn": "牙冠中点",
-              "point": "[23.5701, 3.6217, -1.1099]"
-            },
-            {
-              "fdi": 22,
-              "type": "center_crown",
-              "type_cn": "牙冠中点",
-              "point": "[18.7565, 9.9599, -1.6317]"
-            },
-            {
-              "fdi": 23,
-              "type": "canine_cusp",
-              "type_cn": "尖牙尖点",
-              "point": "[14.7626, 15.8371, -1.5867]"
-            },
-            {
-              "fdi": 24,
-              "type": "buccal_cusp_p",
-              "type_cn": "前磨牙颊尖",
-              "point": "[5.7992, 19.4751, -1.6734]"
-            },
-            {
-              "fdi": 25,
-              "type": "buccal_cusp_p",
-              "type_cn": "前磨牙颊尖",
-              "point": "[2.3544, 19.9177, -2.3298]"
-            },
-            {
-              "fdi": 26,
-              "type": "center_fossa",
-              "type_cn": "中央窝中心点",
-              "point": "[-7.8983, 22.3616, -0.5122]"
-            }
-          ],
-          "measurements": {
-            "lower_jaw": {
-              "grade": "I度拥挤",
-              "discrepancy_mm": 2.13,
-              "tooth_widths_sum_mm": 70.94,
-              "arch_length_mm": 68.81
-            },
-            "upper_jaw": {
-              "grade": "I度拥挤",
-              "discrepancy_mm": 2.16,
-              "tooth_widths_sum_mm": 78.94,
-              "arch_length_mm": 76.78
-            }
-          }
-        }
-      },
-      {
-        "task_name": "tooth-gap",
-        "diagnosis_result": {
-          "teeth_points": [
-            {
-              "fdi": 46,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": "[-13.3012, -21.2707, -2.9037]"
-            },
-            {
-              "fdi": 47,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": "[-10.8660, -24.7056, -3.7161]"
-            },
-            {
-              "fdi": 45,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": "[-3.1534, -15.0226, -4.4405]"
-            },
-            {
-              "fdi": 46,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": "[-1.4787, -18.3430, -3.6169]"
-            },
-            {
-              "fdi": 44,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": "[5.2038, -17.2381, -4.3771]"
-            },
-            {
-              "fdi": 45,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": "[4.2798, -13.2026, -4.4189]"
-            },
-            {
-              "fdi": 43,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": "[11.8285, -14.6382, -3.5668]"
-            },
-            {
-              "fdi": 44,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": "[11.1290, -12.2461, -3.8140]"
-            },
-            {
-              "fdi": 42,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": "[15.5878, -9.3835, -1.4666]"
-            },
-            {
-              "fdi": 43,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": "[17.8069, -10.7622, -4.5749]"
-            },
-            {
-              "fdi": 41,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": "[19.2095, -4.7064, -0.7933]"
-            },
-            {
-              "fdi": 42,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": "[19.2695, -4.4549, -2.3877]"
-            },
-            {
-              "fdi": 41,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": "[18.1097, 0.9442, -1.9896]"
-            },
-            {
-              "fdi": 31,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": "[20.1948, 0.6689, -0.6613]"
-            },
-            {
-              "fdi": 31,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": "[19.3661, 6.3636, -1.4815]"
-            },
-            {
-              "fdi": 32,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": "[20.7537, 5.6683, -3.0292]"
-            },
-            {
-              "fdi": 32,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": "[18.6391, 11.4858, -2.5342]"
-            },
-            {
-              "fdi": 33,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": "[17.1252, 9.2689, -3.9465]"
-            },
-            {
-              "fdi": 33,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": "[12.6452, 14.6185, -3.3717]"
-            },
-            {
-              "fdi": 34,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": "[12.4472, 11.1825, -3.9772]"
-            },
-            {
-              "fdi": 34,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": "[5.4721, 16.7789, -3.7692]"
-            },
-            {
-              "fdi": 35,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": "[4.9711, 14.4467, -4.1135]"
-            },
-            {
-              "fdi": 35,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": "[-2.9072, 16.0882, -5.9414]"
-            },
-            {
-              "fdi": 36,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": "[-1.6874, 18.8569, -4.8565]"
-            },
-            {
-              "fdi": 36,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": "[-16.7377, 21.1166, -1.8304]"
-            },
-            {
-              "fdi": 37,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": "[-12.4031, 23.5692, -2.8396]"
-            },
-            {
-              "fdi": 15,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": "[-2.0093, -22.2424, -0.1991]"
-            },
-            {
-              "fdi": 16,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": "[-1.6240, -23.1125, 1.4567]"
-            },
-            {
-              "fdi": 14,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": "[4.3115, -19.5958, 0.2362]"
-            },
-            {
-              "fdi": 15,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": "[4.3728, -19.7850, 0.4276]"
-            },
-            {
-              "fdi": 13,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": "[11.0532, -19.1980, 2.8334]"
-            },
-            {
-              "fdi": 14,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": "[11.5039, -16.7312, 1.6332]"
-            },
-            {
-              "fdi": 12,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": "[15.5520, -13.2832, 2.4690]"
-            },
-            {
-              "fdi": 13,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": "[17.3983, -14.0465, 3.5296]"
-            },
-            {
-              "fdi": 11,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": "[21.1288, -8.6647, 2.7569]"
-            },
-            {
-              "fdi": 12,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": "[21.1826, -8.5674, 1.9238]"
-            },
-            {
-              "fdi": 11,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": "[24.2537, -0.3636, 1.6207]"
-            },
-            {
-              "fdi": 21,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": "[18.9548, -1.8507, 2.8391]"
-            },
-            {
-              "fdi": 21,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": "[20.0713, 7.8555, 2.4607]"
-            },
-            {
-              "fdi": 22,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": "[19.9336, 7.4049, 1.6323]"
-            },
-            {
-              "fdi": 22,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": "[15.1945, 12.3394, 1.9869]"
-            },
-            {
-              "fdi": 23,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": "[17.7818, 14.7409, 1.9272]"
-            },
-            {
-              "fdi": 23,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": "[10.4163, 18.4052, 1.9563]"
-            },
-            {
-              "fdi": 24,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": "[9.8054, 16.2547, 0.8306]"
-            },
-            {
-              "fdi": 24,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": "[3.5677, 20.7741, -0.2432]"
-            },
-            {
-              "fdi": 25,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": "[3.3105, 18.5326, -0.2929]"
-            },
-            {
-              "fdi": 25,
-              "type": "boundary_distal",
-              "type_cn": "远中边缘点",
-              "point": "[-2.6218, 22.3452, -0.7432]"
-            },
-            {
-              "fdi": 26,
-              "type": "boundary_mesial",
-              "type_cn": "近中边缘点",
-              "point": "[-3.2524, 20.3392, 0.0505]"
-            }
-          ],
-          "measurements": {
-            "lower_jaw": {
-              "total_gaps": 13,
-              "total_gap_size_mm": 42.33,
-              "max_gap_size": 5.08,
-              "average_gap_size": 3.26,
-              "grade": "重度间隙",
-              "gap_details": [
-                {
-                  "tooth1": 47,
-                  "tooth2": 46,
-                  "gap_size": 4.29
-                },
-                {
-                  "tooth1": 46,
-                  "tooth2": 45,
-                  "gap_size": 3.81
-                },
-                {
-                  "tooth1": 45,
-                  "tooth2": 44,
-                  "gap_size": 4.14
-                },
-                {
-                  "tooth1": 44,
-                  "tooth2": 43,
-                  "gap_size": 2.5
-                },
-                {
-                  "tooth1": 43,
-                  "tooth2": 42,
-                  "gap_size": 4.06
-                },
-                {
-                  "tooth1": 42,
-                  "tooth2": 41,
-                  "gap_size": 1.62
-                },
-                {
-                  "tooth1": 41,
-                  "tooth2": 31,
-                  "gap_size": 2.49
-                },
-                {
-                  "tooth1": 31,
-                  "tooth2": 32,
-                  "gap_size": 2.19
-                },
-                {
-                  "tooth1": 32,
-                  "tooth2": 33,
-                  "gap_size": 3.03
-                },
-                {
-                  "tooth1": 33,
-                  "tooth2": 34,
-                  "gap_size": 3.49
-                },
-                {
-                  "tooth1": 34,
-                  "tooth2": 35,
-                  "gap_size": 2.41
-                },
-                {
-                  "tooth1": 35,
-                  "tooth2": 36,
-                  "gap_size": 3.21
-                },
-                {
-                  "tooth1": 36,
-                  "tooth2": 37,
-                  "gap_size": 5.08
-                }
-              ]
-            },
-            "upper_jaw": {
-              "total_gaps": 13,
-              "total_gap_size_mm": 25.2,
-              "max_gap_size": 5.64,
-              "average_gap_size": 1.94,
-              "grade": "重度间隙",
-              "gap_details": [
-                {
-                  "tooth1": 17,
-                  "tooth2": 16,
-                  "gap_size": 0.0
-                },
-                {
-                  "tooth1": 16,
-                  "tooth2": 15,
-                  "gap_size": 1.91
-                },
-                {
-                  "tooth1": 15,
-                  "tooth2": 14,
-                  "gap_size": 0.28
-                },
-                {
-                  "tooth1": 14,
-                  "tooth2": 13,
-                  "gap_size": 2.78
-                },
-                {
-                  "tooth1": 13,
-                  "tooth2": 12,
-                  "gap_size": 2.26
-                },
-                {
-                  "tooth1": 12,
-                  "tooth2": 11,
-                  "gap_size": 0.84
-                },
-                {
-                  "tooth1": 11,
-                  "tooth2": 21,
-                  "gap_size": 5.64
-                },
-                {
-                  "tooth1": 21,
-                  "tooth2": 22,
-                  "gap_size": 0.95
-                },
-                {
-                  "tooth1": 22,
-                  "tooth2": 23,
-                  "gap_size": 3.53
-                },
-                {
-                  "tooth1": 23,
-                  "tooth2": 24,
-                  "gap_size": 2.5
-                },
-                {
-                  "tooth1": 24,
-                  "tooth2": 25,
-                  "gap_size": 2.26
-                },
-                {
-                  "tooth1": 25,
-                  "tooth2": 26,
-                  "gap_size": 2.25
-                },
-                {
-                  "tooth1": 26,
-                  "tooth2": 27,
-                  "gap_size": 0.0
-                }
-              ]
-            }
-          }
-        }
-      },
-      {
-        "task_name": "upper-curve",
-        "diagnosis_result": {
-          "teeth_points": [
-            {
-              "fdi": 21,
-              "point": [23.570139, 3.621685, -1.109911],
-              "type": "center_crown",
-              "type_cn": "牙冠中心"
-            },
-            {
-              "fdi": 22,
-              "point": [18.75646, 9.959874, -1.6317],
-              "type": "center_crown",
-              "type_cn": "牙冠中心"
-            },
-            {
-              "fdi": 23,
-              "point": [14.762629, 15.837118, -1.586723],
-              "type": "canine_cusp",
-              "type_cn": "尖牙牙尖"
-            },
-            {
-              "fdi": 24,
-              "point": [5.799154, 19.475063, -1.673441],
-              "type": "buccal_cusp_p",
-              "type_cn": "颊尖"
-            },
-            {
-              "fdi": 25,
-              "point": [2.354376, 19.917662, -2.329818],
-              "type": "buccal_cusp_p",
-              "type_cn": "颊尖"
-            },
-            {
-              "fdi": 26,
-              "point": [-4.760372, 24.868225, -2.456557],
-              "type": "cusp_mb",
-              "type_cn": "近中颊尖"
-            },
-            {
-              "fdi": 26,
-              "point": [-5.05413, 25.028784, -2.38364],
-              "type": "cusp_db",
-              "type_cn": "远中颊尖"
-            },
-            {
-              "fdi": 11,
-              "point": [23.624239, -4.280602, -1.267112],
-              "type": "center_crown",
-              "type_cn": "牙冠中心"
-            },
-            {
-              "fdi": 12,
-              "point": [19.77459, -10.892465, -1.114354],
-              "type": "center_crown",
-              "type_cn": "牙冠中心"
-            },
-            {
-              "fdi": 13,
-              "point": [14.312166, -18.456556, -0.03459],
-              "type": "canine_cusp",
-              "type_cn": "尖牙牙尖"
-            },
-            {
-              "fdi": 14,
-              "point": [8.391605, -20.218056, -1.58277],
-              "type": "buccal_cusp_p",
-              "type_cn": "颊尖"
-            },
-            {
-              "fdi": 15,
-              "point": [3.401157, -21.964621, -1.357357],
-              "type": "buccal_cusp_p",
-              "type_cn": "颊尖"
-            },
-            {
-              "fdi": 16,
-              "point": [-3.945216, -23.526585, -1.868326],
-              "type": "cusp_mb",
-              "type_cn": "近中颊尖"
-            },
-            {
-              "fdi": 16,
-              "point": [-8.856132, -25.098398, -1.924899],
-              "type": "cusp_db",
-              "type_cn": "远中颊尖"
-            }
-          ],
-          "measurements": {
-            "left": {
-              "side": "left",
-              "curve_type": "凸向下",
-              "curvature": 0.0001,
-              "radius": 8762.7375
-            },
-            "right": {
-              "side": "right",
-              "curve_type": "反向",
-              "curvature": -0.0014,
-              "radius": 350.662
-            }
-          }
-        }
-      },
-      {
-        "task_name": "lower-curve",
-        "diagnosis_result": {
-          "teeth_points": [
-            {
-              "fdi": 31,
-              "type": "center_crown",
-              "type_cn": "牙冠中心",
-              "point": [19.865915, 3.185551, 2.227694]
-            },
-            {
-              "fdi": 32,
-              "type": "center_crown",
-              "type_cn": "牙冠中心",
-              "point": [20.661366, 8.481926, 0.41089]
-            },
-            {
-              "fdi": 33,
-              "type": "canine_cusp",
-              "type_cn": "牙尖点",
-              "point": [15.435625, 11.754643, 0.958512]
-            },
-            {
-              "fdi": 34,
-              "type": "buccal_cusp_p",
-              "type_cn": "颊尖",
-              "point": [9.501556, 15.697985, 0.097294]
-            },
-            {
-              "fdi": 35,
-              "type": "buccal_cusp_p",
-              "type_cn": "颊尖",
-              "point": [3.208187, 16.077785, -1.577428]
-            },
-            {
-              "fdi": 36,
-              "type": "cusp_mb",
-              "type_cn": "近中颊尖",
-              "point": [-6.894934, 21.830896, -0.826249]
-            },
-            {
-              "fdi": 37,
-              "type": "cusp_mb",
-              "type_cn": "近中颊尖",
-              "point": [-15.803823, 25.222765, 1.119632]
-            },
-            {
-              "fdi": 0,
-              "type": "deepest",
-              "type_cn": "最低点",
-              "point": [3.208187, 16.077785, -1.577428],
-              "side": "left"
-            },
-            {
-              "fdi": 41,
-              "type": "center_crown",
-              "type_cn": "牙冠中心",
-              "point": [19.580215, -1.990754, 2.434265]
-            },
-            {
-              "fdi": 42,
-              "type": "center_crown",
-              "type_cn": "牙冠中心",
-              "point": [17.82259, -6.724137, 1.449671]
-            },
-            {
-              "fdi": 43,
-              "type": "canine_cusp",
-              "type_cn": "牙尖点",
-              "point": [15.616444, -12.845527, 1.149659]
-            },
-            {
-              "fdi": 44,
-              "type": "buccal_cusp_p",
-              "type_cn": "颊尖",
-              "point": [8.72871, -15.531746, 0.304363]
-            },
-            {
-              "fdi": 45,
-              "type": "buccal_cusp_p",
-              "type_cn": "颊尖",
-              "point": [2.349064, -16.5478, -1.079024]
-            },
-            {
-              "fdi": 46,
-              "type": "cusp_mb",
-              "type_cn": "近中颊尖",
-              "point": [-6.581944, -21.419401, -0.729622]
-            },
-            {
-              "fdi": 47,
-              "type": "cusp_mb",
-              "type_cn": "近中颊尖",
-              "point": [-15.686579, -23.885883, 0.535672]
-            },
-            {
-              "fdi": 0,
-              "type": "deepest",
-              "type_cn": "最低点",
-              "point": [2.349064, -16.5478, -1.079024],
-              "side": "right"
-            }
-          ],
-          "measurements": {
-            "left": {
-              "depth_mm": 3.17,
-              "classification": "陡",
-              "radius": 101.29
-            },
-            "right": {
-              "depth_mm": 2.4,
-              "classification": "正常",
-              "radius": 118.87
-            }
-          }
-        }
-      },
-      {
-        "task_name": "overjet",
-        "diagnosis_result": {
-          "teeth_points": [
-            {
-              "fdi": 11,
-              "type": "incisal_edge",
-              "type_cn": "切端",
-              "point": [23.624239, -4.280602, -1.267112]
-            },
-            {
-              "fdi": 21,
-              "type": "incisal_edge",
-              "type_cn": "切端",
-              "point": [23.570139, 3.621685, -1.109911]
-            },
-            {
-              "fdi": 41,
-              "type": "incisal_edge",
-              "type_cn": "切端",
-              "point": [19.580215, -1.990754, 2.434265]
-            },
-            {
-              "fdi": 41,
-              "type": "labial_surface",
-              "type_cn": "唇面点",
-              "point": [21.401695, -0.646109, -4.444368]
-            },
-            {
-              "fdi": 31,
-              "type": "incisal_edge",
-              "type_cn": "切端",
-              "point": [19.865915, 3.185551, 2.227694]
-            },
-            {
-              "fdi": 31,
-              "type": "labial_surface",
-              "type_cn": "唇面点",
-              "point": [21.797672, 2.691557, -5.195434]
-            }
-          ],
-          "measurements": {
-            "pair_details": [
-              {
-                "upper_fdi": 11,
-                "lower_fdi": 41,
-                "overjet": 2.3514,
-                "is_crossbite": "false"
-              },
-              {
-                "upper_fdi": 21,
-                "lower_fdi": 31,
-                "overjet": 1.9293,
-                "is_crossbite": "false"
-              }
-            ],
-            "avg_overjet": 2.1404,
-            "diagnosis": "正常",
-            "severity": "正常"
-          }
-        }
-      },
-      {
-        "task_name": "arch-width",
-        "diagnosis_result": {
-          "teeth_points": [
-            {
-              "fdi": 13,
-              "type": "canine_cusp",
-              "type_cn": "牙尖点",
-              "point": [14.312166, -18.456556, -0.03459]
-            },
-            {
-              "fdi": 23,
-              "type": "canine_cusp",
-              "type_cn": "牙尖点",
-              "point": [14.762629, 15.837118, -1.586723]
-            },
-            {
-              "fdi": 33,
-              "type": "canine_cusp",
-              "type_cn": "牙尖点",
-              "point": [15.435625, 11.754643, 0.958512]
-            },
-            {
-              "fdi": 43,
-              "type": "canine_cusp",
-              "type_cn": "牙尖点",
-              "point": [15.616444, -12.845527, 1.149659]
-            },
-            {
-              "fdi": 16,
-              "type": "center_fossa",
-              "type_cn": "中央窝",
-              "point": [-7.514199, -21.970589, 0.114705]
-            },
-            {
-              "fdi": 26,
-              "type": "center_fossa",
-              "type_cn": "中央窝",
-              "point": [-7.89832, 22.361624, -0.512172]
-            },
-            {
-              "fdi": 36,
-              "type": "center_fossa",
-              "type_cn": "中央窝",
-              "point": [-7.724172, 19.746716, -3.297248]
-            },
-            {
-              "fdi": 46,
-              "type": "center_fossa",
-              "type_cn": "中央窝",
-              "point": [-7.478617, -19.378941, -2.832187]
-            }
-          ],
-          "measurements": {
-            "upper_arch": {
-              "canine_width_3_3": {
-                "left_fdi": 23,
-                "right_fdi": 13,
-                "width": 34.2966,
-                "unit": "mm"
-              },
-              "molar_width_6_6": {
-                "left_fdi": 26,
-                "right_fdi": 16,
-                "width": 44.3339,
-                "unit": "mm"
-              }
-            },
-            "lower_arch": {
-              "canine_width_3_3": {
-                "left_fdi": 43,
-                "right_fdi": 33,
-                "width": 24.6008,
-                "unit": "mm"
-              },
-              "molar_width_6_6": {
-                "left_fdi": 46,
-                "right_fdi": 36,
-                "width": 39.1264,
-                "unit": "mm"
-              }
-            },
-            "diagnosis": "正常",
-            "severity": "正常"
+        ],
+        "measurements": {
+          "locking": {
+            "pairs": [
+              { "diagnosis": "正常", "upper_fdi": 16, "lower_fdi": 46 },
+              { "diagnosis": "正常", "upper_fdi": 17, "lower_fdi": 47 },
+              { "diagnosis": "正常", "upper_fdi": 18, "lower_fdi": 48 },
+              { "diagnosis": "正常", "upper_fdi": 26, "lower_fdi": 36 },
+              { "diagnosis": "锁𬌗", "upper_fdi": 27, "lower_fdi": 37 }
+            ]
+          },
+          "anterior": {
+            "diagnosis": "前牙反𬌗",
+            "pairs": [
+              { "diagnosis": "反𬌗", "upper_fdi": 13, "lower_fdi": 43 },
+              { "diagnosis": "正常", "upper_fdi": 12, "lower_fdi": 42 },
+              { "diagnosis": "正常", "upper_fdi": 11, "lower_fdi": 41 },
+              { "diagnosis": "正常", "upper_fdi": 21, "lower_fdi": 31 },
+              { "diagnosis": "正常", "upper_fdi": 22, "lower_fdi": 32 },
+              { "diagnosis": "反𬌗", "upper_fdi": 23, "lower_fdi": 33 }
+            ]
           }
         }
       }
-    ],
-    "basic_algorithm_info": {
-      "upper_stl": "http://175.154.206.51:9000/cy-stl/3D/123/case123_upper.stl?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=dsminioadmin%2F20251130%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251130T124522Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=913850303e062913a1c817979342b32a1b6883b2a9fcfa054c3b4ef769ae4edf",
-      "upper_json": "http://175.154.206.51:9000/cy-stl/3D/123/case123_upper.json?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=dsminioadmin%2F20251130%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251130T124522Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=913850303e062913a1c817979342b32a1b6883b2a9fcfa054c3b4ef769ae4edf",
-      "lower_stl": "http://175.154.206.51:9000/cy-stl/3D/123/case123_lower.stl?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=dsminioadmin%2F20251130%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251130T124522Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=913850303e062913a1c817979342b32a1b6883b2a9fcfa054c3b4ef769ae4edf",
-      "lower_json": "http://175.154.206.51:9000/cy-stl/3D/123/case123_lower.json?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=dsminioadmin%2F20251130%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251130T124522Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=913850303e062913a1c817979342b32a1b6883b2a9fcfa054c3b4ef769ae4edf",
-      "upper_only_tooth_stl": "http://175.154.206.51:9000/cy-stl/3D/123/case123_upper_only_tooth.stl?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=dsminioadmin%2F20251130%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251130T124522Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=913850303e062913a1c817979342b32a1b6883b2a9fcfa054c3b4ef769ae4edf",
-      "upper_only_tooth_json": "http://175.154.206.51:9000/cy-stl/3D/123/case123_upper_only_tooth.json?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=dsminioadmin%2F20251130%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251130T124522Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=913850303e062913a1c817979342b32a1b6883b2a9fcfa054c3b4ef769ae4edf",
-      "lower_only_tooth_stl": "http://175.154.206.51:9000/cy-stl/3D/123/case123_lower_only_tooth.stl?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=dsminioadmin%2F20251130%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251130T124522Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=913850303e062913a1c817979342b32a1b6883b2a9fcfa054c3b4ef769ae4edf",
-      "lower_only_tooth_json": "http://175.154.206.51:9000/cy-stl/3D/123/case123_lower_only_tooth.json?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=dsminioadmin%2F20251130%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251130T124522Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=913850303e062913a1c817979342b32a1b6883b2a9fcfa054c3b4ef769ae4edf",
-      "ul_stl": "http://175.154.206.51:9000/cy-stl/3D/123/case123_ul.stl?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=dsminioadmin%2F20251130%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251130T124522Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=913850303e062913a1c817979342b32a1b6883b2a9fcfa054c3b4ef769ae4edf",
-      "ul_json": "http://175.154.206.51:9000/cy-stl/3D/123/case123_ul.json?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=dsminioadmin%2F20251130%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251130T124522Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=913850303e062913a1c817979342b32a1b6883b2a9fcfa054c3b4ef769ae4edf"
+    },
+    {
+      "task_name": "bolton",
+      "diagnosis_result": {
+        "teeth_points": [
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 11,
+            "type": "boundary_mesial",
+            "point": [29.732647, 2.992795, 3.940576]
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 11,
+            "type": "boundary_distal",
+            "point": [29.726868, -5.131563, 4.816594]
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 12,
+            "type": "boundary_mesial",
+            "point": [29.465675, -4.202106, 2.627064]
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 12,
+            "type": "boundary_distal",
+            "point": [27.598366, -10.052307, 2.943694]
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 13,
+            "type": "boundary_mesial",
+            "point": [27.747196, -9.937279, 2.463166]
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 13,
+            "type": "boundary_distal",
+            "point": [20.882488, -13.86247, 1.489168]
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 14,
+            "type": "boundary_mesial",
+            "point": [20.841827, -13.92143, 1.461022]
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 14,
+            "type": "boundary_distal",
+            "point": [13.927362, -16.056435, 1.038453]
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 15,
+            "type": "boundary_mesial",
+            "point": [13.879375, -16.121548, 1.022175]
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 15,
+            "type": "boundary_distal",
+            "point": [8.851239, -21.567419, 0.224693]
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 16,
+            "type": "boundary_mesial",
+            "point": [7.736505, -18.675945, 0.493005]
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 16,
+            "type": "boundary_distal",
+            "point": [-1.47164, -22.097666, 0.548518]
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 17,
+            "type": "boundary_mesial",
+            "point": [-1.579196, -22.112478, 0.495007]
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 17,
+            "type": "boundary_distal",
+            "point": [-9.933385, -26.347214, 0.931493]
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 18,
+            "type": "boundary_mesial",
+            "point": [-9.928961, -26.443026, 0.934465]
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 18,
+            "type": "boundary_distal",
+            "point": [-18.267096, -29.910927, 2.844402]
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 21,
+            "type": "boundary_mesial",
+            "point": [29.447338, 3.417365, 3.681528]
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 21,
+            "type": "boundary_distal",
+            "point": [28.795893, 11.401359, 2.6454]
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 22,
+            "type": "boundary_mesial",
+            "point": [28.864611, 11.192995, 1.99691]
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 22,
+            "type": "boundary_distal",
+            "point": [25.126938, 16.137424, 2.913527]
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 23,
+            "type": "boundary_mesial",
+            "point": [25.039505, 16.160711, 2.892106]
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 23,
+            "type": "boundary_distal",
+            "point": [18.293421, 19.92271, 1.5492]
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 24,
+            "type": "boundary_mesial",
+            "point": [18.225933, 19.966175, 1.555174]
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 24,
+            "type": "boundary_distal",
+            "point": [10.668788, 20.242846, 0.520808]
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 25,
+            "type": "boundary_mesial",
+            "point": [10.605695, 20.284046, 0.522737]
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 25,
+            "type": "boundary_distal",
+            "point": [4.769586, 24.039059, -0.204398]
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 26,
+            "type": "boundary_mesial",
+            "point": [4.705091, 24.082714, -0.19366]
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 26,
+            "type": "boundary_distal",
+            "point": [-4.867899, 23.802044, 0.206168]
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 27,
+            "type": "boundary_mesial",
+            "point": [-4.927544, 23.855452, 0.179726]
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 27,
+            "type": "boundary_distal",
+            "point": [-14.694417, 24.465876, 1.532305]
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 28,
+            "type": "boundary_mesial",
+            "point": [-14.734206, 24.401459, 1.518028]
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 28,
+            "type": "boundary_distal",
+            "point": [-24.03896, 25.238377, 3.550124]
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 31,
+            "type": "boundary_mesial",
+            "point": [27.403027, 2.1379, -2.673286]
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 31,
+            "type": "boundary_distal",
+            "point": [27.727371, 6.486976, -1.833393]
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 32,
+            "type": "boundary_mesial",
+            "point": [27.728035, 6.524213, -1.911299]
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 32,
+            "type": "boundary_distal",
+            "point": [26.726387, 12.281238, -1.12391]
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 33,
+            "type": "boundary_mesial",
+            "point": [26.670902, 12.345581, -1.161533]
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 33,
+            "type": "boundary_distal",
+            "point": [20.544724, 14.77444, -2.133475]
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 34,
+            "type": "boundary_mesial",
+            "point": [20.468021, 14.831852, -2.110969]
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 34,
+            "type": "boundary_distal",
+            "point": [14.087372, 18.688875, -2.357266]
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 35,
+            "type": "boundary_mesial",
+            "point": [14.000462, 18.709015, -2.328926]
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 35,
+            "type": "boundary_distal",
+            "point": [5.973155, 16.922762, -3.155241]
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 36,
+            "type": "boundary_mesial",
+            "point": [7.134734, 20.200439, -2.260919]
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 36,
+            "type": "boundary_distal",
+            "point": [-3.822026, 20.409773, -2.422714]
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 37,
+            "type": "boundary_mesial",
+            "point": [-3.855271, 20.348667, -2.463831]
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 37,
+            "type": "boundary_distal",
+            "point": [-14.910091, 20.634789, -2.906253]
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 41,
+            "type": "boundary_mesial",
+            "point": [29.979771, 3.25556, -2.185432]
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 41,
+            "type": "boundary_distal",
+            "point": [27.861998, 1.834144, -3.026721]
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 42,
+            "type": "boundary_mesial",
+            "point": [29.800085, -0.726929, -1.04603]
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 42,
+            "type": "boundary_distal",
+            "point": [26.352966, -5.40226, -2.6149]
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 43,
+            "type": "boundary_mesial",
+            "point": [26.381786, -5.452309, -2.533528]
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 43,
+            "type": "boundary_distal",
+            "point": [23.061939, -11.194345, -3.004589]
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 44,
+            "type": "boundary_mesial",
+            "point": [23.056675, -11.29311, -2.99242]
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 44,
+            "type": "boundary_distal",
+            "point": [16.419003, -12.264349, -3.371777]
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 45,
+            "type": "boundary_mesial",
+            "point": [16.33831, -12.302375, -3.325789]
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 45,
+            "type": "boundary_distal",
+            "point": [10.809889, -18.13275, -3.226023]
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 46,
+            "type": "boundary_mesial",
+            "point": [8.901757, -13.968568, -3.779341]
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 46,
+            "type": "boundary_distal",
+            "point": [-0.451798, -19.558315, -2.565334]
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 47,
+            "type": "boundary_mesial",
+            "point": [-0.512828, -19.515219, -2.609341]
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 47,
+            "type": "boundary_distal",
+            "point": [-8.266084, -26.730719, -3.047176]
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 48,
+            "type": "boundary_mesial",
+            "point": [-10.553447, -22.431498, -3.111591]
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 48,
+            "type": "boundary_distal",
+            "point": [-15.834271, -27.85211, -0.199343]
+          }
+        ],
+        "measurements": {
+          "all_ratio_percent": 90.94,
+          "upper_all_sum": 93.19,
+          "lower_front_sum": 32.35,
+          "width": {
+            "22": 6.2656,
+            "44": 6.7191,
+            "23": 7.84,
+            "45": 8.0353,
+            "24": 7.6326,
+            "46": 10.9639,
+            "25": 6.9778,
+            "47": 10.6004,
+            "26": 9.5854,
+            "48": 8.1087,
+            "27": 9.879,
+            "28": 9.5608,
+            "31": 4.4413,
+            "32": 5.8963,
+            "11": 8.1715,
+            "33": 6.6614,
+            "12": 6.1491,
+            "34": 7.4599,
+            "13": 7.9674,
+            "35": 8.2651,
+            "14": 7.2489,
+            "36": 10.96,
+            "15": 7.4549,
+            "37": 11.0674,
+            "16": 9.8235,
+            "17": 9.3764,
+            "18": 9.2303,
+            "41": 2.6857,
+            "42": 6.0169,
+            "21": 8.0773,
+            "43": 6.6494
+          },
+          "lower_all_sum": 84.75,
+          "upper_front_sum": 44.47,
+          "front_ratio_percent": 72.75
+        }
+      }
+    },
+    {
+      "task_name": "arch-symmetry",
+      "diagnosis_result": {
+        "teeth_points": [
+          {
+            "type_cn": "牙齿质心",
+            "fdi": 11,
+            "type": "center_tooth",
+            "point": [30.609286836852817, -1.2342138709864061, 2.684248121781891]
+          },
+          {
+            "type_cn": "牙齿质心",
+            "fdi": 16,
+            "type": "center_tooth",
+            "point": [3.2429714661320266, -21.15977521308895, 0.028199666905341394]
+          },
+          {
+            "type_cn": "牙齿质心",
+            "fdi": 21,
+            "type": "center_tooth",
+            "point": [29.44039200482629, 7.457264920527661, 2.2280885537323027]
+          },
+          {
+            "type_cn": "牙齿质心",
+            "fdi": 26,
+            "type": "center_tooth",
+            "point": [-0.34481319930795923, 22.552912160899623, -0.022435660726643592]
+          },
+          {
+            "type_cn": "牙齿质心",
+            "fdi": 31,
+            "type": "center_tooth",
+            "point": [26.665360671832666, 4.349481990701273, -1.0817340918248737]
+          },
+          {
+            "type_cn": "牙齿质心",
+            "fdi": 36,
+            "type": "center_tooth",
+            "point": [1.5254115765051413, 19.487627772834067, -2.1070212176211425]
+          },
+          {
+            "type_cn": "牙齿质心",
+            "fdi": 41,
+            "type": "center_tooth",
+            "point": [29.72811064211841, 0.8838640285477861, -2.5766504609019476]
+          },
+          {
+            "type_cn": "牙齿质心",
+            "fdi": 46,
+            "type": "center_tooth",
+            "point": [4.931897772104594, -17.6997547555002, -2.3248526423135427]
+          }
+        ],
+        "upper_midline_points": [
+          { "point1": [30.024839420839555, 3.1115255247706273, 2.456168337757097] },
+          { "point2": [31.024839420839555, 3.1115255247706273, 2.456168337757097] }
+        ],
+        "lower_midline_points": [
+          { "point1": [28.196735656975537, 2.6166730096245296, -1.8291922763634108] },
+          { "point2": [29.196735656975537, 2.6166730096245296, -1.8291922763634108] }
+        ],
+        "measurements": {
+          "shape": "尖圆形",
+          "upper": {
+            "pairs": { "16-26": { "left_dist": 19.6, "right_dist": 24.39, "symmetric": false } }
+          },
+          "lower": {
+            "pairs": { "36-46": { "left_dist": 16.87, "right_dist": 20.32, "symmetric": false } }
+          },
+          "tolerance": 1
+        }
+      }
+    },
+    {
+      "task_name": "tooth-crowding-degree",
+      "diagnosis_result": {
+        "teeth_points": [
+          {
+            "type_cn": "近中颊沟点",
+            "fdi": 47,
+            "type": "mesial_buccal_groove",
+            "point": "[-4.7693, -22.2717, -2.1450]"
+          },
+          {
+            "type_cn": "近中颊沟点",
+            "fdi": 46,
+            "type": "mesial_buccal_groove",
+            "point": "[7.8815, -22.4016, -3.0849]"
+          },
+          {
+            "type_cn": "前磨牙颊尖",
+            "fdi": 45,
+            "type": "buccal_cusp_p",
+            "point": "[14.1265, -15.7672, 0.4438]"
+          },
+          {
+            "type_cn": "前磨牙颊尖",
+            "fdi": 44,
+            "type": "buccal_cusp_p",
+            "point": "[20.8952, -13.5412, 0.6646]"
+          },
+          {
+            "type_cn": "尖牙尖点",
+            "fdi": 43,
+            "type": "canine_cusp",
+            "point": "[26.2757, -8.6041, 1.2112]"
+          },
+          {
+            "type_cn": "牙冠中点",
+            "fdi": 42,
+            "type": "center_crown",
+            "point": "[28.6142, -3.1541, 0.6495]"
+          },
+          {
+            "type_cn": "牙冠中点",
+            "fdi": 41,
+            "type": "center_crown",
+            "point": "[30.0178, 0.8855, -0.1553]"
+          },
+          {
+            "type_cn": "牙冠中点",
+            "fdi": 31,
+            "type": "center_crown",
+            "point": "[26.9808, 4.6228, 1.5858]"
+          },
+          {
+            "type_cn": "牙冠中点",
+            "fdi": 32,
+            "type": "center_crown",
+            "point": "[27.7444, 9.3701, 1.0140]"
+          },
+          {
+            "type_cn": "尖牙尖点",
+            "fdi": 33,
+            "type": "canine_cusp",
+            "point": "[24.5602, 14.0517, 1.4888]"
+          },
+          {
+            "type_cn": "前磨牙颊尖",
+            "fdi": 34,
+            "type": "buccal_cusp_p",
+            "point": "[17.9206, 17.2511, 1.1807]"
+          },
+          {
+            "type_cn": "前磨牙颊尖",
+            "fdi": 35,
+            "type": "buccal_cusp_p",
+            "point": "[11.6904, 18.6415, 0.2110]"
+          },
+          {
+            "type_cn": "近中颊沟点",
+            "fdi": 36,
+            "type": "mesial_buccal_groove",
+            "point": "[1.8193, 25.0748, -2.3986]"
+          },
+          {
+            "type_cn": "近中颊沟点",
+            "fdi": 37,
+            "type": "mesial_buccal_groove",
+            "point": "[-7.9350, 25.7159, -2.3287]"
+          },
+          {
+            "type_cn": "中央窝中心点",
+            "fdi": 17,
+            "type": "center_fossa",
+            "point": "[-5.9740, -23.6567, 0.2717]"
+          },
+          {
+            "type_cn": "中央窝中心点",
+            "fdi": 16,
+            "type": "center_fossa",
+            "point": "[3.7222, -21.1738, 0.6512]"
+          },
+          {
+            "type_cn": "前磨牙颊尖",
+            "fdi": 15,
+            "type": "buccal_cusp_p",
+            "point": "[12.4271, -20.7252, -2.4088]"
+          },
+          {
+            "type_cn": "前磨牙颊尖",
+            "fdi": 14,
+            "type": "buccal_cusp_p",
+            "point": "[17.7325, -16.9648, -2.0082]"
+          },
+          {
+            "type_cn": "尖牙尖点",
+            "fdi": 13,
+            "type": "canine_cusp",
+            "point": "[25.8364, -12.8207, -1.4006]"
+          },
+          {
+            "type_cn": "牙冠中点",
+            "fdi": 12,
+            "type": "center_crown",
+            "point": "[29.1606, -7.1700, -0.6189]"
+          },
+          {
+            "type_cn": "牙冠中点",
+            "fdi": 11,
+            "type": "center_crown",
+            "point": "[31.2543, -1.1398, -0.3103]"
+          },
+          {
+            "type_cn": "牙冠中点",
+            "fdi": 21,
+            "type": "center_crown",
+            "point": "[29.9162, 7.3066, -0.4754]"
+          },
+          {
+            "type_cn": "牙冠中点",
+            "fdi": 22,
+            "type": "center_crown",
+            "point": "[27.5895, 13.6500, -0.4141]"
+          },
+          {
+            "type_cn": "尖牙尖点",
+            "fdi": 23,
+            "type": "canine_cusp",
+            "point": "[22.7976, 18.3435, -1.5672]"
+          },
+          {
+            "type_cn": "前磨牙颊尖",
+            "fdi": 24,
+            "type": "buccal_cusp_p",
+            "point": "[14.2884, 21.4273, -2.5023]"
+          },
+          {
+            "type_cn": "前磨牙颊尖",
+            "fdi": 25,
+            "type": "buccal_cusp_p",
+            "point": "[7.5529, 23.1544, -2.8719]"
+          },
+          {
+            "type_cn": "中央窝中心点",
+            "fdi": 26,
+            "type": "center_fossa",
+            "point": "[-0.2198, 22.4884, 0.2565]"
+          },
+          {
+            "type_cn": "中央窝中心点",
+            "fdi": 27,
+            "type": "center_fossa",
+            "point": "[-9.8171, 23.2222, 0.8525]"
+          }
+        ],
+        "measurements": {
+          "lower_jaw": {
+            "tooth_widths_sum_mm": 62.83,
+            "grade": "正常",
+            "discrepancy_mm": -2.86,
+            "arch_length_mm": 65.69
+          },
+          "upper_jaw": {
+            "tooth_widths_sum_mm": 73.79,
+            "grade": "正常",
+            "discrepancy_mm": -2.44,
+            "arch_length_mm": 76.23
+          }
+        }
+      }
+    },
+    {
+      "task_name": "tooth-gap",
+      "diagnosis_result": {
+        "teeth_points": [
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 46,
+            "type": "boundary_distal",
+            "point": "[-0.4518, -19.5583, -2.5653]"
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 47,
+            "type": "boundary_mesial",
+            "point": "[-0.5128, -19.5152, -2.6093]"
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 45,
+            "type": "boundary_distal",
+            "point": "[10.8099, -18.1328, -3.2260]"
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 46,
+            "type": "boundary_mesial",
+            "point": "[8.9018, -13.9686, -3.7793]"
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 44,
+            "type": "boundary_distal",
+            "point": "[16.4190, -12.2643, -3.3718]"
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 45,
+            "type": "boundary_mesial",
+            "point": "[16.3383, -12.3024, -3.3258]"
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 43,
+            "type": "boundary_distal",
+            "point": "[23.0619, -11.1943, -3.0046]"
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 44,
+            "type": "boundary_mesial",
+            "point": "[23.0567, -11.2931, -2.9924]"
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 42,
+            "type": "boundary_distal",
+            "point": "[26.3530, -5.4023, -2.6149]"
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 43,
+            "type": "boundary_mesial",
+            "point": "[26.3818, -5.4523, -2.5335]"
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 41,
+            "type": "boundary_distal",
+            "point": "[27.8620, 1.8341, -3.0267]"
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 42,
+            "type": "boundary_mesial",
+            "point": "[29.8001, -0.7269, -1.0460]"
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 41,
+            "type": "boundary_mesial",
+            "point": "[29.9798, 3.2556, -2.1854]"
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 31,
+            "type": "boundary_mesial",
+            "point": "[27.4030, 2.1379, -2.6733]"
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 31,
+            "type": "boundary_distal",
+            "point": "[27.7274, 6.4870, -1.8334]"
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 32,
+            "type": "boundary_mesial",
+            "point": "[27.7280, 6.5242, -1.9113]"
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 32,
+            "type": "boundary_distal",
+            "point": "[26.7264, 12.2812, -1.1239]"
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 33,
+            "type": "boundary_mesial",
+            "point": "[26.6709, 12.3456, -1.1615]"
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 33,
+            "type": "boundary_distal",
+            "point": "[20.5447, 14.7744, -2.1335]"
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 34,
+            "type": "boundary_mesial",
+            "point": "[20.4680, 14.8319, -2.1110]"
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 34,
+            "type": "boundary_distal",
+            "point": "[14.0874, 18.6889, -2.3573]"
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 35,
+            "type": "boundary_mesial",
+            "point": "[14.0005, 18.7090, -2.3289]"
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 35,
+            "type": "boundary_distal",
+            "point": "[5.9732, 16.9228, -3.1552]"
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 36,
+            "type": "boundary_mesial",
+            "point": "[7.1347, 20.2004, -2.2609]"
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 36,
+            "type": "boundary_distal",
+            "point": "[-3.8220, 20.4098, -2.4227]"
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 37,
+            "type": "boundary_mesial",
+            "point": "[-3.8553, 20.3487, -2.4638]"
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 16,
+            "type": "boundary_distal",
+            "point": "[-1.4716, -22.0977, 0.5485]"
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 17,
+            "type": "boundary_mesial",
+            "point": "[-1.5792, -22.1125, 0.4950]"
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 15,
+            "type": "boundary_distal",
+            "point": "[8.8512, -21.5674, 0.2247]"
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 16,
+            "type": "boundary_mesial",
+            "point": "[7.7365, -18.6759, 0.4930]"
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 14,
+            "type": "boundary_distal",
+            "point": "[13.9274, -16.0564, 1.0385]"
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 15,
+            "type": "boundary_mesial",
+            "point": "[13.8794, -16.1215, 1.0222]"
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 13,
+            "type": "boundary_distal",
+            "point": "[20.8825, -13.8625, 1.4892]"
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 14,
+            "type": "boundary_mesial",
+            "point": "[20.8418, -13.9214, 1.4610]"
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 12,
+            "type": "boundary_distal",
+            "point": "[27.5984, -10.0523, 2.9437]"
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 13,
+            "type": "boundary_mesial",
+            "point": "[27.7472, -9.9373, 2.4632]"
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 11,
+            "type": "boundary_distal",
+            "point": "[29.7269, -5.1316, 4.8166]"
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 12,
+            "type": "boundary_mesial",
+            "point": "[29.4657, -4.2021, 2.6271]"
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 11,
+            "type": "boundary_mesial",
+            "point": "[29.7326, 2.9928, 3.9406]"
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 21,
+            "type": "boundary_mesial",
+            "point": "[29.4473, 3.4174, 3.6815]"
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 21,
+            "type": "boundary_distal",
+            "point": "[28.7959, 11.4014, 2.6454]"
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 22,
+            "type": "boundary_mesial",
+            "point": "[28.8646, 11.1930, 1.9969]"
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 22,
+            "type": "boundary_distal",
+            "point": "[25.1269, 16.1374, 2.9135]"
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 23,
+            "type": "boundary_mesial",
+            "point": "[25.0395, 16.1607, 2.8921]"
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 23,
+            "type": "boundary_distal",
+            "point": "[18.2934, 19.9227, 1.5492]"
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 24,
+            "type": "boundary_mesial",
+            "point": "[18.2259, 19.9662, 1.5552]"
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 24,
+            "type": "boundary_distal",
+            "point": "[10.6688, 20.2428, 0.5208]"
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 25,
+            "type": "boundary_mesial",
+            "point": "[10.6057, 20.2840, 0.5227]"
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 25,
+            "type": "boundary_distal",
+            "point": "[4.7696, 24.0391, -0.2044]"
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 26,
+            "type": "boundary_mesial",
+            "point": "[4.7051, 24.0827, -0.1937]"
+          },
+          {
+            "type_cn": "远中边缘点",
+            "fdi": 26,
+            "type": "boundary_distal",
+            "point": "[-4.8679, 23.8020, 0.2062]"
+          },
+          {
+            "type_cn": "近中边缘点",
+            "fdi": 27,
+            "type": "boundary_mesial",
+            "point": "[-4.9275, 23.8555, 0.1797]"
+          }
+        ],
+        "measurements": {
+          "lower_jaw": {
+            "total_gap_size_mm": 11.59,
+            "average_gap_size": 0.89,
+            "total_gaps": 13,
+            "max_gap_size": 4.16,
+            "grade": "中度间隙",
+            "gap_details": [
+              { "tooth2": 46, "tooth1": 47, "gap_size": 0.04 },
+              { "tooth2": 45, "tooth1": 46, "gap_size": 4.16 },
+              { "tooth2": 44, "tooth1": 45, "gap_size": 0.04 },
+              { "tooth2": 43, "tooth1": 44, "gap_size": 0.1 },
+              { "tooth2": 42, "tooth1": 43, "gap_size": 0.05 },
+              { "tooth2": 41, "tooth1": 42, "gap_size": 2.56 },
+              { "tooth2": 31, "tooth1": 41, "gap_size": 1.12 },
+              { "tooth2": 32, "tooth1": 31, "gap_size": 0.04 },
+              { "tooth2": 33, "tooth1": 32, "gap_size": 0.06 },
+              { "tooth2": 34, "tooth1": 33, "gap_size": 0.06 },
+              { "tooth2": 35, "tooth1": 34, "gap_size": 0.02 },
+              { "tooth2": 36, "tooth1": 35, "gap_size": 3.28 },
+              { "tooth2": 37, "tooth1": 36, "gap_size": 0.06 }
+            ]
+          },
+          "upper_jaw": {
+            "total_gap_size_mm": 4.91,
+            "average_gap_size": 0.38,
+            "total_gaps": 13,
+            "max_gap_size": 2.89,
+            "grade": "轻度间隙",
+            "gap_details": [
+              { "tooth2": 16, "tooth1": 17, "gap_size": 0.01 },
+              { "tooth2": 15, "tooth1": 16, "gap_size": 2.89 },
+              { "tooth2": 14, "tooth1": 15, "gap_size": 0.07 },
+              { "tooth2": 13, "tooth1": 14, "gap_size": 0.06 },
+              { "tooth2": 12, "tooth1": 13, "gap_size": 0.12 },
+              { "tooth2": 11, "tooth1": 12, "gap_size": 0.93 },
+              { "tooth2": 21, "tooth1": 11, "gap_size": 0.42 },
+              { "tooth2": 22, "tooth1": 21, "gap_size": 0.21 },
+              { "tooth2": 23, "tooth1": 22, "gap_size": 0.02 },
+              { "tooth2": 24, "tooth1": 23, "gap_size": 0.04 },
+              { "tooth2": 25, "tooth1": 24, "gap_size": 0.04 },
+              { "tooth2": 26, "tooth1": 25, "gap_size": 0.04 },
+              { "tooth2": 27, "tooth1": 26, "gap_size": 0.05 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "task_name": "upper-curve",
+      "diagnosis_result": {
+        "teeth_points": [
+          {
+            "type_cn": "牙冠中心",
+            "fdi": 21,
+            "type": "center_crown",
+            "point": [29.916153, 7.306551, -0.475388]
+          },
+          {
+            "type_cn": "牙冠中心",
+            "fdi": 22,
+            "type": "center_crown",
+            "point": [27.589527, 13.65004, -0.41414]
+          },
+          {
+            "type_cn": "尖牙牙尖",
+            "fdi": 23,
+            "type": "canine_cusp",
+            "point": [22.79763, 18.343533, -1.567172]
+          },
+          {
+            "type_cn": "颊尖",
+            "fdi": 24,
+            "type": "buccal_cusp_p",
+            "point": [14.288399, 21.427345, -2.502324]
+          },
+          {
+            "type_cn": "颊尖",
+            "fdi": 25,
+            "type": "buccal_cusp_p",
+            "point": [7.552884, 23.154366, -2.871908]
+          },
+          {
+            "type_cn": "近中颊尖",
+            "fdi": 26,
+            "type": "cusp_mb",
+            "point": [2.874228, 25.392052, -1.520004]
+          },
+          {
+            "type_cn": "远中颊尖",
+            "fdi": 26,
+            "type": "cusp_db",
+            "point": [-2.245703, 25.091621, -1.929368]
+          },
+          {
+            "type_cn": "近中颊尖",
+            "fdi": 27,
+            "type": "cusp_mb",
+            "point": [-7.15566, 25.874315, -1.284988]
+          },
+          {
+            "type_cn": "近中颊尖",
+            "fdi": 28,
+            "type": "cusp_mb",
+            "point": [-16.243694, 28.715759, 0.440253]
+          },
+          {
+            "type_cn": "牙冠中心",
+            "fdi": 11,
+            "type": "center_crown",
+            "point": [31.254257, -1.139836, -0.310273]
+          },
+          {
+            "type_cn": "牙冠中心",
+            "fdi": 12,
+            "type": "center_crown",
+            "point": [29.160553, -7.169959, -0.618862]
+          },
+          {
+            "type_cn": "尖牙牙尖",
+            "fdi": 13,
+            "type": "canine_cusp",
+            "point": [25.83639, -12.820726, -1.400627]
+          },
+          {
+            "type_cn": "颊尖",
+            "fdi": 14,
+            "type": "buccal_cusp_p",
+            "point": [17.732513, -16.964756, -2.008241]
+          },
+          {
+            "type_cn": "颊尖",
+            "fdi": 15,
+            "type": "buccal_cusp_p",
+            "point": [12.427052, -20.725206, -2.408848]
+          },
+          {
+            "type_cn": "近中颊尖",
+            "fdi": 16,
+            "type": "cusp_mb",
+            "point": [7.179356, -22.817028, -1.670632]
+          },
+          {
+            "type_cn": "远中颊尖",
+            "fdi": 16,
+            "type": "cusp_db",
+            "point": [1.904139, -24.113665, -2.052526]
+          },
+          {
+            "type_cn": "近中颊尖",
+            "fdi": 17,
+            "type": "cusp_mb",
+            "point": [-3.221609, -25.452143, -0.72222]
+          },
+          {
+            "type_cn": "近中颊尖",
+            "fdi": 18,
+            "type": "cusp_mb",
+            "point": [-11.329652, -30.294146, 0.366367]
+          }
+        ],
+        "measurements": {
+          "left": {
+            "side": "left",
+            "curve_type": "凸向下",
+            "radius": 132.0478,
+            "curvature": 0.0038
+          },
+          "right": {
+            "side": "right",
+            "curve_type": "凸向下",
+            "radius": 152.6809,
+            "curvature": 0.0033
+          }
+        }
+      }
+    },
+    {
+      "task_name": "lower-curve",
+      "diagnosis_result": {
+        "teeth_points": [
+          {
+            "type_cn": "牙冠中心",
+            "fdi": 31,
+            "type": "center_crown",
+            "point": [26.980824, 4.622759, 1.585805]
+          },
+          {
+            "type_cn": "牙冠中心",
+            "fdi": 32,
+            "type": "center_crown",
+            "point": [27.744423, 9.370099, 1.013982]
+          },
+          {
+            "type_cn": "牙尖点",
+            "fdi": 33,
+            "type": "canine_cusp",
+            "point": [24.560247, 14.051693, 1.488797]
+          },
+          {
+            "type_cn": "颊尖",
+            "fdi": 34,
+            "type": "buccal_cusp_p",
+            "point": [17.92062, 17.251118, 1.180699]
+          },
+          {
+            "type_cn": "颊尖",
+            "fdi": 35,
+            "type": "buccal_cusp_p",
+            "point": [11.690368, 18.641466, 0.211021]
+          },
+          {
+            "type_cn": "近中颊尖",
+            "fdi": 36,
+            "type": "cusp_mb",
+            "point": [1.768614, 22.315178, 0.200262]
+          },
+          {
+            "type_cn": "近中颊尖",
+            "fdi": 37,
+            "type": "cusp_mb",
+            "point": [-6.508942, 22.685301, -0.095787]
+          },
+          {
+            "type_cn": "远中颊尖",
+            "fdi": 37,
+            "type": "cusp_db",
+            "point": [-10.236597, 23.030891, 0.090283]
+          },
+          {
+            "type_cn": "牙冠中心",
+            "fdi": 41,
+            "type": "center_crown",
+            "point": [30.017826, 0.885459, -0.155349]
+          },
+          {
+            "type_cn": "牙冠中心",
+            "fdi": 42,
+            "type": "center_crown",
+            "point": [28.614178, -3.154063, 0.649545]
+          },
+          {
+            "type_cn": "牙尖点",
+            "fdi": 43,
+            "type": "canine_cusp",
+            "point": [26.275702, -8.604141, 1.211208]
+          },
+          {
+            "type_cn": "颊尖",
+            "fdi": 44,
+            "type": "buccal_cusp_p",
+            "point": [20.895216, -13.541241, 0.664616]
+          },
+          {
+            "type_cn": "颊尖",
+            "fdi": 45,
+            "type": "buccal_cusp_p",
+            "point": [14.126539, -15.767216, 0.443754]
+          },
+          {
+            "type_cn": "近中颊尖",
+            "fdi": 46,
+            "type": "cusp_mb",
+            "point": [8.365293, -18.930687, -0.302013]
+          },
+          {
+            "type_cn": "近中颊尖",
+            "fdi": 47,
+            "type": "cusp_mb",
+            "point": [-2.453785, -23.336418, 0.322993]
+          },
+          {
+            "type_cn": "远中颊尖",
+            "fdi": 47,
+            "type": "cusp_db",
+            "point": [-6.013324, -24.600357, 0.459636]
+          }
+        ],
+        "measurements": {
+          "left": { "depth_mm": 0.52, "classification": "正常", "radius": 8120.1 },
+          "right": { "depth_mm": 0.51, "classification": "正常", "radius": 166388.04 }
+        }
+      }
+    },
+    {
+      "task_name": "overjet",
+      "diagnosis_result": {
+        "teeth_points": [
+          {
+            "type_cn": "切端",
+            "fdi": 11,
+            "type": "incisal_edge",
+            "point": [31.254257, -1.139836, -0.310273]
+          },
+          {
+            "type_cn": "切端",
+            "fdi": 21,
+            "type": "incisal_edge",
+            "point": [29.916153, 7.306551, -0.475388]
+          },
+          {
+            "type_cn": "切端",
+            "fdi": 41,
+            "type": "incisal_edge",
+            "point": [30.017826, 0.885459, -0.155349]
+          },
+          {
+            "type_cn": "唇面点",
+            "fdi": 41,
+            "type": "labial_surface",
+            "point": [31.260387, 0.19025, -2.840301]
+          },
+          {
+            "type_cn": "切端",
+            "fdi": 31,
+            "type": "incisal_edge",
+            "point": [26.980824, 4.622759, 1.585805]
+          },
+          {
+            "type_cn": "唇面点",
+            "fdi": 31,
+            "type": "labial_surface",
+            "point": [28.393982, 4.598293, -4.593624]
+          }
+        ],
+        "measurements": {
+          "severity": "正常",
+          "avg_overjet": 0.5694,
+          "diagnosis": "正常",
+          "pair_details": [
+            { "overjet": -0.3816, "is_crossbite": false, "upper_fdi": 11, "lower_fdi": 41 },
+            { "overjet": 1.5203, "is_crossbite": false, "upper_fdi": 21, "lower_fdi": 31 }
+          ]
+        }
+      }
+    },
+    {
+      "task_name": "arch-width",
+      "diagnosis_result": {
+        "teeth_points": [
+          {
+            "type_cn": "牙尖点",
+            "fdi": 13,
+            "type": "canine_cusp",
+            "point": [25.83639, -12.820726, -1.400627]
+          },
+          {
+            "type_cn": "牙尖点",
+            "fdi": 23,
+            "type": "canine_cusp",
+            "point": [22.79763, 18.343533, -1.567172]
+          },
+          {
+            "type_cn": "牙尖点",
+            "fdi": 33,
+            "type": "canine_cusp",
+            "point": [24.560247, 14.051693, 1.488797]
+          },
+          {
+            "type_cn": "牙尖点",
+            "fdi": 43,
+            "type": "canine_cusp",
+            "point": [26.275702, -8.604141, 1.211208]
+          },
+          {
+            "type_cn": "中央窝",
+            "fdi": 16,
+            "type": "center_fossa",
+            "point": [3.722187, -21.173761, 0.65118]
+          },
+          {
+            "type_cn": "中央窝",
+            "fdi": 26,
+            "type": "center_fossa",
+            "point": [-0.219803, 22.488405, 0.256478]
+          },
+          {
+            "type_cn": "中央窝",
+            "fdi": 36,
+            "type": "center_fossa",
+            "point": [1.384874, 19.346615, -2.965601]
+          },
+          {
+            "type_cn": "中央窝",
+            "fdi": 46,
+            "type": "center_fossa",
+            "point": [4.753361, -17.722221, -3.003687]
+          }
+        ],
+        "measurements": {
+          "severity": "正常",
+          "upper_arch": {
+            "canine_width_3_3": { "left_fdi": 23, "unit": "mm", "right_fdi": 13, "width": 31.3121 },
+            "molar_width_6_6": { "left_fdi": 26, "unit": "mm", "right_fdi": 16, "width": 43.8398 }
+          },
+          "diagnosis": "正常",
+          "lower_arch": {
+            "canine_width_3_3": { "left_fdi": 43, "unit": "mm", "right_fdi": 33, "width": 22.7207 },
+            "molar_width_6_6": { "left_fdi": 46, "unit": "mm", "right_fdi": 36, "width": 37.2216 }
+          }
+        }
+      }
     }
-  },
-  "message": "分析成功"
+  ],
+  "basic_algorithm_info": {
+    "obj": {
+      "upper_basics_json": "http://175.154.206.51:9000/cy-stl/3D/2512001368/1997902013463007232/obj/2512001368_1997902013463007232_upper.basics.json?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20251210%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251210T032209Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=fdf8e7a064902d85b67c7d7df6507fd6b34f617ee897234292f62f366dee8d96",
+      "ul_json": "http://175.154.206.51:9000/cy-stl/3D/2512001368/1997902013463007232/obj/2512001368_1997902013463007232_ul.json?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20251210%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251210T032211Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=45d5347f8d48e786b2bd702e85db2d298dd69ba77f1a13b73d44ac4652edaa7f",
+      "lower_obj_json": "http://175.154.206.51:9000/cy-stl/3D/2512001368/1997902013463007232/obj/2512001368_1997902013463007232_lower.json?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20251210%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251210T032210Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=44b1948b11c73609d78ef69250078173a1bc66d2b73515b29f562b8cb6d8ff07",
+      "upper_obj_json": "http://175.154.206.51:9000/cy-stl/3D/2512001368/1997902013463007232/obj/2512001368_1997902013463007232_upper.json?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20251210%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251210T032210Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=efc8820a99cefd775a11a3661c67e38b9193dbbb132b9db9c9565c646e1ad91d",
+      "lower_obj": "http://175.154.206.51:9000/cy-stl/3D/2512001368/1997902013463007232/obj/2512001368_1997902013463007232_lower.obj?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20251210%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251210T032210Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=a155c3ae5b6acb2556ba279c9a1f45d871c9c01dc7b71531b82894654910e153",
+      "ul_obj": "http://175.154.206.51:9000/cy-stl/3D/2512001368/1997902013463007232/obj/2512001368_1997902013463007232_ul.obj?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20251210%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251210T032211Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=330ab772df3396f6de7d3ff1921e4cf055072059bb5fab5d99f139154e4dc65e",
+      "upper_obj": "http://175.154.206.51:9000/cy-stl/3D/2512001368/1997902013463007232/obj/2512001368_1997902013463007232_upper.obj?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20251210%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251210T032210Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=88f9317a6bb1bcbea2d2e0d4b467c20c8ec84fbb58ddb063c4bd4e2ee279473f",
+      "lower_basics_json": "http://175.154.206.51:9000/cy-stl/3D/2512001368/1997902013463007232/obj/2512001368_1997902013463007232_lower.basics.json?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20251210%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251210T032209Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=9ad57ea59047a07e6c56386dc9956dcf91e3189a10c38cb890fda58eba152c8c"
+    },
+    "stl": {
+      "lower_stl_json": "http://175.154.206.51:9000/cy-stl/3D/2512001368/1997902013463007232/stl/2512001368_1997902013463007232_lower.json?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20251210%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251210T032209Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=c3a74562f9ba61b4ca585c96349ad935780b2b500b4579397fe8375875a1aa25",
+      "upper_only_tooth_stl": "http://175.154.206.51:9000/cy-stl/3D/2512001368/1997902013463007232/stl/2512001368_1997902013463007232_upper_only_tooth.stl?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20251210%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251210T032209Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=f2c69a72115cc8930fddf43aa20bab67a56dc2f78a0d4f67c42ab058dea9a434",
+      "lower_only_tooth_json": "http://175.154.206.51:9000/cy-stl/3D/2512001368/1997902013463007232/stl/2512001368_1997902013463007232_lower_only_tooth.json?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20251210%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251210T032209Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=c978568daf4d4468520eddb8f2a36f786668d49ae023bbed1eac22f9168b919a",
+      "upper_stl_json": "http://175.154.206.51:9000/cy-stl/3D/2512001368/1997902013463007232/stl/2512001368_1997902013463007232_upper.json?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20251210%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251210T032209Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=3dcc99674531e4dca8ae9f3ca207fcc9688c6c3069b6b754ea6c4d221fb5db37",
+      "upper_only_tooth_json": "http://175.154.206.51:9000/cy-stl/3D/2512001368/1997902013463007232/stl/2512001368_1997902013463007232_upper_only_tooth.json?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20251210%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251210T032209Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=153fcaf2cba1fe95ad9b2143b7368a58276475f52fa8fc23ea0613b8af72a817",
+      "lower_stl": "http://175.154.206.51:9000/cy-stl/3D/2512001368/1997902013463007232/stl/2512001368_1997902013463007232_lower.stl?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20251210%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251210T032209Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=e05285ecc093e22bc6f1f039dbce6fcbd298b2a5a43771d9f1e0f2ca91e2833c",
+      "upper_stl": "http://175.154.206.51:9000/cy-stl/3D/2512001368/1997902013463007232/stl/2512001368_1997902013463007232_upper.stl?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20251210%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251210T032208Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=00bcdc77d24a1779130ea94f852e5a54683c6eebf5649026b42aec129ca59eb8",
+      "lower_only_tooth_stl": "http://175.154.206.51:9000/cy-stl/3D/2512001368/1997902013463007232/stl/2512001368_1997902013463007232_lower_only_tooth.stl?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20251210%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251210T032209Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=4ed1f9fd6e6bfdc3004a8b62b7bb08f60ee1b6367f835fa4499f860cea963115"
+    }
+  }
 }
