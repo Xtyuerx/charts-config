@@ -178,6 +178,8 @@ export class CrossbiteAnalysisStrategy extends BaseAnalysisStrategy {
       fontColor: '#ffffff',
     })
 
+    console.log(infoPanel)
+
     // this.group.add(infoPanel)
   }
 

@@ -169,15 +169,9 @@ export class LowerCurveAnalysisStrategy extends BaseAnalysisStrategy {
       return
     }
 
-    // 将曲线数据转换为Three.js坐标（保持缩放）
-    const scale = 1.5
+    // 将曲线数据转换为Three.js坐标（不缩放，使用原始坐标）
     const curvePoints = curveData.map(
-      (point) =>
-        new THREE.Vector3(
-          (point[0] || 0) * scale,
-          (point[1] || 0) * scale,
-          (point[2] || 0) * scale,
-        ),
+      (point) => new THREE.Vector3(point[0] || 0, point[1] || 0, point[2] || 0),
     )
 
     console.log('🔵 LowerCurve - 曲线点数:', curvePoints.length)
@@ -249,11 +243,28 @@ export class LowerCurveAnalysisStrategy extends BaseAnalysisStrategy {
     const referenceFDIs = [47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37]
     const pointsMap = new Map<number, THREE.Vector3>()
 
-    // 提取每颗牙齿的中心点（使用缩放坐标）- 只从下颌牙齿中提取
+    // 提取每颗牙齿的中心点（使用原始坐标，不缩放）- 只从下颌牙齿中提取
     referenceFDIs.forEach((fdi) => {
       const toothPoints = lowerTeethPoints.filter((p) => p.fdi === fdi)
       if (toothPoints.length > 0) {
-        const center = this.calculatePointsCenterScaled(toothPoints.map((p) => p.point))
+        // 计算中心点，使用原始坐标（与点位渲染保持一致）
+        const sum = toothPoints.reduce(
+          (acc, p) => {
+            const pointCoords = typeof p.point === 'string' ? JSON.parse(p.point) : p.point
+            acc.x += pointCoords[0] || 0
+            acc.y += pointCoords[1] || 0
+            acc.z += pointCoords[2] || 0
+            return acc
+          },
+          { x: 0, y: 0, z: 0 },
+        )
+
+        const center = new THREE.Vector3(
+          sum.x / toothPoints.length,
+          sum.y / toothPoints.length,
+          sum.z / toothPoints.length,
+        )
+
         pointsMap.set(fdi, center)
       }
     })
@@ -265,11 +276,11 @@ export class LowerCurveAnalysisStrategy extends BaseAnalysisStrategy {
 
     const curveDepth = (measurements.curve_depth_mm as number) || 0
 
-    // 1. 渲染平滑曲线（不绘制直线段）
-    this.renderSpeeConnectionLine(pointsMap, referenceFDIs)
-
-    // 2. 渲染覆盖下颌模型的白色透明平面（只使用下颌牙齿数据）
+    // 1. 渲染贴合点位的白色透明平面（先画平面）
     this.renderFullLowerJawPlane(pointsMap, lowerTeethPoints)
+
+    // 2. 渲染平滑曲线（曲线在平面上方，贴合所有点位）
+    this.renderSpeeConnectionLine(pointsMap, referenceFDIs)
 
     // 3. 渲染关键点标记（只标记4个下颌关键点：37, 47, 31, 41）
     const keyFDIs = [37, 47, 31, 41]
@@ -303,8 +314,9 @@ export class LowerCurveAnalysisStrategy extends BaseAnalysisStrategy {
 
     if (orderedPoints.length < 2) return
 
-    // 绘制更平滑的曲线，增加采样点数到200
-    const curve = new THREE.CatmullRomCurve3(orderedPoints, false, 'catmullrom', 0.5)
+    // 绘制更平滑的曲线，确保完美贴合所有点位
+    // 使用 chordal 类型和较小的 tension 值来更好地贴合点位
+    const curve = new THREE.CatmullRomCurve3(orderedPoints, false, 'chordal', 0.3)
     const curveGeometry = new THREE.BufferGeometry().setFromPoints(curve.getPoints(200))
     const curveMaterial = new THREE.LineBasicMaterial({
       color: 0x00ff00, // 绿色线条
@@ -325,8 +337,9 @@ export class LowerCurveAnalysisStrategy extends BaseAnalysisStrategy {
   }
 
   /**
-   * 渲染覆盖整个下颌的白色透明平面
-   * 平面水平（平行于坐标系的XZ平面），高度为31和41号牙的平均高度
+   * 渲染水平白色透明平面
+   * 平面在 XY 平面上（在下颌 mesh 的局部坐标系中，Z轴垂直向上）
+   * 铺满整个下颌，贴近所有牙齿点位
    */
   private renderFullLowerJawPlane(
     pointsMap: Map<number, THREE.Vector3>,
@@ -335,98 +348,60 @@ export class LowerCurveAnalysisStrategy extends BaseAnalysisStrategy {
   ): void {
     if (pointsMap.size < 3) return
 
-    // 获取31号牙和41号牙的点位
-    const point31 = pointsMap.get(31)
-    const point41 = pointsMap.get(41)
+    // 获取所有点位
+    const allPoints = Array.from(pointsMap.values())
 
-    if (!point31 || !point41) {
-      console.warn('⚠️ 未找到31或41号牙的点位，无法创建平面')
-      return
-    }
+    // 计算X、Y范围（在下颌mesh局部坐标系中，XY是水平面）
+    const margin = 5
+    const minX = Math.min(...allPoints.map((p) => p.x)) - margin
+    const maxX = Math.max(...allPoints.map((p) => p.x)) + margin
+    const minY = Math.min(...allPoints.map((p) => p.y)) - margin
+    const maxY = Math.max(...allPoints.map((p) => p.y)) + margin
 
-    // 平面高度：使用31和41号牙的平均高度
-    const planeY = (point31.y + point41.y) / 2
+    // Z坐标：使用所有点位的最大Z值（最靠近咬合面）
+    const planeZ = Math.max(...allPoints.map((p) => p.z))
 
-    // 计算所有参考点的中心位置
-    const referencePoints = Array.from(pointsMap.values())
-    const centerX = referencePoints.reduce((sum, p) => sum + p.x, 0) / referencePoints.length
-    const centerZ = referencePoints.reduce((sum, p) => sum + p.z, 0) / referencePoints.length
+    // 计算平面尺寸
+    const planeWidth = maxX - minX
+    const planeHeight = maxY - minY
+    const centerX = (minX + maxX) / 2
+    const centerY = (minY + maxY) / 2
 
-    // 固定平面大小：50x50（已经是场景坐标系）
-    const planeSize = 50
-
-    // 计算平面的四个角（以中心点为基准）
-    const halfSize = planeSize / 2
-    const minX = centerX - halfSize
-    const maxX = centerX + halfSize
-    const minZ = centerZ - halfSize
-    const maxZ = centerZ + halfSize
-
-    // 在x-z平面上创建网格（Y轴保持不变，形成水平平面）
-    const segments = 50 // 网格分辨率
-    const vertices: number[] = []
-    const indices: number[] = []
-
-    // 生成网格顶点（完全水平的平面，所有点Y坐标相同）
-    for (let i = 0; i <= segments; i++) {
-      for (let j = 0; j <= segments; j++) {
-        const x = minX + (i / segments) * planeSize
-        const z = minZ + (j / segments) * planeSize
-        const y = planeY // 所有顶点使用相同的Y坐标，形成水平平面
-
-        vertices.push(x, y, z)
-      }
-    }
-
-    // 生成网格索引
-    for (let i = 0; i < segments; i++) {
-      for (let j = 0; j < segments; j++) {
-        const topLeft = i * (segments + 1) + j
-        const topRight = topLeft + 1
-        const bottomLeft = (i + 1) * (segments + 1) + j
-        const bottomRight = bottomLeft + 1
-
-        // 两个三角形组成一个四边形
-        indices.push(topLeft, bottomLeft, topRight)
-        indices.push(topRight, bottomLeft, bottomRight)
-      }
-    }
-
-    // 创建几何体
-    const planeGeometry = new THREE.BufferGeometry()
-    planeGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3))
-    planeGeometry.setIndex(indices)
-    planeGeometry.computeVertexNormals()
+    // 使用 PlaneGeometry 创建平面（默认在XY平面上）
+    const planeGeometry = new THREE.PlaneGeometry(planeWidth, planeHeight, 50, 50)
 
     // 创建白色透明材质
     const planeMaterial = new THREE.MeshPhongMaterial({
-      color: 0xffffff, // 白色
+      color: 0xffffff,
       transparent: true,
-      opacity: 0.35, // 透明度35%
-      side: THREE.DoubleSide, // 双面可见
-      depthWrite: false, // 防止透明度问题
+      opacity: 0.35,
+      side: THREE.DoubleSide,
+      depthWrite: false,
     })
 
     const planeMesh = new THREE.Mesh(planeGeometry, planeMaterial)
     planeMesh.name = `${this.taskName}_spee_full_lower_plane`
 
-    // 将平面添加到下颌模型mesh中，这样会跟随下颌一起显示/隐藏
+    // 设置平面位置（在XY平面上，Z坐标固定）
+    planeMesh.position.set(centerX, centerY, planeZ)
+
+    // 添加到下颌模型
     const lowerMesh = this.context.lowerMeshLabel
     if (lowerMesh) {
       lowerMesh.add(planeMesh)
-      console.log('✅ Spee平面已添加到下颌模型')
+      console.log('✅ Spee水平平面已添加到下颌模型，位置:', planeMesh.position)
     } else {
       this.group.add(planeMesh)
       console.warn('⚠️ 未找到下颌mesh，Spee平面添加到分析group')
     }
 
-    // 添加平面边框（正方形边界，水平线）
+    // 添加平面边框
     const edgePoints = [
-      new THREE.Vector3(minX, planeY, minZ),
-      new THREE.Vector3(maxX, planeY, minZ),
-      new THREE.Vector3(maxX, planeY, maxZ),
-      new THREE.Vector3(minX, planeY, maxZ),
-      new THREE.Vector3(minX, planeY, minZ),
+      new THREE.Vector3(minX, minY, planeZ),
+      new THREE.Vector3(maxX, minY, planeZ),
+      new THREE.Vector3(maxX, maxY, planeZ),
+      new THREE.Vector3(minX, maxY, planeZ),
+      new THREE.Vector3(minX, minY, planeZ),
     ]
 
     const edgeGeometry = new THREE.BufferGeometry().setFromPoints(edgePoints)
@@ -439,29 +414,11 @@ export class LowerCurveAnalysisStrategy extends BaseAnalysisStrategy {
     const edgeLines = new THREE.Line(edgeGeometry, edgeMaterial)
     edgeLines.name = `${this.taskName}_spee_plane_border`
 
-    // 边框也添加到下颌mesh
     if (lowerMesh) {
       lowerMesh.add(edgeLines)
     } else {
       this.group.add(edgeLines)
     }
-    // ========== ✅ 最后统一进行平面旋转 ==========
-
-    // 1. 计算 31→41 方向
-    const jawDir = new THREE.Vector3().subVectors(point41, point31).normalize()
-
-    // 2. 平面中心位置
-    const centerPos = new THREE.Vector3(centerX, planeY, centerZ)
-
-    // 3. 设置平面位置
-    planeMesh.position.copy(centerPos)
-    edgeLines.position.copy(centerPos)
-
-    // 4. 让两者一起 lookAt
-    const lookTarget = new THREE.Vector3().addVectors(centerPos, jawDir)
-
-    planeMesh.lookAt(lookTarget)
-    edgeLines.lookAt(lookTarget)
   }
 
   /**
@@ -563,28 +520,6 @@ export class LowerCurveAnalysisStrategy extends BaseAnalysisStrategy {
     } else {
       this.group.add(depthLabel)
     }
-  }
-
-  /**
-   * 计算多个点的中心（缩放版本，用于添加到 group）
-   */
-  private calculatePointsCenterScaled(points: number[][]): THREE.Vector3 {
-    const scale = 1.5
-    const sum = points.reduce(
-      (acc, p) => {
-        acc.x += p[0] || 0
-        acc.y += p[1] || 0
-        acc.z += p[2] || 0
-        return acc
-      },
-      { x: 0, y: 0, z: 0 },
-    )
-
-    return new THREE.Vector3(
-      (sum.x / points.length) * scale,
-      (sum.y / points.length) * scale,
-      (sum.z / points.length) * scale,
-    )
   }
 
   /**
