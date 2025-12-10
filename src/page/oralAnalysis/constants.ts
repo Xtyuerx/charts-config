@@ -1,4 +1,4 @@
-import type { ViewLabel, StrategyConfig } from './types'
+import type { ViewLabel } from './types'
 import * as THREE from 'three'
 
 // ==================== 场景和材质配置 ====================
