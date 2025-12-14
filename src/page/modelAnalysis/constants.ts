@@ -1,6 +1,5 @@
-import * as THREE from 'three';
-import { opacity } from 'html2canvas/dist/types/css/property-descriptors/opacity';
-import type { ViewLabel } from './types';
+import * as THREE from 'three'
+import type { ViewLabel } from './types'
 
 // ==================== 场景和材质配置 ====================
 
@@ -18,7 +17,7 @@ export const SCENE_CONFIG = {
     x: -Math.PI / 2,
     z: -Math.PI / 2,
   },
-} as const;
+} as const
 
 /**
  * 材质配置
@@ -41,7 +40,7 @@ export const MATERIAL_CONFIG = {
     emissive: 0x000000,
     emissiveIntensity: 0,
   },
-} as const;
+} as const
 
 /**
  * 标签配置
@@ -54,7 +53,7 @@ export const LABEL_CONFIG = {
   font: '200px Arial',
   textColor: '#000000',
   scale: { x: 2, y: 2, z: 1 },
-} as const;
+} as const
 
 // ==================== 视角配置 ====================
 
@@ -69,7 +68,7 @@ export const VIEW_LABELS: ViewLabel[] = [
   { label: '下颌', isShow: false, type: 4, key: 'lower_angle' },
   { label: '左双颌', isShow: false, type: 5, key: 'left' },
   { label: '右双颌', isShow: false, type: 6, key: 'right' },
-];
+]
 
 // ==================== 牙齿相关配置 ====================
 
@@ -113,7 +112,7 @@ export const TOOTH_COLOR_MAP: Record<number, number> = {
   46: 0x87ceeb,
   47: 0x87cefa,
   48: 0xb0c4de,
-};
+}
 
 /**
  * 牙齿配对关系 - [上颌, 下颌]
@@ -135,7 +134,7 @@ export const TOOTH_PAIRS: [number, number][] = [
   [26, 36],
   [27, 37],
   [28, 38],
-];
+]
 
 // ==================== 点位类型颜色映射 ====================
 
@@ -165,7 +164,7 @@ export const POINT_TYPE_COLORS: Record<string, number> = {
   center_crown: 0x88ff00,
   // 颊沟点
   mesial_buccal_groove: 0xff0088,
-};
+}
 
 // ==================== 渲染器默认配置 ====================
 
@@ -177,7 +176,7 @@ export const DEFAULT_POINT_OPTIONS = {
   size: 0.5,
   opacity: 1.0,
   showLabel: false,
-};
+}
 
 /**
  * 线渲染器默认配置
@@ -190,7 +189,7 @@ export const DEFAULT_LINE_OPTIONS = {
   gapSize: 0.3,
   showArrows: false,
   showLabel: false,
-};
+}
 
 /**
  * 标签渲染器默认配置
@@ -201,4 +200,4 @@ export const DEFAULT_LABEL_OPTIONS = {
   backgroundColor: '#285e50',
   padding: 8,
   borderRadius: 4,
-};
+}
