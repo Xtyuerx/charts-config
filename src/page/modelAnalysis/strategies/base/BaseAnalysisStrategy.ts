@@ -262,7 +262,30 @@ export abstract class BaseAnalysisStrategy implements IAnalysisStrategy {
    * 完整版在第四步的渲染器层实现
    */
   protected createPointMarkers(points: ToothPoint[]): void {
+    console.log('createPointMarkers', points);
+    const scale = 1.5; // SCENE_CONFIG.modelScale - 提前定义
+
     points.forEach(p => {
+      // 防御性检查：确保 point 数据存在且有效
+      if (!p.point || !Array.isArray(p.point) || p.point.length < 3) {
+        console.warn(`⚠️ 跳过无效点位数据: FDI=${p.fdi}, type=${p.type}, point=`, p.point);
+        return;
+      }
+
+      // 检查坐标值是否为有效数字
+      if (
+        typeof p.point[0] !== 'number' ||
+        typeof p.point[1] !== 'number' ||
+        typeof p.point[2] !== 'number' ||
+        isNaN(p.point[0]) ||
+        isNaN(p.point[1]) ||
+        isNaN(p.point[2])
+      ) {
+        console.warn(`⚠️ 跳过无效坐标值: FDI=${p.fdi}, type=${p.type}, point=`, p.point);
+        return;
+      }
+
+      console.log('p', p.point[0], p.point[1], p.point[2], p);
       const color = this.getPointColor(p.type);
 
       // 创建球体作为点标记
@@ -275,7 +298,6 @@ export abstract class BaseAnalysisStrategy implements IAnalysisStrategy {
       const sphere = new THREE.Mesh(geometry, material);
 
       // 设置位置（考虑缩放）
-      const scale = 1.5; // SCENE_CONFIG.modelScale
       sphere.position.set(p.point[0] * scale, p.point[1] * scale, p.point[2] * scale);
       sphere.name = `point_${p.fdi}_${p.type}`;
 

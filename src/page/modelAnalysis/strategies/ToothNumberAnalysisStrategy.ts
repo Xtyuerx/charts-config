@@ -41,6 +41,9 @@ export class ToothNumberAnalysisStrategy extends BaseAnalysisStrategy {
       });
       label.name = `label_${fdi}`;
 
+      // 启用深度测试，让标签可以被牙齿模型遮挡
+      this.enableDepthTestForLabel(label);
+
       // 使用方案2：直接添加到对应的 mesh
       this.addToMesh(label, fdi);
     });
@@ -116,7 +119,8 @@ export class ToothNumberAnalysisStrategy extends BaseAnalysisStrategy {
    */
   private groupByFDI(
     points: AnalysisData['teeth_points'],
-  ): Record<string, AnalysisData['teeth_points']> {
+  ): Record<string, NonNullable<AnalysisData['teeth_points']>> {
+    if (!points) return {};
     return points.reduce((acc, point) => {
       const fdi = point.fdi.toString();
       if (!acc[fdi]) {
@@ -124,7 +128,7 @@ export class ToothNumberAnalysisStrategy extends BaseAnalysisStrategy {
       }
       acc[fdi].push(point);
       return acc;
-    }, {} as Record<string, AnalysisData['teeth_points']>);
+    }, {} as Record<string, NonNullable<AnalysisData['teeth_points']>>);
   }
 
   /**
@@ -144,5 +148,21 @@ export class ToothNumberAnalysisStrategy extends BaseAnalysisStrategy {
 
     // 返回原始坐标（不缩放），因为会继承父 mesh 的缩放
     return new THREE.Vector3(sum.x / points.length, sum.y / points.length, sum.z / points.length);
+  }
+
+  /**
+   * 为标签启用深度测试，使其能被模型遮挡
+   * @param label 标签对象
+   */
+  private enableDepthTestForLabel(label: THREE.Sprite): void {
+    // 重置渲染顺序，使用正常的渲染流程
+    label.renderOrder = 0;
+
+    // 启用深度测试，让标签可以被模型遮挡
+    if (label.material) {
+      const material = label.material as THREE.SpriteMaterial;
+      material.depthTest = true; // 启用深度测试
+      material.depthWrite = true; // 不写入深度缓冲（保持透明效果）
+    }
   }
 }

@@ -20,10 +20,10 @@ export class OverbiteAnalysisStrategy extends BaseAnalysisStrategy {
     const upperPoints = teethPoints.filter(p => this.isUpper(p.fdi));
     const lowerPoints = teethPoints.filter(p => this.isLower(p.fdi));
 
-    // 渲染上颌点位（红色）
-    this.createColoredPointMarkers(upperPoints, 0xff0000);
-    // 渲染下颌点位（绿色）
-    this.createColoredPointMarkers(lowerPoints, 0x00ff00);
+    // 渲染上颌点位（#FEB5B5）
+    this.createColoredPointMarkers(upperPoints, 0xfeb5b5);
+    // 渲染下颌点位（#A49ED9）
+    this.createColoredPointMarkers(lowerPoints, 0xa49ed9);
   }
 
   /**
@@ -37,6 +37,8 @@ export class OverbiteAnalysisStrategy extends BaseAnalysisStrategy {
         color,
         emissive: color,
         emissiveIntensity: 0.3,
+        depthTest: true,
+        depthWrite: true,
       });
       const sphere = new THREE.Mesh(geometry, material);
 
@@ -66,9 +68,9 @@ export class OverbiteAnalysisStrategy extends BaseAnalysisStrategy {
     incisalPoints.forEach(ip => {
       const gp = gingivaPoints.find(g => g.fdi === ip.fdi);
       if (gp) {
-        // 根据上下颌选择颜色：上颌红色，下颌绿色
+        // 根据上下颌选择颜色：上颌 #FEB5B5，下颌 #A49ED9
         const isUpper = this.isUpper(ip.fdi);
-        const lineColor = isUpper ? 0xff0000 : 0x00ff00; // 上颌红色，下颌绿色
+        const lineColor = isUpper ? 0xfeb5b5 : 0xa49ed9;
 
         // 创建虚线连接（使用 unscaled 坐标）
         const startVec = new THREE.Vector3(ip.point[0], ip.point[1], ip.point[2]);
@@ -84,18 +86,20 @@ export class OverbiteAnalysisStrategy extends BaseAnalysisStrategy {
     incisalPoints
       .filter(p => anteriorTeeth.includes(p.fdi))
       .forEach(p => {
-        // 根据上下颌选择颜色：上颌红色，下颌绿色
+        // 根据上下颌选择颜色：上颌 #FEB5B5，下颌 #A49ED9
         const isUpper = this.isUpper(p.fdi);
-        const color = isUpper ? 0xff0000 : 0x00ff00; // 上颌红色，下颌绿色
+        const color = isUpper ? 0xfeb5b5 : 0xa49ed9;
 
-        // 给前牙切端点添加更大的标记（使用 unscaled 位置）
-        const geometry = new THREE.SphereGeometry(0.7, 16, 16);
+        // 给前牙切端点添加标记（使用 unscaled 位置）
+        const geometry = new THREE.SphereGeometry(0.5, 16, 16);
         const material = new THREE.MeshPhongMaterial({
           color,
           emissive: color,
           emissiveIntensity: 0.5,
           transparent: true,
           opacity: 0.8,
+          depthTest: true,
+          depthWrite: true,
         });
         const sphere = new THREE.Mesh(geometry, material);
         sphere.position.set(p.point[0], p.point[1], p.point[2]); // 不再应用缩放
@@ -119,8 +123,8 @@ export class OverbiteAnalysisStrategy extends BaseAnalysisStrategy {
       linewidth: lineWidth,
       dashSize: 0.5,
       gapSize: 0.3,
-      depthTest: false,
-      depthWrite: false,
+      depthTest: true,
+      depthWrite: true,
       transparent: true,
     });
     const line = new THREE.Line(geometry, material);
