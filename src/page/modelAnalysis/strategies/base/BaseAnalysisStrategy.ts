@@ -553,33 +553,65 @@ export abstract class BaseAnalysisStrategy implements IAnalysisStrategy {
   }
   /**
    * 创建牙弓线
-   * 使用模型提取的牙齿中心点（centersUpper 和 centersLower）
+   * 优先使用 teeth_points 数据（来自拥挤度分析），否则使用模型提取的中心点
    */
-  protected createArchWire(): void {
-    const { centersUpper, centersLower } = this.context;
-
-    console.log('centersUpper', centersUpper, centersLower, this, this.context);
-
-    if (!centersUpper || !centersLower) {
-      console.warn('⚠️ 牙齿中心点数据不可用，无法创建牙弓线');
-      return;
-    }
-
-    // 由于牙齿中心点是 unscaled 的，而牙弓线需要和缩放后的模型对齐
-    // 所以需要先对中心点进行缩放（SCENE_CONFIG.modelScale）
+  protected createArchWire(teethPoints?: import('../types').ToothPoint[]): void {
     const scale = SCENE_CONFIG.modelScale;
     const scaledUpperCenters: Record<number, THREE.Vector3> = {};
     const scaledLowerCenters: Record<number, THREE.Vector3> = {};
 
-    // 缩放上颌中心点
-    Object.entries(centersUpper).forEach(([fdi, center]) => {
-      scaledUpperCenters[Number(fdi)] = center.clone().multiplyScalar(scale);
-    });
+    // 如果提供了 teeth_points，优先使用它来计算中心点
+    if (teethPoints && teethPoints.length > 0) {
+      console.log('✅ 使用 teeth_points 数据创建牙弓线（来自拥挤度分析）');
 
-    // 缩放下颌中心点
-    Object.entries(centersLower).forEach(([fdi, center]) => {
-      scaledLowerCenters[Number(fdi)] = center.clone().multiplyScalar(scale);
-    });
+      // 按 FDI 分组
+      const fdiGroups: Record<number, number[][]> = {};
+      teethPoints.forEach(p => {
+        if (!fdiGroups[p.fdi]) {
+          fdiGroups[p.fdi] = [];
+        }
+        fdiGroups[p.fdi].push(p.point);
+      });
+
+      // 计算每个 FDI 的中心点
+      Object.entries(fdiGroups).forEach(([fdi, points]) => {
+        const fdiNum = Number(fdi);
+        const center = this.calculatePointsCenterUnscaled(points);
+        const scaledCenter = center.clone().multiplyScalar(scale);
+
+        // 根据 FDI 范围分配到上下颌
+        if (fdiNum >= 11 && fdiNum <= 28) {
+          scaledUpperCenters[fdiNum] = scaledCenter;
+        } else if (fdiNum >= 31 && fdiNum <= 48) {
+          scaledLowerCenters[fdiNum] = scaledCenter;
+        }
+      });
+
+      console.log('从 teeth_points 计算得到:', {
+        上颌点数: Object.keys(scaledUpperCenters).length,
+        下颌点数: Object.keys(scaledLowerCenters).length,
+      });
+    } else {
+      // 使用模型提取的牙齿中心点
+      const { centersUpper, centersLower } = this.context;
+
+      console.log('使用模型提取的中心点创建牙弓线', centersUpper, centersLower);
+
+      if (!centersUpper || !centersLower) {
+        console.warn('⚠️ 牙齿中心点数据不可用，无法创建牙弓线');
+        return;
+      }
+
+      // 缩放上颌中心点
+      Object.entries(centersUpper).forEach(([fdi, center]) => {
+        scaledUpperCenters[Number(fdi)] = center.clone().multiplyScalar(scale);
+      });
+
+      // 缩放下颌中心点
+      Object.entries(centersLower).forEach(([fdi, center]) => {
+        scaledLowerCenters[Number(fdi)] = center.clone().multiplyScalar(scale);
+      });
+    }
 
     // 创建中间牙弓线（使用缩放后的坐标）
     this.archWire = createMiddleArchWire(scaledUpperCenters, scaledLowerCenters);
