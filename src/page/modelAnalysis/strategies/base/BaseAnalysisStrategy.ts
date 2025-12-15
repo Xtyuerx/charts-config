@@ -225,10 +225,6 @@ export abstract class BaseAnalysisStrategy implements IAnalysisStrategy {
 
   /**
    * 渲染测量标注
-   * 子类必须实现
-   */
-  /**
-   * 渲染测量标注
    * 子类可选实现
    */
   protected renderMeasurements(measurements: Record<string, unknown>): void {
