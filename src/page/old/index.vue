@@ -143,15 +143,19 @@ onUnmounted(() => {
 async function loadJsonPointsItem() {
   const allResponse = await fetch('/points/stl_all_demo.json')
   const allStl = await allResponse.json()
-  const upper =
-    'http://192.168.100.123:9000/cy-stl/3D/20250807105033261/1994249841554755584/stl/20251114_0004_upper.stl?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20251203%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251203T083510Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=370f04ad97b7f0c8af15c9dbe3ab4ed0d21bcbaff7ac445c3f2aca0c324091a2'
-  const upper_only_tooth =
-    'http://192.168.100.123:9000/cy-stl/3D/20250807105033261/1994249841554755584/stl/20251114_0004_upper_only_tooth.stl?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20251203%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251203T083510Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=06af9801b23c915dcac13c3856485867a84e4eb676c2801e24e12d5786a02f1e'
-  const lower =
-    'http://192.168.100.123:9000/cy-stl/3D/20250807105033261/1994249841554755584/stl/20251114_0004_lower.stl?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20251203%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251203T083510Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=02bd9bc6acf2269fb2a990736cd14ff0c9d5497e393a319c15b12b3338a4900b'
-  const lower_only_tooth =
-    'http://192.168.100.123:9000/cy-stl/3D/20250807105033261/1994249841554755584/stl/20251114_0004_lower_only_tooth.stl?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20251203%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251203T083510Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=4c82ce72ec87c653cba13b62135079e6d3f62c7045298d4e91536b5dc332bc59'
-  loadModels(upper, upper_only_tooth, lower, lower_only_tooth)
+  // 模型配置
+  const modelConfig = {
+    upper: '/models/upper.stl',
+    upper_only_tooth: '/models/upper_only_tooth.stl',
+    lower: '/models/lower.stl',
+    lower_only_tooth: '/models/lower_only_tooth.stl',
+  }
+  loadModels(
+    modelConfig.upper,
+    modelConfig.upper_only_tooth,
+    modelConfig.lower,
+    modelConfig.lower_only_tooth,
+  )
   tabData.value = formatPathologyResults(allStl.pathology_results)
   console.log(tabData, 'tabData')
 

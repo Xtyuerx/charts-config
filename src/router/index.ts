@@ -34,6 +34,12 @@ const router = createRouter({
       meta: { title: '数据模型' },
     },
     {
+      path: '/old',
+      name: 'old',
+      component: () => import('@/page/old/index.vue'),
+      meta: { title: '数据模型' },
+    },
+    {
       path: '/oralAnalysis',
       name: 'oralAnalysis',
       component: () => import('@/page/oralAnalysis/index.vue'),
