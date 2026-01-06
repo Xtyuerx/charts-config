@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { over } from 'lodash';
 import type { RenderContext, AnalysisData, DiagnosisData } from '../types';
 import type { IAnalysisStrategy } from '../strategies/base/IAnalysisStrategy';
 import { AnalysisStrategyFactory } from '../factories/AnalysisStrategyFactory';

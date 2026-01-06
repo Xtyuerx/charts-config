@@ -491,13 +491,13 @@ const handleSave = () => {
   // 获取更新后的点位数据（仅对拥挤度分析和覆合分析有效）
   const updatedData = getCurrentUpdatedPoints();
   if (updatedData) {
-    console.log('📍 更新后的点位数据:', updatedData);
+    console.log('更新后的点位数据:', updatedData);
   }
   let params;
   // 🔥 根据分析类型处理不同的数据格式
   if (currentTaskName === 'midline-deviation') {
     // 中线分析：数据格式为 { upper_midline_point: [x,y,z], lower_midline_point: [x,y,z] }
-    console.log('📍 中线分析更新后的数据:', updatedData);
+    console.log('中线分析更新后的数据:', updatedData);
 
     params = {
       id: StlId.value,

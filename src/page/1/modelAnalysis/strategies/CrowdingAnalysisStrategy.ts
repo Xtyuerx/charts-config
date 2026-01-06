@@ -34,11 +34,6 @@ export class CrowdingAnalysisStrategy extends BaseAnalysisStrategy {
 
     // 创建上下颌牙弓线（在点位渲染之后，基于点位实际位置连线）
     this.createArchWires();
-
-    // 注释掉renderJawCrowding，避免与renderPoints创建的点位重复
-    // renderPoints 已经为每个点位创建了可拖动的球体
-    // renderJawCrowding(teeth_points, measurements?.upper_jaw as Record<string, unknown>, true);
-    // renderJawCrowding(teeth_points, measurements?.lower_jaw as Record<string, unknown>, false);
   }
 
   /**
@@ -129,7 +124,7 @@ export class CrowdingAnalysisStrategy extends BaseAnalysisStrategy {
       }
 
       // 创建球体作为点标记
-      const geometry = new THREE.SphereGeometry(0.5, 16, 16);
+      const geometry = new THREE.SphereGeometry(0.8, 16, 16);
       const material = new THREE.MeshPhongMaterial({
         color,
         emissive: color,

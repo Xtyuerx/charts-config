@@ -539,7 +539,7 @@ export class MidlineAnalysisStrategy extends BaseAnalysisStrategy {
 
     // 确定颜色
     const originalColor = isUpper ? 0xfd7676 : 0x4169e1; // 原始点颜色：上颌红色，下颌蓝色
-    const samplePointColor = isUpper ? 0xfd7676 : 0x4169e1; // 采样点颜色：上颌绿色，下颌青色
+    const samplePointColor = isUpper ? 0xfeb5b5 : 0x4169e1; // 采样点颜色：上颌绿色，下颌青色
 
     // 根据 isUpper 直接获取目标 mesh
     const targetMesh = isUpper ? this.context.upperMeshLabel : this.context.lowerMeshLabel;
@@ -749,7 +749,7 @@ export class MidlineAnalysisStrategy extends BaseAnalysisStrategy {
     const closestPoint = new THREE.Vector3();
 
     // 直接在策略组坐标系中找到最近点（简化处理）
-    const samples = 500;
+    const samples = 20000;
     for (let i = 0; i <= samples; i++) {
       const t = i / samples;
       const curvePoint = curve.getPointAt(t);
