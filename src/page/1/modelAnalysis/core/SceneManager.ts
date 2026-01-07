@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { OrbitControls, DragControls } from 'three-stdlib';
+import { TrackballControls, DragControls } from 'three-stdlib';
 import { SCENE_CONFIG } from '../constants';
 import { RenderContext } from './RenderContext';
 
@@ -13,7 +13,7 @@ export class SceneManager {
   private scene!: THREE.Scene;
   private camera!: THREE.PerspectiveCamera;
   private renderer!: THREE.WebGLRenderer;
-  private controls: OrbitControls | null = null;
+  private controls: TrackballControls | null = null;
   private dragControls: DragControls | null = null;
   private draggableObjects: THREE.Object3D[] = [];
   private container!: HTMLDivElement;
@@ -81,8 +81,9 @@ export class SceneManager {
 
     // 添加灯光
     this.setupLights();
-
-    // 注意：不在这里初始化 OrbitControls
+    // 初始化 TrackballControls（使用默认目标点，模型加载后会更新）
+    this.initOrbitControls();
+    // 注意：不在这里初始化 TrackballControls
     // 将在模型加载、居中、朝向调整后再初始化控制器
     // 这样可以确保控制器的目标点和相机位置都是正确的
 
@@ -98,7 +99,7 @@ export class SceneManager {
   }
 
   /**
-   * 初始化 OrbitControls
+   * 初始化 TrackballControls
    * 应该在模型加载、居中、朝向调整后调用
    */
   private initOrbitControls(): void {
@@ -108,20 +109,12 @@ export class SceneManager {
     }
 
     // 创建控制器
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    // 阻尼效果
-    this.controls.enableDamping = false;
-    this.controls.dampingFactor = 0.05;
-    // 基础设置
-    this.controls.minDistance = 10;
-    this.controls.maxDistance = 1000;
-
-    // 完全移除旋转角度限制，允许无限制的连续旋转
-    // 不设置 minPolarAngle 和 maxPolarAngle，或设置为允许完全旋转的值
-    // this.controls.minPolarAngle = -Infinity; // 垂直旋转最小角度（无限制）
-    // this.controls.maxPolarAngle = Infinity; // 垂直旋转最大角度（无限制）
-    // this.controls.minAzimuthAngle = -Infinity; // 水平旋转最小角度（无限制）
-    // this.controls.maxAzimuthAngle = Infinity; // 水平旋转最大角度（无限制）
+    this.controls = new TrackballControls(this.camera, this.renderer.domElement);
+    this.controls.rotateSpeed = 4.0;
+    this.controls.zoomSpeed = 1.2;
+    this.controls.panSpeed = 0.8;
+    this.controls.staticMoving = true;
+    this.controls.dynamicDampingFactor = 0.15;
   }
 
   /**
@@ -382,7 +375,6 @@ export class SceneManager {
     lowerMesh.visible = false;
     upperMeshLabel.visible = false;
     lowerMeshLabel.visible = false;
-
     // 如果没有保存的模型朝向信息，从当前mesh计算中心点
     if (!this.modelOrientation) {
       // 计算上颌和下颌的边界框中心
@@ -409,6 +401,10 @@ export class SceneManager {
         upperMidpoint: upperCenter || bothCenter,
         lowerMidpoint: lowerCenter,
       };
+      // 确保控制器已初始化
+      if (!this.controls) {
+        this.initOrbitControls();
+      }
 
       console.warn('⚠️ 使用默认朝向信息，建议先加载模型并调用adjustCameraToFaceFrontTeeth');
     }
@@ -933,7 +929,7 @@ export class SceneManager {
    */
   flipCameraDirection(): void {
     if (!this.controls) {
-      console.warn('⚠️ OrbitControls 尚未初始化');
+      console.warn('⚠️ TrackballControls 尚未初始化');
       return;
     }
 
@@ -980,7 +976,7 @@ export class SceneManager {
   /**
    * 获取控制器对象
    */
-  getControls(): OrbitControls | null {
+  getControls(): TrackballControls | null {
     return this.controls;
   }
 

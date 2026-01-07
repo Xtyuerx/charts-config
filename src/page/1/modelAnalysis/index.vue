@@ -349,6 +349,7 @@ onMounted(async () => {
 
     // 1. 初始化场景
     initScene(containerRef.value);
+    startAnimation();
 
     // 2. 加载模型（包含牙齿中心点提取）
     // const modelResult = await loadModels(modelConfig);
@@ -377,9 +378,6 @@ onMounted(async () => {
     // if (modelResult) {
     //   loadToothNumbersFromCenters(modelResult.centersUpper, modelResult.centersLower);
     // }
-
-    // 7. 开始动画循环
-    startAnimation();
   } catch (err) {
     console.error('❌ 系统初始化失败:', err);
   }
@@ -472,9 +470,9 @@ const handleAIReset = () => {
     await loadDiagnosisData(data);
 
     // 如果之前有显示某个分析，重新切换到该分析以刷新视图
-    if (currentTaskName) {
-      switchTo(currentTaskName);
-    }
+    // if (currentTaskName) {
+    //   switchTo(currentTaskName);
+    // }
   });
 };
 
