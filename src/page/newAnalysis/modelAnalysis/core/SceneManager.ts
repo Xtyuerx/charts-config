@@ -268,6 +268,12 @@ export class SceneManager {
         strategy.updateOnDrag(object)
       }
     }
+    if (object.userData.isArchSymmetryPoint) {
+      const strategy = object.userData.strategy
+      if (strategy && typeof strategy.updateOnDrag === 'function') {
+        strategy.updateOnDrag(object)
+      }
+    }
 
     // 其他类型的拖拽控制点可以在这里添加
   }
