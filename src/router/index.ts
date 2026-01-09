@@ -45,6 +45,12 @@ const router = createRouter({
       component: () => import('@/page/oralAnalysis/index.vue'),
       meta: { title: '口腔分析' },
     },
+    {
+      path: '/newAnalysis',
+      name: 'newAnalysis',
+      component: () => import('@/page/newAnalysis/modelAnalysis/index.vue'),
+      meta: { title: '口腔分析' },
+    },
   ],
 })
 
