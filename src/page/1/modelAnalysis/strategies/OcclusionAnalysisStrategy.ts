@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { AnalysisData, MeasurementGroup, RenderType } from '../types';
 import { LabelRenderer } from '../renderers';
+import { SCENE_CONFIG } from '../constants';
 import { BaseAnalysisStrategy } from './base/BaseAnalysisStrategy';
 
 /**
@@ -53,14 +54,18 @@ export class OcclusionAnalysisStrategy extends BaseAnalysisStrategy {
 
     console.log('🦷 提取的尖牙:', canineTeeth);
     console.log('🦷 提取的磨牙:', molarTeeth);
-    this.createColoredPointMarkers(canineTeeth.points);
-    this.createColoredPointMarkers(molarTeeth.points);
+    // 🔥 为尖牙和磨牙分别创建点位，使用不同的标识符
+    this.createColoredPointMarkers(canineTeeth.points, 'canine');
+    this.createColoredPointMarkers(molarTeeth.points, 'molar');
   }
   /**
    * 创建指定颜色的点位标记
    * 根据FDI编码自动确定颜色：上颌0xfeb5b5，下颌0xa49ed9
    */
-  private createColoredPointMarkers(midlinePoints: AnalysisData['teeth_points']): void {
+  private createColoredPointMarkers(
+    midlinePoints: AnalysisData['teeth_points'],
+    toothCategory: 'canine' | 'molar', // 🔥 新增参数：牙齿类别
+  ): void {
     if (!midlinePoints || midlinePoints.length === 0) return;
 
     // 为每个原始中线点找到对应的最近采样点
@@ -98,6 +103,8 @@ export class OcclusionAnalysisStrategy extends BaseAnalysisStrategy {
       if (nearestSamplePoint) {
         // 使用原始位置（不进行坐标转换）
         const samplePosition = nearestSamplePoint.position.clone();
+        // 🔥 创建唯一的标识符，包含牙齿类别、FDI和索引
+        const uniqueId = `${toothCategory}_${point.fdi}_${index}`;
 
         // 创建可拖拽的采样点球体（使用原始位置）
         const nearestSphere = this.createDraggableSamplePointSphere(
@@ -108,7 +115,7 @@ export class OcclusionAnalysisStrategy extends BaseAnalysisStrategy {
           nearestSamplePoint.t,
           originalCenter,
           jawType,
-          index,
+          uniqueId, // 🔥 传递唯一标识符而不是index
           1.0,
           point, // 传入原始的 ToothPoint 数据
         );
@@ -119,7 +126,7 @@ export class OcclusionAnalysisStrategy extends BaseAnalysisStrategy {
         // 🔥 在采样点位置创建切片（使用相同颜色）
         const sliceGroup = this.createMidlineSlice(
           samplePosition,
-          index,
+          uniqueId, // 🔥 使用唯一标识符
           sliceColor, // 使用与点位相同的颜色
           isUpper,
           nearestSamplePoint.t, // 传递t参数用于计算切片方向
@@ -259,9 +266,9 @@ export class OcclusionAnalysisStrategy extends BaseAnalysisStrategy {
     initialT: number,
     originalPoint: THREE.Vector3,
     jawType: string,
-    pointIndex: number,
+    uniqueId: string, // 🔥 改为唯一标识符
     opacity = 1.0,
-    originalToothPoint?: import('../types').ToothPoint, // 新增参数：原始点位数据
+    originalToothPoint?: import('../types').ToothPoint,
   ): THREE.Mesh {
     // 使用合适的球体尺寸和材质
     const geometry = new THREE.SphereGeometry(radius, 32, 32);
@@ -269,21 +276,22 @@ export class OcclusionAnalysisStrategy extends BaseAnalysisStrategy {
       color: color,
       transparent: true,
       opacity: opacity,
-      depthTest: false, // 启用深度测试，让球体能被模型遮挡
-      depthWrite: false, // 禁用深度写入，避免遮挡其他对象
+      depthTest: false,
+      depthWrite: false,
     });
 
     const sphere = new THREE.Mesh(geometry, material);
     sphere.position.copy(position);
     sphere.name = name;
     sphere.visible = true;
-    sphere.renderOrder = 1001; // 稍高的渲染顺序，确保在模型之后但仍参与深度测试
-    sphere.frustumCulled = false; // 禁用视锥体剔除
+    sphere.renderOrder = 1001;
+    sphere.frustumCulled = false;
 
     // 🔥 强制设置球体属性
     sphere.matrixAutoUpdate = true;
     sphere.castShadow = false;
     sphere.receiveShadow = false;
+
     // 设置拖拽数据：只能在牙弓线上滑动
     sphere.userData = {
       isDraggable: true,
@@ -292,7 +300,7 @@ export class OcclusionAnalysisStrategy extends BaseAnalysisStrategy {
       curveReference: this.archWire?.curve,
       originalPoint: originalPoint, // 初始的原始点位置
       jawType: jawType,
-      pointIndex: pointIndex,
+      uniqueId: uniqueId, // 🔥 使用唯一标识符
       isSamplePoint: true,
       draggable: true,
       onDrag: (newPosition: THREE.Vector3) => this.constrainSamplePointToCurve(sphere, newPosition),
@@ -300,7 +308,7 @@ export class OcclusionAnalysisStrategy extends BaseAnalysisStrategy {
       // 🔥 保存原始的 ToothPoint 数据，用于重构输出格式
       originalToothPoint: originalToothPoint,
 
-      // 🔥 新增：存储用于计算最终原始点位的信息
+      // 🔥 存储用于计算最终原始点位的信息
       initialSamplePosition: position.clone(), // 初始采样点位置
       currentSamplePosition: position.clone(), // 当前采样点位置
       calculatedOriginalPosition: originalPoint.clone(), // 计算后的原始点位置
@@ -368,12 +376,8 @@ export class OcclusionAnalysisStrategy extends BaseAnalysisStrategy {
     newPosition: THREE.Vector3,
     curveT: number,
   ): void {
-    const jawTypeChinese = sampleSphere.userData.jawType; // '上颌' 或 '下颌'
-    const pointIndex = sampleSphere.userData.pointIndex;
-
-    // 🔥 将中文 jawType 转换为英文格式，匹配切片组命名
-    const jawTypeEnglish = jawTypeChinese === '上颌' ? 'upper' : 'lower';
-    const sliceGroupName = `${this.taskName}_midline_slice_group_${jawTypeEnglish}_${pointIndex}`;
+    const uniqueId = sampleSphere.userData.uniqueId; // 🔥 使用唯一标识符
+    const sliceGroupName = `${this.taskName}_midline_slice_group_${uniqueId}`;
 
     // 在策略组中查找对应的切片组
     let sliceGroup: THREE.Group | null = null;
@@ -463,6 +467,135 @@ export class OcclusionAnalysisStrategy extends BaseAnalysisStrategy {
     if (connectionLine.geometry.boundingSphere) {
       connectionLine.geometry.computeBoundingSphere();
     }
+  }
+  /**
+   * 根据采样点的移动计算对应的原始点位置
+   */
+  private calculateOriginalPositionFromSample(
+    initialOriginalPoint: THREE.Vector3,
+    initialSamplePosition: THREE.Vector3,
+    currentSamplePosition: THREE.Vector3,
+  ): THREE.Vector3 {
+    // 方案1：直接使用采样点位置作为新的原始点位置
+    // 这适用于采样点就是原始点在牙弓线上的投影的情况
+    return currentSamplePosition.clone();
+
+    // 方案2：如果需要保持原始点与采样点的相对位置关系
+    // const offset = initialOriginalPoint.clone().sub(initialSamplePosition);
+    // return currentSamplePosition.clone().add(offset);
+  }
+
+  /**
+   * 获取可拖拽对象列表
+   */
+  public getDraggableObjects(): THREE.Mesh[] {
+    return this.draggablePoints;
+  }
+
+  /**
+   * 获取移动后的点位数据
+   * 返回符合 ToothPoint 格式的数据，保持与初始格式完全一致
+   */
+  public getUpdatedPoints(): Array<
+    import('../types').ToothPoint & {
+      originalPoint: [number, number, number];
+      hasMoved: boolean;
+    }
+  > {
+    return this.draggablePoints.map(point => {
+      // 🔥 对于咬合分析的采样点，使用不同的数据结构
+      if (point.userData.isSamplePoint) {
+        const jawType = point.userData.jawType as string;
+        const pointIndex = point.userData.pointIndex as number;
+        const originalPos = point.userData.originalPosition || point.userData.initialSamplePosition;
+        const currentSamplePos = point.position; // 当前采样点位置
+
+        // 🔥 关键修改：获取计算后的原始点位置（移动后采样点对应的原始点位）
+        const calculatedOriginalPos =
+          point.userData.calculatedOriginalPosition || point.userData.originalPoint;
+
+        // 🔥 重新构造原始输入数据中对应的点位信息
+        // 需要从 userData 中获取原始的 ToothPoint 信息
+        const originalToothPoint = point.userData.originalToothPoint;
+
+        return {
+          // 🔥 保持与原始输入数据完全一致的格式
+          fdi: originalToothPoint?.fdi || 0, // 使用原始的 fdi
+          type: originalToothPoint?.type || 'unknown', // 使用原始的 type
+          type_cn: originalToothPoint?.type_cn || '未知', // 使用原始的 type_cn
+
+          // 🔥 返回计算后的原始点位坐标，考虑缩放因子
+          point: [
+            Number(calculatedOriginalPos.x.toFixed(4)),
+            Number(calculatedOriginalPos.y.toFixed(4)),
+            Number(calculatedOriginalPos.z.toFixed(4)),
+          ] as [number, number, number],
+        };
+      }
+
+      // 原有的逻辑（如果有其他类型的可拖拽点）
+      const originalPos = point.userData.originalPosition || point.position;
+      const currentPos = point.position;
+
+      return {
+        fdi: point.userData.fdi || 0,
+        type: point.userData.type || 'unknown',
+        type_cn: point.userData.type_cn || '未知',
+        point: [
+          Number(currentPos.x.toFixed(4)),
+          Number(currentPos.y.toFixed(4)),
+          Number(currentPos.z.toFixed(4)),
+        ] as [number, number, number],
+      };
+    });
+  }
+
+  /**
+   * 添加拖动更新回调方法
+   */
+  public updateOnDrag(object: THREE.Object3D): void {
+    // 咬合分析可以在这里添加拖动时的实时更新逻辑
+    // 例如更新切片位置、连接线等
+    console.log('🔄 咬合分析 - 拖拽更新:', object.name);
+  }
+
+  /**
+   * 获取所有移动后的点位数据（简化版本，只返回ToothPoint格式）
+   */
+  public getUpdatedToothPoints(): import('../types').ToothPoint[] {
+    return this.getUpdatedPoints().map(point => ({
+      fdi: point.fdi,
+      type: point.type,
+      type_cn: point.type_cn,
+      point: point.point,
+    }));
+  }
+
+  /**
+   * 检查是否有点位被移动过
+   */
+  public hasMovedPoints(): boolean {
+    return this.getUpdatedPoints().some(point => point.hasMoved);
+  }
+
+  /**
+   * 重置所有点位到初始位置
+   */
+  public resetPointsToInitialPosition(): void {
+    this.draggablePoints.forEach(point => {
+      if (point.userData.isSamplePoint) {
+        const initialPos = point.userData.initialSamplePosition;
+        if (initialPos) {
+          point.position.copy(initialPos);
+          point.userData.currentSamplePosition = initialPos.clone();
+          point.userData.calculatedOriginalPosition = point.userData.originalPoint.clone();
+
+          // 更新相关的视觉元素
+          this.updateSamplePointLines(point, point.userData.originalPoint, initialPos);
+          this.updateSamplePointSlice(point, initialPos, point.userData.curveT);
+        }
+      }
+    });
   }
 
   /**
@@ -630,14 +763,14 @@ export class OcclusionAnalysisStrategy extends BaseAnalysisStrategy {
    */
   private createMidlineSlice(
     center: THREE.Vector3,
-    index: number,
+    uniqueId: string, // 🔥 改为唯一标识符
     color: number,
     isUpper: boolean,
     curveT?: number, // 可选的t参数，用于计算切片方向
   ): THREE.Group {
     const jawType = isUpper ? 'upper' : 'lower';
     const group = new THREE.Group();
-    group.name = `${this.taskName}_midline_slice_group_${jawType}_${index}`;
+    group.name = `${this.taskName}_midline_slice_group_${uniqueId}`; // 🔥 使用唯一标识符
 
     // 设置group位置为点位中心
     group.position.copy(center);
@@ -662,36 +795,33 @@ export class OcclusionAnalysisStrategy extends BaseAnalysisStrategy {
     // 默认在中心点，可以根据需要偏移
     plane.position.set(0, 0, 0);
     plane.renderOrder = -1;
-    plane.name = `${this.taskName}_midline_slice_${jawType}_${index}`;
+    plane.name = `${this.taskName}_midline_slice_${jawType}_${uniqueId}`;
 
     // 设置切面朝向：垂直于牙弓线切线方向
     if (curveT !== undefined && this.archWire?.curve) {
-      // 计算牙弓线在该点的切线方向
-      const tangent = this.archWire.curve.getTangentAt(curveT);
+      // 曲线切线
+      const tangent = this.archWire.curve.getTangentAt(curveT).normalize();
 
-      // 🔥 根据点位在牙弓上的位置来确定切片方向
-      // 判断是否在左侧（基于X坐标）
-      const isLeftSide = center.x < 0;
+      // 牙弓的“稳定竖直参考”
+      const worldUp = new THREE.Vector3(0, 0, 1);
 
-      // 🔥 使用更稳定的法线计算方法
-      let normal: THREE.Vector3;
-      if (isLeftSide) {
-        // 左侧：确保切片向内倾斜
-        normal = new THREE.Vector3(-tangent.y, tangent.x, 0).normalize();
-      } else {
-        // 右侧：确保切片向内倾斜
-        normal = new THREE.Vector3(tangent.y, -tangent.x, 0).normalize();
+      // 防止 tangent ≈ up 时数值不稳定
+      let xAxis = new THREE.Vector3().crossVectors(worldUp, tangent);
+      if (xAxis.lengthSq() < 1e-6) {
+        xAxis = new THREE.Vector3(1, 0, 0).cross(tangent);
       }
+      xAxis.normalize();
 
-      // 🔥 添加额外的角度调整，避免过度倾斜
-      const maxTiltAngle = Math.PI / 6; // 最大倾斜30度
-      const currentAngle = Math.atan2(normal.y, normal.x);
-      const clampedAngle = Math.max(-maxTiltAngle, Math.min(maxTiltAngle, currentAngle));
+      const yAxis = new THREE.Vector3().crossVectors(tangent, xAxis).normalize();
 
-      normal.set(Math.cos(clampedAngle), Math.sin(clampedAngle), 0);
+      // 构造正交基：X、Y 在平面内，Z = 法向
+      const matrix = new THREE.Matrix4().makeBasis(
+        xAxis, // 平面 X
+        yAxis, // 平面 Y
+        tangent, // 平面法向（垂直牙弓线）
+      );
 
-      plane.lookAt(center.clone().add(normal));
-      plane.rotateX(Math.PI / 2);
+      plane.quaternion.setFromRotationMatrix(matrix);
     } else {
       // 默认方向：竖直站立
       plane.rotation.x = Math.PI / 2;
@@ -724,7 +854,7 @@ export class OcclusionAnalysisStrategy extends BaseAnalysisStrategy {
     border.position.set(0, 0, 0);
     // 边框与平面保持完全相同的旋转
     border.setRotationFromQuaternion(plane.quaternion); // 使用与平面相同的四元数旋转
-    border.name = `${this.taskName}_midline_slice_border_${jawType}_${index}`;
+    border.name = `${this.taskName}_midline_slice_border_${jawType}_${uniqueId}`;
 
     group.add(border);
 

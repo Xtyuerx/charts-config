@@ -539,7 +539,7 @@ export class MidlineAnalysisStrategy extends BaseAnalysisStrategy {
 
     // 确定颜色
     const originalColor = isUpper ? 0xfd7676 : 0x4169e1; // 原始点颜色：上颌红色，下颌蓝色
-    const samplePointColor = isUpper ? 0xfeb5b5 : 0x4169e1; // 采样点颜色：上颌绿色，下颌青色
+    const samplePointColor = isUpper ? 0xfeb5b5 : 0xa49ed9; // 采样点颜色：上颌绿色，下颌青色
 
     // 根据 isUpper 直接获取目标 mesh
     const targetMesh = isUpper ? this.context.upperMeshLabel : this.context.lowerMeshLabel;
@@ -866,9 +866,9 @@ export class MidlineAnalysisStrategy extends BaseAnalysisStrategy {
           const calculatedPosition = userData.calculatedOriginalPosition || userData.originalPoint;
 
           result[fieldName] = [
-            Number(calculatedPosition.x.toFixed(3)),
-            Number(calculatedPosition.y.toFixed(3)),
-            Number(calculatedPosition.z.toFixed(3)),
+            Number(calculatedPosition.x.toFixed(4)),
+            Number(calculatedPosition.y.toFixed(4)),
+            Number(calculatedPosition.z.toFixed(4)),
           ];
 
           console.log(`📍 ${jawType}中线点最终位置 (从采样点获取):`, {

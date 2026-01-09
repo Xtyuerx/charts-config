@@ -105,7 +105,7 @@ export class OverjetAnalysisStrategy extends BaseAnalysisStrategy {
         this.draggablePoints.push(nearestSphere);
 
         // 🔥 在采样点位置创建切片（也添加到策略组保持坐标系一致）
-        const sliceColor = isUpper ? 0xfd7676 : 0x4169e1; // 上颌红色，下颌蓝色
+        const sliceColor = isUpper ? 0xfeb5b5 : 0xa49ed9; // 上颌红色，下颌蓝色
         const sliceGroup = this.createMidlineSlice(
           samplePosition,
           index,
@@ -495,9 +495,9 @@ export class OverjetAnalysisStrategy extends BaseAnalysisStrategy {
 
           // 🔥 返回计算后的原始点位坐标，而不是采样点坐标
           point: [
-            Number(calculatedOriginalPos.x.toFixed(3)),
-            Number(calculatedOriginalPos.y.toFixed(3)),
-            Number(calculatedOriginalPos.z.toFixed(3)),
+            Number(calculatedOriginalPos.x.toFixed(4)),
+            Number(calculatedOriginalPos.y.toFixed(4)),
+            Number(calculatedOriginalPos.z.toFixed(4)),
           ] as [number, number, number],
         };
       }
@@ -514,9 +514,9 @@ export class OverjetAnalysisStrategy extends BaseAnalysisStrategy {
         type: type || 'unknown',
         type_cn: type_cn || '未知点位',
         point: [
-          Number(currentPos.x.toFixed(3)),
-          Number(currentPos.y.toFixed(3)),
-          Number(currentPos.z.toFixed(3)),
+          Number(currentPos.x.toFixed(4)),
+          Number(currentPos.y.toFixed(4)),
+          Number(currentPos.z.toFixed(4)),
         ] as [number, number, number],
       };
     });

@@ -187,6 +187,14 @@ export class SceneManager {
           const updatedPoints = strategy.getUpdatedPoints();
         }
       }
+      // 处理咬合分析点位拖拽结束
+      if (event.object.userData.isOcclusionPoint) {
+        const strategy = event.object.userData.strategy;
+        if (strategy && typeof strategy.getUpdatedPoints === 'function') {
+          const updatedPoints = strategy.getUpdatedPoints();
+          console.log('🦷 咬合分析点位拖拽结束，更新后的点位:', updatedPoints);
+        }
+      }
     });
 
     // 拖拽过程中的处理
@@ -234,6 +242,26 @@ export class SceneManager {
 
     // 处理覆盖分析的点位拖拽
     if (object.userData.isOverjetPoint) {
+      const strategy = object.userData.strategy;
+
+      if (strategy && typeof strategy.updateOnDrag === 'function') {
+        strategy.updateOnDrag(object);
+      }
+    }
+    // 处理咬合分析的采样点拖拽
+    if (object.userData.isSamplePoint && object.userData.onDrag) {
+      // 调用采样点的拖拽回调，约束到牙弓线
+      object.userData.onDrag(object.position);
+    }
+    // 处理Bolton分析的点位拖拽
+    if (object.userData.isBoltonPoint) {
+      const strategy = object.userData.strategy;
+      if (strategy && typeof strategy.updateOnDrag === 'function') {
+        strategy.updateOnDrag(object);
+      }
+    }
+    // 🔥 新增：处理牙弓宽度分析的点位拖拽
+    if (object.userData.isArchWidthPoint) {
       const strategy = object.userData.strategy;
 
       if (strategy && typeof strategy.updateOnDrag === 'function') {

@@ -470,9 +470,9 @@ const handleAIReset = () => {
     await loadDiagnosisData(data);
 
     // 如果之前有显示某个分析，重新切换到该分析以刷新视图
-    // if (currentTaskName) {
-    //   switchTo(currentTaskName);
-    // }
+    if (currentTaskName) {
+      switchTo(currentTaskName);
+    }
   });
 };
 

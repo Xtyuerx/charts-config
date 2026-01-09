@@ -7,6 +7,11 @@ import { MidlineAnalysisStrategy } from '../strategies/MidlineAnalysisStrategy';
 import { CrowdingAnalysisStrategy } from '../strategies/CrowdingAnalysisStrategy';
 import { OverbiteAnalysisStrategy } from '../strategies/OverbiteAnalysisStrategy';
 import { OverjetAnalysisStrategy } from '../strategies/OverjetAnalysisStrategy';
+import { OcclusionAnalysisStrategy } from '../strategies/OcclusionAnalysisStrategy';
+import { CrossbiteAnalysisStrategy } from '../strategies/CrossbiteAnalysisStrategy';
+import { ToothGapAnalysisStrategy } from '../strategies/ToothGapAnalysisStrategy';
+import { BoltonAnalysisStrategy } from '../strategies/BoltonAnalysisStrategy';
+import { ArchWidthAnalysisStrategy } from '../strategies/ArchWidthAnalysisStrategy';
 import { SceneManager } from '../core/SceneManager';
 
 /**
@@ -213,8 +218,107 @@ export class AnalysisService {
     if (strategy instanceof OverjetAnalysisStrategy) {
       this.registerOverjetDraggableObjects(strategy);
     }
+    //如果是咬合分析策略，注册可拖拽对象
+    if (strategy instanceof OcclusionAnalysisStrategy) {
+      this.registerOcclusionDraggableObjects(strategy);
+    }
+    //如果是锁𬌗与反𬌗分析策略，注册可拖拽对象
+    if (strategy instanceof CrossbiteAnalysisStrategy) {
+      this.registerCrossbiteDraggableObjects(strategy);
+    }
+    //如果是牙齿间隙分析策略，注册可拖拽对象
+    if (strategy instanceof ToothGapAnalysisStrategy) {
+      this.registerToothGapDraggableObjects(strategy);
+    }
+    //如果是Bolton分析策略，注册可拖拽对象
+    if (strategy instanceof BoltonAnalysisStrategy) {
+      this.registerBoltonDraggableObjects(strategy);
+    }
+    //如果是牙弓宽度分析策略，注册可拖拽对象
+    if (strategy instanceof ArchWidthAnalysisStrategy) {
+      this.registerArchWidthDraggableObjects(strategy);
+    }
 
     return true;
+  }
+  /**
+   * 注册牙弓宽度分析的可拖拽对象
+   */
+  private registerArchWidthDraggableObjects(strategy: ArchWidthAnalysisStrategy): void {
+    const draggableObjects = strategy.getDraggableObjects();
+    if (draggableObjects.length > 0) {
+      const sceneManager = SceneManager.getInstance();
+
+      draggableObjects.forEach(obj => {
+        sceneManager.addDraggableObject(obj);
+      });
+
+      sceneManager.setupDragControls();
+    }
+  }
+  /**
+   * 注册Bolton分析的可拖拽对象
+   */
+  private registerBoltonDraggableObjects(strategy: BoltonAnalysisStrategy): void {
+    const draggableObjects = strategy.getDraggableObjects();
+    if (draggableObjects.length > 0) {
+      console.log(`🎯 Bolton分析 - 注册${draggableObjects.length}个可拖拽点位`);
+
+      // 获取SceneManager实例并添加可拖拽对象
+      const sceneManager = SceneManager.getInstance();
+
+      draggableObjects.forEach(obj => {
+        sceneManager.addDraggableObject(obj);
+        obj.userData.draggable = true;
+        obj.userData.isBoltonPoint = true; // 标记为Bolton分析点位
+        obj.userData.strategy = strategy; // 保存策略引用
+      });
+
+      // 初始化拖拽控制（如果还没有初始化）
+      sceneManager.setupDragControls();
+    }
+  }
+  /**
+   * 🔥 新增：注册牙齿间隙分析的拖拽对象
+   */
+  private registerToothGapDraggableObjects(strategy: ToothGapAnalysisStrategy): void {
+    const draggableObjects = strategy.getDraggableObjects();
+
+    if (draggableObjects.length > 0) {
+      const sceneManager = SceneManager.getInstance();
+
+      draggableObjects.forEach(obj => {
+        sceneManager.addDraggableObject(obj);
+      });
+
+      sceneManager.setupDragControls();
+    }
+  }
+
+  /**
+   * 注册咬合分析的可拖拽对象
+   */
+  private registerOcclusionDraggableObjects(strategy: OcclusionAnalysisStrategy): void {
+    const draggableObjects = strategy.getDraggableObjects();
+
+    if (draggableObjects.length > 0) {
+      console.log(`🎯 咬合分析 - 注册${draggableObjects.length}个可拖拽采样点`);
+
+      // 获取SceneManager实例并添加可拖拽对象
+      const sceneManager = SceneManager.getInstance();
+
+      draggableObjects.forEach(obj => {
+        sceneManager.addDraggableObject(obj);
+        obj.userData.draggable = true;
+        obj.userData.isOcclusionPoint = true; // 标记为咬合分析点位
+        obj.userData.strategy = strategy; // 保存策略引用
+      });
+
+      // 初始化拖拽控制（如果还没有初始化）
+      sceneManager.setupDragControls();
+    } else {
+      console.log('🎯 咬合分析 - 没有可拖拽对象');
+    }
   }
 
   /**
@@ -296,8 +400,29 @@ export class AnalysisService {
   }
 
   /**
+   * 注册锁𬌗与反𬌗分析的可拖拽对象
+   */
+  private registerCrossbiteDraggableObjects(strategy: CrossbiteAnalysisStrategy): void {
+    const draggableObjects = strategy.getDraggableObjects();
+    if (draggableObjects.length > 0) {
+      console.log(`🎯 注册${draggableObjects.length}个锁𬌗与反𬌗可拖拽点位`);
+
+      // 获取SceneManager实例并添加可拖拽对象
+      const sceneManager = SceneManager.getInstance();
+
+      draggableObjects.forEach(obj => {
+        sceneManager.addDraggableObject(obj);
+        obj.userData.draggable = true;
+      });
+
+      // 初始化拖拽控制（如果还没有初始化）
+      sceneManager.setupDragControls();
+    }
+  }
+
+  /**
    * 获取当前策略更新后的点位数据
-   * 支持拥挤度分析和覆合分析
+   * 支持拥挤度分析、覆合分析、覆盖分析、中线分析、咬合分析和锁𬌗与反𬌗分析
    */
   getCurrentUpdatedPoints(): any[] | any | null {
     if (this.currentStrategy instanceof CrowdingAnalysisStrategy) {
@@ -313,7 +438,21 @@ export class AnalysisService {
     if (this.currentStrategy instanceof MidlineAnalysisStrategy) {
       return this.currentStrategy.getUpdatedPoints();
     }
-
+    if (this.currentStrategy instanceof OcclusionAnalysisStrategy) {
+      return this.currentStrategy.getUpdatedPoints();
+    }
+    if (this.currentStrategy instanceof CrossbiteAnalysisStrategy) {
+      return this.currentStrategy.getUpdatedPoints();
+    }
+    if (this.currentStrategy instanceof ToothGapAnalysisStrategy) {
+      return this.currentStrategy.getUpdatedPoints();
+    }
+    if (this.currentStrategy instanceof BoltonAnalysisStrategy) {
+      return this.currentStrategy.getUpdatedPoints();
+    }
+    if (this.currentStrategy instanceof ArchWidthAnalysisStrategy) {
+      return this.currentStrategy.getUpdatedPoints();
+    }
     return null;
   }
 

@@ -158,9 +158,9 @@ export const POINT_TYPE_COLORS: Record<string, number> = {
   cusp_ml: 0xff00ff,
   // 质心
   center_tooth: 0xffff00,
-  // 边界点
-  boundary_mesial: 0xff6b6b,
-  boundary_distal: 0x6bff6b,
+  // 边界点0xfeb5b5 : 0xa49ed9;
+  boundary_mesial: 0xfeb5b5,
+  boundary_distal: 0xa49ed9,
   // 尖牙牙尖
   canine_cusp: 0xff8800,
   // 前磨牙颊尖

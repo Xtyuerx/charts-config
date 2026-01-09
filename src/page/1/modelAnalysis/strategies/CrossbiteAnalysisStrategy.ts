@@ -12,6 +12,8 @@ export class CrossbiteAnalysisStrategy extends BaseAnalysisStrategy {
   readonly name = '锁𬌗与反𬌗分析';
   readonly taskName = 'crossbite';
   readonly renderType: RenderType = 'POINT_ONLY';
+  // 存储可拖动的点位对象
+  private draggablePoints: THREE.Mesh[] = [];
 
   /**
    * 重写点位渲染 - 将点位添加到对应的 mesh，跟随上下颌显示/隐藏
@@ -20,7 +22,7 @@ export class CrossbiteAnalysisStrategy extends BaseAnalysisStrategy {
   protected renderPoints(teethPoints: ToothPoint[]): void {
     teethPoints.forEach(p => {
       // 根据上下颌选择颜色：上颌用红色，下颌用绿色
-      const color = this.isUpper(p.fdi) ? 0xfd7676 : 0x4169e1;
+      const color = this.isUpper(p.fdi) ? 0xfeb5b5 : 0xa49ed9;
 
       // 解析 point（可能是字符串或数组）
       let pointCoords: number[];
@@ -45,13 +47,57 @@ export class CrossbiteAnalysisStrategy extends BaseAnalysisStrategy {
       sphere.position.set(pointCoords[0] ?? 0, pointCoords[1] ?? 0, pointCoords[2] ?? 0);
       sphere.name = `point_${p.fdi}_${p.type}`; // 使用统一的命名格式
 
+      // 设置为可拖动，并保存完整的原始数据
+      sphere.userData.draggable = true;
+      sphere.userData.isCrowdingPoint = true;
+      sphere.userData.strategy = this;
+      sphere.userData.fdi = p.fdi;
+      sphere.userData.pointType = p.type;
+      sphere.userData.pointTypeCn = p.type_cn;
+      sphere.userData.originalPosition = sphere.position.clone();
+      sphere.userData.originalToothPoint = p; // 保存完整的原始数据
+
       // 添加到对应的 mesh（上颌或下颌）
       this.addToMesh(sphere, p.fdi);
+      this.draggablePoints.push(sphere);
     });
 
     console.log(`✅ 渲染了 ${teethPoints.length} 个锁𬌗与反𬌗点位，已添加到对应 mesh`);
   }
+  /**
+   * 获取所有可拖动对象
+   * 供 SceneManager 注册拖拽控制使用
+   */
 
+  public getDraggableObjects(): THREE.Mesh[] {
+    return this.draggablePoints;
+  }
+
+  /**
+   * 获取移动后的点位数据
+   * 返回符合 ToothPoint 格式的数据，保持与初始格式完全一致
+   */
+  public getUpdatedPoints(): Array<import('../types').ToothPoint> {
+    return this.draggablePoints.map(point => {
+      const fdi = point.userData.fdi as number;
+      const type = point.userData.pointType as string;
+      const type_cn = point.userData.pointTypeCn as string;
+      const originalPos = point.userData.originalPosition as THREE.Vector3;
+      const currentPos = point.position;
+
+      return {
+        fdi,
+        type,
+        type_cn,
+        // 返回当前位置坐标，保持数据精度
+        point: [
+          Number(currentPos.x.toFixed(4)),
+          Number(currentPos.y.toFixed(4)),
+          Number(currentPos.z.toFixed(4)),
+        ] as [number, number, number],
+      };
+    });
+  }
   /**
    * 渲染特定元素
    * 锁𬌗与反𬌗分析：高亮显示异常的牙齿位置
