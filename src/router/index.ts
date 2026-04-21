@@ -51,6 +51,24 @@ const router = createRouter({
       component: () => import('@/page/newAnalysis/modelAnalysis/index.vue'),
       meta: { title: '口腔分析' },
     },
+    {
+      path: '/paintAnalysis',
+      name: 'paintAnalysis',
+      component: () => import('@/components/three-demo/test/bvhVertexPaint.vue'),
+      meta: { title: '涂色工具' },
+    },
+    {
+      path: '/colorStl',
+      name: 'colorStl',
+      component: () => import('@/page/colorStl/index.vue'),
+      meta: { title: '涂色STL' },
+    },
+    {
+      path: '/jsonStl',
+      name: 'jsonStl',
+      component: () => import('@/page/jsonStl/index.vue'),
+      meta: { title: 'STL标注JSON' },
+    },
   ],
 })
 
