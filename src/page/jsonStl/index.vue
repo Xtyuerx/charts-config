@@ -54,6 +54,11 @@ let stlGeometry: THREE.BufferGeometry | null = null
 
 let pointerHandler: ((ev: PointerEvent) => void) | null = null
 
+type LabelPayload = {
+  labels?: number[]
+  faceLabels?: number[]
+}
+
 function colorForLabel(label: number): THREE.Color {
   if (!label) return gingivaColor
   const h = (((label * 2654435761) >>> 0) % 360) / 360
@@ -153,6 +158,7 @@ function buildTriangleAdjacency(pos: THREE.BufferAttribute, tc: number): number[
       [b, c],
       [c, a],
     ]) {
+      if (u == null || v == null) continue
       const ek = edgeKey(u, v)
       let arr = edgeMap.get(ek)
       if (!arr) {
@@ -165,14 +171,15 @@ function buildTriangleAdjacency(pos: THREE.BufferAttribute, tc: number): number[
   const adj: number[][] = Array.from({ length: tc }, () => [])
   for (const list of edgeMap.values()) {
     const uniq = [...new Set(list)]
-    for (let i = 0; i < uniq.length; i++) {
-      for (let j = i + 1; j < uniq.length; j++) {
-        const ti = uniq[i]
-        const tj = uniq[j]
-        adj[ti].push(tj)
-        adj[tj].push(ti)
-      }
+  for (let i = 0; i < uniq.length; i++) {
+    for (let j = i + 1; j < uniq.length; j++) {
+      const ti = uniq[i]
+      const tj = uniq[j]
+      if (ti == null || tj == null) continue
+      adj[ti]?.push(tj)
+      adj[tj]?.push(ti)
     }
+  }
   }
   return adj
 }
@@ -238,13 +245,51 @@ function paintMeshFromVertexLabels(mesh: THREE.Mesh, labels: number[]) {
     geom.setAttribute('color', new THREE.BufferAttribute(colors, 3))
   } else {
     const attr = geom.attributes.color as THREE.BufferAttribute
-    for (let i = 0; i < colors.length; i++) attr.array[i] = colors[i]
+    for (let i = 0; i < colors.length; i++) attr.array[i] = colors[i] ?? 0
     attr.needsUpdate = true
   }
   const mat = mesh.material as THREE.MeshPhongMaterial
   mat.vertexColors = true
   mat.color.setHex(0xffffff)
   mat.needsUpdate = true
+}
+
+function resolveVertexLabels(
+  geometry: THREE.BufferGeometry,
+  payload: LabelPayload,
+): { vertexLabels: number[]; triangleCount: number } {
+  const pos = geometry.attributes.position as THREE.BufferAttribute
+  const vertexCount = pos.count
+  const triangleCount = vertexCount / 3
+  const sourceLabels = payload.faceLabels?.length ? payload.faceLabels : payload.labels
+
+  if (!sourceLabels?.length) {
+    throw new Error('JSON 缺少 labels 或 faceLabels')
+  }
+
+  if (sourceLabels.length === vertexCount) {
+    return {
+      vertexLabels: sourceLabels.map((value) => Number(value)),
+      triangleCount,
+    }
+  }
+
+  if (sourceLabels.length === triangleCount) {
+    const vertexLabels = new Array(vertexCount)
+    for (let tri = 0; tri < triangleCount; tri++) {
+      const value = Number(sourceLabels[tri] ?? 0)
+      const base = tri * 3
+      vertexLabels[base] = value
+      vertexLabels[base + 1] = value
+      vertexLabels[base + 2] = value
+    }
+
+    return { vertexLabels, triangleCount }
+  }
+
+  throw new Error(
+    `labels 长度与网格不一致：${sourceLabels.length} / 顶点 ${vertexCount} / 面 ${triangleCount}`,
+  )
 }
 
 function refreshPointCloud() {
@@ -362,10 +407,12 @@ onMounted(() => {
     raycaster.setFromCamera(new THREE.Vector2(mx, my), camera!)
     const hits = raycaster.intersectObject(jawMesh, false)
     if (!hits.length) return
-    const face = hits[0].face
+    const hit = hits[0]
+    if (!hit) return
+    const face = hit.face
     if (!face) return
     const clickTri = Math.floor(face.a / 3)
-    const pt = hits[0].point.clone()
+    const pt = hit.point.clone()
 
     if (clickMarker) {
       scene!.remove(clickMarker)
@@ -400,14 +447,20 @@ onMounted(() => {
     try {
       const res = await fetch(labelUrl)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const json = (await res.json()) as { labels?: number[] }
+      const json = (await res.json()) as LabelPayload
+      if (!json.labels?.length && json.faceLabels?.length) {
+        json.labels = json.faceLabels
+      }
       if (!json.labels?.length) throw new Error('JSON 无 labels')
 
       await new Promise<void>((r) => setTimeout(r, 0))
 
       const pos = geometry.attributes.position as THREE.BufferAttribute
+      const resolved = resolveVertexLabels(geometry, json)
+      vertexLabels = resolved.vertexLabels
       const vn = pos.count
-      triCount = vn / 3
+      triCount = resolved.triangleCount
+      json.labels = [...vertexLabels]
 
       if (json.labels.length === vn) {
         vertexLabels = json.labels.map((x) => Number(x))

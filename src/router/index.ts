@@ -69,6 +69,12 @@ const router = createRouter({
       component: () => import('@/page/jsonStl/index.vue'),
       meta: { title: 'STL标注JSON' },
     },
+    {
+      path: '/fStl',
+      name: 'fStl',
+      component: () => import('@/page/f/index.vue'),
+      meta: { title: 'STL复原JSON' },
+    },
   ],
 })
 

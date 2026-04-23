@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="content">
     <div class="toolbar">
       <button @click="toggleUpper">
@@ -29,20 +29,9 @@
         />
       </label>
 
-      <label class="tool-item bulk-item">
-        <span>批量牙号</span>
-        <input
-          v-model="batchToothIdsInput"
-          class="bulk-input"
-          type="text"
-          placeholder="例如 11,12,21"
-        />
-      </label>
-      <button @click="applyBatchTeeth">批量回填</button>
-
       <label class="tool-item">
         <span>笔刷半径</span>
-        <input v-model.number="brushRadius" type="range" min="0.5" max="6" step="0.1" />
+        <input v-model.number="brushRadius" type="range" min="0.5" max="12" step="0.1" />
         <span>{{ brushRadius.toFixed(1) }}</span>
       </label>
 
@@ -50,14 +39,15 @@
       <button @click="toggleSegmentPreview">
         {{ previewSegmentResult ? '返回编辑' : '预览分割结果' }}
       </button>
+      <button @click="exportSelectedToothRegion">导出当前牙号 JSON</button>
       <button @click="exportUpperLabels">导出上颌 JSON</button>
       <button @click="exportLowerLabels">导出下颌 JSON</button>
     </div>
 
-    <div class="quick-tooth-list" v-if="availableToothIds.length">
+    <div class="quick-tooth-list">
       <span class="quick-title">快速选择牙号：</span>
       <button
-        v-for="toothId in availableToothIds"
+        v-for="toothId in toothOptions"
         :key="toothId"
         class="quick-tooth-btn"
         :class="{ active: selectedToothId === toothId }"
@@ -68,8 +58,8 @@
     </div>
 
     <div class="tips">
-      左键按住可连续涂色。牙体模式下写入牙号，牙龈模式下写入 0。上颌和下颌会分别导出独立
-      JSON，后续可直接按牙号还原每颗牙齿的范围。
+      这里只加载 STL，本次涂色结果直接写在三角面标签上。一个牙号对应一种颜色，导出 JSON 后可按
+      `faceLabels` 或 `labels` 直接还原每颗牙齿的范围。
     </div>
 
     <div ref="containerRef" class="container"></div>
@@ -77,7 +67,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import * as THREE from 'three'
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh'
 import { STLLoader, TrackballControls } from 'three-stdlib'
@@ -88,6 +78,12 @@ type JawType = 'upper' | 'lower'
 
 type BVHGeometry = THREE.BufferGeometry & {
   boundsTree?: {
+    closestPointToPoint?: (
+      point: THREE.Vector3,
+      target?: { faceIndex?: number | null; distance?: number; point?: THREE.Vector3 },
+      minThreshold?: number,
+      maxThreshold?: number,
+    ) => number
     shapecast: (options: {
       intersectsBounds: (box: THREE.Box3) => boolean
       intersectsTriangle: (tri: THREE.Triangle, triangleIndex: number) => boolean | void
@@ -97,10 +93,42 @@ type BVHGeometry = THREE.BufferGeometry & {
   disposeBoundsTree?: () => void
 }
 
-type LabelJson = {
-  jaw?: string
-  version?: number
-  labels?: number[]
+type Point3 = [number, number, number]
+
+type ToothTriangleRecord = {
+  triangleIndex: number
+  centroid: Point3
+  vertices: [Point3, Point3, Point3]
+}
+
+type ToothRegionRecord = {
+  toothId: number
+  jaw: JawType
+  triangleCount: number
+  area: number
+  centroid: Point3
+  bounds: {
+    min: Point3
+      max: Point3
+      size: Point3
+  }
+  rawContourLoops: Point3[][]
+  contourLoops: Point3[][]
+  triangleIndices: number[]
+  triangles: ToothTriangleRecord[]
+}
+
+type JawLabelExport = {
+  format: 'stl-labels'
+  version: 3
+  jaw: JawType
+  triangleCount: number
+  vertexCount: number
+  labeledTriangleCount: number
+  toothIds: number[]
+  labels: number[]
+  faceLabels: number[]
+  teeth: ToothRegionRecord[]
 }
 
 const containerRef = ref<HTMLDivElement>()
@@ -122,37 +150,40 @@ let brushIndicator: THREE.Mesh | null = null
 
 const showUpper = ref(true)
 const showLower = ref(true)
-const brushRadius = ref(2)
+const brushRadius = ref(4)
 const brushMode = ref<BrushMode>('tooth')
-const selectedToothId = ref<number | null>(null)
-const batchToothIdsInput = ref('')
+const toothOptions = [11, 12, 13, 14, 15, 16, 17, 18, 21, 22, 23, 24, 25, 26, 27, 28, 31, 32, 33, 34, 35, 36, 37, 38, 41, 42, 43, 44, 45, 46, 47, 48]
+const selectedToothId = ref<number | null>(toothOptions[0] ?? null)
 const previewSegmentResult = ref(false)
 
 const modelConfig = {
   upper: '/models/upper.stl',
   lower: '/models/lower.stl',
-  upperJson: '/models/upper.json',
-  lowerJson: '/models/lower.json',
 }
 
 const toothColor = new THREE.Color(0xffffff)
 const gingivaColor = new THREE.Color(0xc97f88)
 
-const availableToothIdSet = ref(new Set<number>())
-const availableToothIds = computed(() => Array.from(availableToothIdSet.value).sort((a, b) => a - b))
-
 const faceLabelMap = new WeakMap<THREE.Mesh, Uint16Array>()
-const baselineMap = new WeakMap<THREE.Mesh, Uint16Array>()
+const triangleAdjacencyMap = new WeakMap<THREE.Mesh, number[][]>()
+const triangleCenterMap = new WeakMap<THREE.Mesh, Float32Array>()
+const toothAnchorTriangleMap = new WeakMap<THREE.Mesh, Map<number, number>>()
 const preparedMeshSet = new WeakSet<THREE.Mesh>()
 
 const raycaster = new THREE.Raycaster()
 const mouse = new THREE.Vector2()
-const brushSphere = new THREE.Sphere()
-const tempTriangleCenter = new THREE.Vector3()
 
 let targets: THREE.Mesh[] = []
-let activeTarget: THREE.Mesh | null = null
 let isPainting = false
+let didDragPaint = false
+let lastStrokeMesh: THREE.Mesh | null = null
+let lastStrokeTriangleIndex: number | null = null
+
+const BRUSH_PAINT_FACTOR = 2.8
+const STROKE_LINK_FACTOR = 8
+const TOOTH_EXPORT_RADIUS_FACTOR = 0.065
+const TOOTH_EXPORT_RADIUS_MIN = 2.8
+const TOOTH_EXPORT_RADIUS_MAX = 5.2
 
 function getAllMeshes() {
   return [upperMesh, lowerMesh].filter(Boolean) as THREE.Mesh[]
@@ -169,41 +200,8 @@ function normalizeLabel(value: number): number {
   return Math.max(0, Math.floor(Number(value) || 0))
 }
 
-function majorityFdiTri(a: number, b: number, c: number): number {
-  const x = normalizeLabel(a)
-  const y = normalizeLabel(b)
-  const z = normalizeLabel(c)
-  if (x === y || x === z) return x
-  if (y === z) return y
-  return Math.max(x, y, z)
-}
-
-function buildTriangleLabels(geometry: THREE.BufferGeometry, labels: number[]): Uint16Array {
-  const position = geometry.attributes.position as THREE.BufferAttribute | undefined
-  if (!position) throw new Error('geometry 缺少 position')
-
-  const vertexCount = position.count
-  const triCount = geometry.index ? geometry.index.count / 3 : Math.floor(vertexCount / 3)
-  const output = new Uint16Array(triCount)
-
-  if (labels.length === triCount) {
-    for (let tri = 0; tri < triCount; tri++) {
-      output[tri] = normalizeLabel(labels[tri] ?? 0)
-    }
-    return output
-  }
-
-  if (labels.length === vertexCount) {
-    for (let tri = 0; tri < triCount; tri++) {
-      const ia = geometry.index ? geometry.index.getX(tri * 3) : tri * 3
-      const ib = geometry.index ? geometry.index.getX(tri * 3 + 1) : tri * 3 + 1
-      const ic = geometry.index ? geometry.index.getX(tri * 3 + 2) : tri * 3 + 2
-      output[tri] = majorityFdiTri(labels[ia] ?? 0, labels[ib] ?? 0, labels[ic] ?? 0)
-    }
-    return output
-  }
-
-  throw new Error(`labels 与网格不匹配：labels=${labels.length}, 顶点=${vertexCount}, 三角面=${triCount}`)
+function toPoint3(vector: THREE.Vector3): Point3 {
+  return [vector.x, vector.y, vector.z]
 }
 
 function toPaintGeometry(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
@@ -221,26 +219,115 @@ function colorForLabel(label: number): THREE.Color {
   return new THREE.Color().setHSL(h, 0.65, 0.55)
 }
 
-function collectToothIds(labels: Uint16Array) {
-  const nextSet = new Set(availableToothIdSet.value)
-  for (const label of labels) {
-    if (label > 0) nextSet.add(label)
-  }
-  availableToothIdSet.value = nextSet
+function ensureGeometryBoundsTree(geometry: THREE.BufferGeometry) {
+  const bvhGeometry = geometry as BVHGeometry
+  if (!bvhGeometry.computeBoundsTree) bvhGeometry.computeBoundsTree = computeBoundsTree
+  if (!bvhGeometry.disposeBoundsTree) bvhGeometry.disposeBoundsTree = disposeBoundsTree
+  if (!bvhGeometry.boundsTree) bvhGeometry.computeBoundsTree?.()
+  return bvhGeometry
 }
 
-async function loadBaseline(url: string, mesh: THREE.Mesh, jaw: JawType) {
-  const sourceGeometry = jaw === 'upper' ? rawUpperGeometry : rawLowerGeometry
-  if (!sourceGeometry) return
+function getTriangleCenter(
+  geometry: THREE.BufferGeometry,
+  triangleIndex: number,
+  target: THREE.Vector3,
+  a: THREE.Vector3,
+  b: THREE.Vector3,
+  c: THREE.Vector3,
+) {
+  const position = geometry.attributes.position as THREE.BufferAttribute | undefined
+  if (!position) return target.set(0, 0, 0)
 
-  const response = await fetch(url)
-  if (!response.ok) return
-  const data = (await response.json()) as LabelJson
-  if (!data.labels?.length) return
+  a.fromBufferAttribute(position, triangleIndex * 3)
+  b.fromBufferAttribute(position, triangleIndex * 3 + 1)
+  c.fromBufferAttribute(position, triangleIndex * 3 + 2)
 
-  const baseline = buildTriangleLabels(sourceGeometry, data.labels)
-  baselineMap.set(mesh, baseline)
-  collectToothIds(baseline)
+  return target.copy(a).add(b).add(c).multiplyScalar(1 / 3)
+}
+
+function buildTriangleAdjacency(geometry: THREE.BufferGeometry) {
+  const position = geometry.attributes.position as THREE.BufferAttribute | undefined
+  if (!position) return []
+
+  const triCount = geometry.index ? geometry.index.count / 3 : Math.floor(position.count / 3)
+  const adjacency = Array.from({ length: triCount }, () => [] as number[])
+  const edgeMap = new Map<string, number[]>()
+  const tempA = new THREE.Vector3()
+  const tempB = new THREE.Vector3()
+
+  const getVertexIndex = (triangleIndex: number, vertexOffset: number) =>
+    geometry.index ? geometry.index.getX(triangleIndex * 3 + vertexOffset) : triangleIndex * 3 + vertexOffset
+
+  const toKey = (vertex: THREE.Vector3) =>
+    `${(vertex.x * 1e5).toFixed(0)},${(vertex.y * 1e5).toFixed(0)},${(vertex.z * 1e5).toFixed(0)}`
+
+  const getEdgeKey = (firstVertexIndex: number, secondVertexIndex: number) => {
+    tempA.fromBufferAttribute(position, firstVertexIndex)
+    tempB.fromBufferAttribute(position, secondVertexIndex)
+    const keyA = toKey(tempA)
+    const keyB = toKey(tempB)
+    return keyA < keyB ? `${keyA}|${keyB}` : `${keyB}|${keyA}`
+  }
+
+  for (let triangleIndex = 0; triangleIndex < triCount; triangleIndex++) {
+    const vertexIndices = [
+      getVertexIndex(triangleIndex, 0),
+      getVertexIndex(triangleIndex, 1),
+      getVertexIndex(triangleIndex, 2),
+    ]
+
+    for (const [from, to] of [
+      [vertexIndices[0], vertexIndices[1]],
+      [vertexIndices[1], vertexIndices[2]],
+      [vertexIndices[2], vertexIndices[0]],
+    ] as const) {
+      if (from == null || to == null) continue
+      const edgeKey = getEdgeKey(from, to)
+      const triangles = edgeMap.get(edgeKey)
+      if (triangles) {
+        triangles.push(triangleIndex)
+      } else {
+        edgeMap.set(edgeKey, [triangleIndex])
+      }
+    }
+  }
+
+  for (const triangles of edgeMap.values()) {
+    const uniqueTriangles = Array.from(new Set(triangles))
+    for (let i = 0; i < uniqueTriangles.length; i++) {
+      for (let j = i + 1; j < uniqueTriangles.length; j++) {
+        const current = uniqueTriangles[i]
+        const neighbor = uniqueTriangles[j]
+        if (current == null || neighbor == null) continue
+        adjacency[current]?.push(neighbor)
+        adjacency[neighbor]?.push(current)
+      }
+    }
+  }
+
+  return adjacency
+}
+
+function buildTriangleCenters(geometry: THREE.BufferGeometry) {
+  const position = geometry.attributes.position as THREE.BufferAttribute | undefined
+  if (!position) return new Float32Array()
+
+  const triCount = geometry.index ? geometry.index.count / 3 : Math.floor(position.count / 3)
+  const centers = new Float32Array(triCount * 3)
+  const center = new THREE.Vector3()
+  const a = new THREE.Vector3()
+  const b = new THREE.Vector3()
+  const c = new THREE.Vector3()
+
+  for (let triangleIndex = 0; triangleIndex < triCount; triangleIndex++) {
+    getTriangleCenter(geometry, triangleIndex, center, a, b, c)
+    const base = triangleIndex * 3
+    centers[base] = center.x
+    centers[base + 1] = center.y
+    centers[base + 2] = center.z
+  }
+
+  return centers
 }
 
 function createJawMesh(geometry: THREE.BufferGeometry, jaw: JawType): THREE.Mesh {
@@ -332,11 +419,10 @@ function preparePaintMesh(mesh: THREE.Mesh) {
 
   ensureFaceLabels(mesh)
 
-  const geometry = mesh.geometry as BVHGeometry
-  if (!geometry.computeBoundsTree) geometry.computeBoundsTree = computeBoundsTree
-  if (!geometry.disposeBoundsTree) geometry.disposeBoundsTree = disposeBoundsTree
-  if (!geometry.boundsTree) geometry.computeBoundsTree?.()
+  ensureGeometryBoundsTree(mesh.geometry)
   mesh.raycast = acceleratedRaycast
+  triangleAdjacencyMap.set(mesh, buildTriangleAdjacency(mesh.geometry))
+  triangleCenterMap.set(mesh, buildTriangleCenters(mesh.geometry))
 
   enableVertexColors(mesh)
   repaintMesh(mesh)
@@ -407,15 +493,6 @@ async function loadMeshes() {
   upperMesh = createJawMesh(toPaintGeometry(upperSource), 'upper')
   lowerMesh = createJawMesh(toPaintGeometry(lowerSource), 'lower')
 
-  await Promise.all([
-    loadBaseline(modelConfig.upperJson, upperMesh, 'upper'),
-    loadBaseline(modelConfig.lowerJson, lowerMesh, 'lower'),
-  ])
-
-  if (selectedToothId.value == null && availableToothIds.value.length) {
-    selectedToothId.value = availableToothIds.value[0] ?? null
-  }
-
   scene.add(upperMesh)
   scene.add(lowerMesh)
 
@@ -458,8 +535,18 @@ function toggleLower() {
 }
 
 function getBrushLabel(): number | null {
+  const toothId = normalizeLabel(selectedToothId.value ?? 0)
+  if (!toothId) return null
   if (brushMode.value === 'gingiva') return 0
-  return normalizeLabel(selectedToothId.value ?? 0) || null
+  return toothId
+}
+
+function getLocalBrushRadius(mesh: THREE.Mesh) {
+  const scaleX = Math.abs(mesh.scale.x) || 1
+  const scaleY = Math.abs(mesh.scale.y) || 1
+  const scaleZ = Math.abs(mesh.scale.z) || 1
+  const averageScale = (scaleX + scaleY + scaleZ) / 3
+  return brushRadius.value / averageScale
 }
 
 function getBrushPreviewColor() {
@@ -508,9 +595,7 @@ function raycastToTarget(event: PointerEvent): THREE.Intersection | null {
   mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
 
   raycaster.setFromCamera(mouse, camera)
-  const hit = raycaster.intersectObjects(interactableTargets, false)[0] ?? null
-  activeTarget = hit ? (hit.object as THREE.Mesh) : null
-  return hit
+  return raycaster.intersectObjects(interactableTargets, false)[0] ?? null
 }
 
 function updateHover(event: PointerEvent) {
@@ -525,42 +610,200 @@ function updateHover(event: PointerEvent) {
   return hit
 }
 
-function paintMesh(mesh: THREE.Mesh, localPoint: THREE.Vector3) {
+function getTriangleCenterDistance(centers: Float32Array, fromTriangleIndex: number, toTriangleIndex: number) {
+  const fromBase = fromTriangleIndex * 3
+  const toBase = toTriangleIndex * 3
+  const dx = (centers[fromBase] ?? 0) - (centers[toBase] ?? 0)
+  const dy = (centers[fromBase + 1] ?? 0) - (centers[toBase + 1] ?? 0)
+  const dz = (centers[fromBase + 2] ?? 0) - (centers[toBase + 2] ?? 0)
+  return Math.hypot(dx, dy, dz)
+}
+
+function ensureMeshTopology(mesh: THREE.Mesh) {
+  let adjacency = triangleAdjacencyMap.get(mesh)
+  if (!adjacency?.length) {
+    adjacency = buildTriangleAdjacency(mesh.geometry)
+    triangleAdjacencyMap.set(mesh, adjacency)
+  }
+
+  let centers = triangleCenterMap.get(mesh)
+  if (!centers?.length) {
+    centers = buildTriangleCenters(mesh.geometry)
+    triangleCenterMap.set(mesh, centers)
+  }
+
+  return { adjacency, centers }
+}
+
+function buildSurfacePath(
+  adjacency: number[][],
+  centers: Float32Array,
+  fromTriangleIndex: number,
+  toTriangleIndex: number,
+  maxDistance: number,
+) {
+  if (fromTriangleIndex === toTriangleIndex) return [toTriangleIndex]
+
+  const queue = [fromTriangleIndex]
+  const bestDistanceMap = new Map<number, number>([[fromTriangleIndex, 0]])
+  const previousMap = new Map<number, number>()
+
+  while (queue.length) {
+    let bestIndex = 0
+    let bestDistance = Infinity
+    for (let i = 0; i < queue.length; i++) {
+      const triangleIndex = queue[i]
+      if (triangleIndex == null) continue
+      const distance = bestDistanceMap.get(triangleIndex) ?? Infinity
+      if (distance < bestDistance) {
+        bestDistance = distance
+        bestIndex = i
+      }
+    }
+
+    const triangleIndex = queue.splice(bestIndex, 1)[0]
+    if (triangleIndex == null) continue
+
+    const currentDistance = bestDistanceMap.get(triangleIndex) ?? Infinity
+    if (currentDistance > maxDistance) continue
+    if (triangleIndex === toTriangleIndex) {
+      const path = [triangleIndex]
+      let cursor = triangleIndex
+      while (previousMap.has(cursor)) {
+        cursor = previousMap.get(cursor)!
+        path.push(cursor)
+      }
+      path.reverse()
+      return path
+    }
+
+    for (const neighborTriangleIndex of adjacency[triangleIndex] ?? []) {
+      const nextDistance =
+        currentDistance + getTriangleCenterDistance(centers, triangleIndex, neighborTriangleIndex)
+      const previousDistance = bestDistanceMap.get(neighborTriangleIndex)
+      if (nextDistance <= maxDistance && (previousDistance == null || nextDistance < previousDistance)) {
+        bestDistanceMap.set(neighborTriangleIndex, nextDistance)
+        previousMap.set(neighborTriangleIndex, triangleIndex)
+        queue.push(neighborTriangleIndex)
+      }
+    }
+  }
+
+  return null
+}
+
+function resolveStrokeSeeds(mesh: THREE.Mesh, triangleIndex: number) {
+  if (lastStrokeMesh !== mesh || lastStrokeTriangleIndex == null) {
+    return [triangleIndex]
+  }
+
+  const { adjacency, centers } = ensureMeshTopology(mesh)
+  if (!adjacency?.length || !centers?.length) {
+    return [triangleIndex]
+  }
+
+  const directDistance = getTriangleCenterDistance(centers, lastStrokeTriangleIndex, triangleIndex)
+  const localBrushRadius = getLocalBrushRadius(mesh)
+  if (directDistance > localBrushRadius * STROKE_LINK_FACTOR) {
+    return [triangleIndex]
+  }
+
+  return buildSurfacePath(
+    adjacency,
+    centers,
+    lastStrokeTriangleIndex,
+    triangleIndex,
+    directDistance * 2 + localBrushRadius,
+  ) ?? [triangleIndex]
+}
+
+function paintMesh(mesh: THREE.Mesh, seedTriangleIndices: number[]) {
   const geometry = mesh.geometry as BVHGeometry
   const labels = faceLabelMap.get(mesh)
-  if (!geometry.boundsTree || !labels) return
+  const { adjacency, centers } = ensureMeshTopology(mesh)
+  if (!geometry.boundsTree || !labels || !adjacency?.length || !centers?.length) return false
 
   const nextLabel = getBrushLabel()
   if (nextLabel == null) {
-    window.alert('请先选择牙号，再进行牙体上色')
-    return
+    window.alert('请先选择牙号，再进行涂色')
+    return false
   }
 
-  brushSphere.set(localPoint, brushRadius.value)
-  const hitTriangles: number[] = []
+  const safeSeeds = Array.from(
+    new Set(
+      seedTriangleIndices
+        .map((triangleIndex) => Math.max(0, Math.min(triangleIndex, labels.length - 1)))
+        .filter((triangleIndex) => Number.isFinite(triangleIndex)),
+    ),
+  )
+  if (!safeSeeds.length) return false
 
-  geometry.boundsTree.shapecast({
-    intersectsBounds: (box: THREE.Box3) => box.intersectsSphere(brushSphere),
-    intersectsTriangle: (tri: THREE.Triangle, triangleIndex: number) => {
-      tempTriangleCenter.copy(tri.a).add(tri.b).add(tri.c).multiplyScalar(1 / 3)
-      if (tempTriangleCenter.distanceTo(localPoint) <= brushRadius.value) {
-        hitTriangles.push(triangleIndex)
-      }
-      return false
-    },
+  const localBrushRadius = getLocalBrushRadius(mesh) * BRUSH_PAINT_FACTOR
+  const visited = new Uint8Array(labels.length)
+  const queue = [...safeSeeds]
+  const distanceMap = new Map<number, number>()
+  let painted = false
+  safeSeeds.forEach((triangleIndex) => {
+    distanceMap.set(triangleIndex, 0)
   })
 
-  for (const triangleIndex of hitTriangles) {
+  while (queue.length) {
+    let bestIndex = 0
+    let bestDistance = Infinity
+    for (let i = 0; i < queue.length; i++) {
+      const candidateTriangleIndex = queue[i]
+      if (candidateTriangleIndex == null) continue
+      const candidateDistance = distanceMap.get(candidateTriangleIndex) ?? Infinity
+      if (candidateDistance < bestDistance) {
+        bestDistance = candidateDistance
+        bestIndex = i
+      }
+    }
+
+    const triangleIndex = queue.splice(bestIndex, 1)[0]
+    if (triangleIndex == null || visited[triangleIndex]) continue
+    visited[triangleIndex] = 1
+
+    const currentDistance = distanceMap.get(triangleIndex) ?? Infinity
+    if (currentDistance > localBrushRadius) {
+      continue
+    }
+
+    painted = true
     labels[triangleIndex] = nextLabel
+
+    for (const neighborTriangleIndex of adjacency[triangleIndex] ?? []) {
+      if (visited[neighborTriangleIndex]) continue
+
+      const nextDistance =
+        currentDistance + getTriangleCenterDistance(centers, triangleIndex, neighborTriangleIndex)
+      const previousDistance = distanceMap.get(neighborTriangleIndex)
+      if (nextDistance <= localBrushRadius && (previousDistance == null || nextDistance < previousDistance)) {
+        distanceMap.set(neighborTriangleIndex, nextDistance)
+        queue.push(neighborTriangleIndex)
+      }
+    }
   }
 
-  repaintMesh(mesh)
+  if (painted) {
+    repaintMesh(mesh)
+  }
+
+  return painted
 }
 
 function paintAtIntersect(intersect: THREE.Intersection) {
-  if (!activeTarget) return
-  const localPoint = activeTarget.worldToLocal(intersect.point.clone())
-  paintMesh(activeTarget, localPoint)
+  const mesh = intersect.object as THREE.Mesh
+  const faceIndex = typeof intersect.faceIndex === 'number' ? intersect.faceIndex : -1
+  if (faceIndex < 0) return false
+  const currentLabel = getBrushLabel()
+  const painted = paintMesh(mesh, resolveStrokeSeeds(mesh, faceIndex))
+  if (painted && currentLabel != null && currentLabel > 0) {
+    setToothAnchorTriangle(mesh, currentLabel, faceIndex)
+  }
+  lastStrokeMesh = mesh
+  lastStrokeTriangleIndex = faceIndex
+  return painted
 }
 
 function onPointerDown(event: PointerEvent) {
@@ -572,9 +815,14 @@ function onPointerDown(event: PointerEvent) {
     return
   }
 
+  if (typeof hit.faceIndex !== 'number' || hit.faceIndex < 0) {
+    return
+  }
+
   isPainting = true
+  didDragPaint = false
+  didDragPaint = paintAtIntersect(hit)
   if (controls) controls.enabled = false
-  paintAtIntersect(hit)
   event.preventDefault()
   event.stopPropagation()
 
@@ -585,12 +833,15 @@ function onPointerDown(event: PointerEvent) {
 function onPointerMove(event: PointerEvent) {
   const hit = updateHover(event)
   if (!isPainting || !hit) return
-  paintAtIntersect(hit)
+  didDragPaint = paintAtIntersect(hit) || didDragPaint
   event.preventDefault()
 }
 
 function endPainting() {
   isPainting = false
+  didDragPaint = false
+  lastStrokeMesh = null
+  lastStrokeTriangleIndex = null
   if (controls) controls.enabled = true
 }
 
@@ -612,6 +863,7 @@ function bindPointerEvents() {
   })
   eventCanvas.addEventListener('pointermove', onPointerMove, { passive: false })
   eventCanvas.addEventListener('pointerup', onPointerUp)
+  eventCanvas.addEventListener('pointercancel', onPointerUp)
   eventCanvas.addEventListener('pointerleave', onPointerLeave)
   window.addEventListener('pointerup', onPointerUp)
 }
@@ -621,6 +873,7 @@ function unbindPointerEvents() {
     eventCanvas.removeEventListener('pointerdown', onPointerDown, true)
     eventCanvas.removeEventListener('pointermove', onPointerMove)
     eventCanvas.removeEventListener('pointerup', onPointerUp)
+    eventCanvas.removeEventListener('pointercancel', onPointerUp)
     eventCanvas.removeEventListener('pointerleave', onPointerLeave)
   }
   window.removeEventListener('pointerup', onPointerUp)
@@ -636,48 +889,473 @@ function resetSegmentation() {
   })
 }
 
-function parseBatchToothIds(input: string) {
-  return Array.from(
-    new Set(
-      input
-        .split(/[\s,，、]+/)
-        .map((item) => normalizeLabel(Number(item)))
-        .filter((value) => value > 0),
-    ),
-  )
-}
+function getExportFaceLabels(mesh: THREE.Mesh | null, toothId: number | null = null) {
+  if (!mesh) return []
+  const labels = faceLabelMap.get(mesh)
+  if (!labels) return []
 
-function applyBatchTeeth() {
-  const toothIds = parseBatchToothIds(batchToothIdsInput.value)
-  if (!toothIds.length) {
-    window.alert('请输入至少一个有效牙号，例如 11,12,21')
-    return
+  if (toothId == null || toothId <= 0) {
+    return Array.from(labels)
   }
 
-  targets.forEach((mesh) => {
-    const labels = faceLabelMap.get(mesh)
-    const baseline = baselineMap.get(mesh)
-    if (!labels || !baseline || baseline.length !== labels.length) return
+  return Array.from(labels, (label) => (label === toothId ? toothId : 0))
+}
 
-    for (let i = 0; i < labels.length; i++) {
-      const baselineLabel = baseline[i] ?? 0
-      if (toothIds.includes(baselineLabel)) {
-        labels[i] = baselineLabel
+function setToothAnchorTriangle(mesh: THREE.Mesh, toothId: number, triangleIndex: number) {
+  let anchorMap = toothAnchorTriangleMap.get(mesh)
+  if (!anchorMap) {
+    anchorMap = new Map<number, number>()
+    toothAnchorTriangleMap.set(mesh, anchorMap)
+  }
+  anchorMap.set(toothId, triangleIndex)
+}
+
+function getToothAnchorTriangle(mesh: THREE.Mesh, toothId: number) {
+  return toothAnchorTriangleMap.get(mesh)?.get(toothId) ?? null
+}
+
+function getToothExportRadius(mesh: THREE.Mesh) {
+  const position = mesh.geometry.attributes.position as THREE.BufferAttribute | undefined
+  if (!position) return TOOTH_EXPORT_RADIUS_MAX
+
+  if (!mesh.geometry.boundingBox) {
+    mesh.geometry.computeBoundingBox()
+  }
+
+  const boundingBox = mesh.geometry.boundingBox
+  if (!boundingBox) return TOOTH_EXPORT_RADIUS_MAX
+
+  const size = new THREE.Vector3()
+  boundingBox.getSize(size)
+  const radius = Math.max(size.x, size.y) * TOOTH_EXPORT_RADIUS_FACTOR
+  return Math.min(TOOTH_EXPORT_RADIUS_MAX, Math.max(TOOTH_EXPORT_RADIUS_MIN, radius))
+}
+
+function getLargestConnectedToothLabels(
+  mesh: THREE.Mesh,
+  toothId: number,
+  anchorTriangleIndex?: number | null,
+) {
+  const labels = faceLabelMap.get(mesh)
+  if (!labels) return []
+
+  const { adjacency, centers } = ensureMeshTopology(mesh)
+  if (!adjacency?.length) {
+    return getExportFaceLabels(mesh, toothId)
+  }
+
+  if (
+    anchorTriangleIndex != null &&
+    anchorTriangleIndex >= 0 &&
+    anchorTriangleIndex < labels.length &&
+    labels[anchorTriangleIndex] === toothId &&
+    centers?.length
+  ) {
+    const visited = new Uint8Array(labels.length)
+    const queue = [anchorTriangleIndex]
+    const component: number[] = []
+    visited[anchorTriangleIndex] = 1
+    const anchorBase = anchorTriangleIndex * 3
+    const anchorCenter = new THREE.Vector3(
+      centers[anchorBase] ?? 0,
+      centers[anchorBase + 1] ?? 0,
+      centers[anchorBase + 2] ?? 0,
+    )
+    const maxDistance = getToothExportRadius(mesh)
+
+    while (queue.length) {
+      const triangleIndex = queue.shift()
+      if (triangleIndex == null) continue
+
+      component.push(triangleIndex)
+      for (const neighborTriangleIndex of adjacency[triangleIndex] ?? []) {
+        if (visited[neighborTriangleIndex] || labels[neighborTriangleIndex] !== toothId) continue
+        const neighborBase = neighborTriangleIndex * 3
+        const distanceToAnchor = anchorCenter.distanceTo(
+          new THREE.Vector3(
+            centers[neighborBase] ?? 0,
+            centers[neighborBase + 1] ?? 0,
+            centers[neighborBase + 2] ?? 0,
+          ),
+        )
+        if (distanceToAnchor > maxDistance) continue
+        visited[neighborTriangleIndex] = 1
+        queue.push(neighborTriangleIndex)
       }
     }
 
-    repaintMesh(mesh)
+    const nextLabels = new Array<number>(labels.length).fill(0)
+    component.forEach((triangleIndex) => {
+      nextLabels[triangleIndex] = toothId
+    })
+    return nextLabels
+  }
+
+  const visited = new Uint8Array(labels.length)
+  let bestComponent: number[] = []
+
+  for (let start = 0; start < labels.length; start++) {
+    if (visited[start] || labels[start] !== toothId) continue
+
+    const queue = [start]
+    const component: number[] = []
+    visited[start] = 1
+
+    while (queue.length) {
+      const triangleIndex = queue.shift()
+      if (triangleIndex == null) continue
+
+      component.push(triangleIndex)
+      for (const neighborTriangleIndex of adjacency[triangleIndex] ?? []) {
+        if (visited[neighborTriangleIndex] || labels[neighborTriangleIndex] !== toothId) continue
+        visited[neighborTriangleIndex] = 1
+        queue.push(neighborTriangleIndex)
+      }
+    }
+
+    if (component.length > bestComponent.length) {
+      bestComponent = component
+    }
+  }
+
+  if (!bestComponent.length) {
+    return getExportFaceLabels(mesh, toothId)
+  }
+
+  const nextLabels = new Array<number>(labels.length).fill(0)
+  bestComponent.forEach((triangleIndex) => {
+    nextLabels[triangleIndex] = toothId
+  })
+  return nextLabels
+}
+
+function getTriangleVertices(mesh: THREE.Mesh, triangleIndex: number) {
+  const position = mesh.geometry.attributes.position as THREE.BufferAttribute | undefined
+  if (!position) return null
+
+  const a = new THREE.Vector3().fromBufferAttribute(position, triangleIndex * 3)
+  const b = new THREE.Vector3().fromBufferAttribute(position, triangleIndex * 3 + 1)
+  const c = new THREE.Vector3().fromBufferAttribute(position, triangleIndex * 3 + 2)
+  return { a, b, c }
+}
+
+function buildContourLoopsFromTriangles(triangles: ToothTriangleRecord[]) {
+  const pointMap = new Map<string, Point3>()
+  const edgeUseCount = new Map<string, number>()
+  const vertexNeighbors = new Map<string, Set<string>>()
+
+  const addEdge = (from: Point3, to: Point3) => {
+    const fromKey = from.join(',')
+    const toKey = to.join(',')
+    pointMap.set(fromKey, from)
+    pointMap.set(toKey, to)
+
+    const edgeKey = fromKey < toKey ? `${fromKey}|${toKey}` : `${toKey}|${fromKey}`
+    edgeUseCount.set(edgeKey, (edgeUseCount.get(edgeKey) ?? 0) + 1)
+  }
+
+  for (const triangle of triangles) {
+    const [a, b, c] = triangle.vertices
+    addEdge(a, b)
+    addEdge(b, c)
+    addEdge(c, a)
+  }
+
+  edgeUseCount.forEach((count, edgeKey) => {
+    if (count !== 1) return
+    const [fromKey, toKey] = edgeKey.split('|')
+    if (!fromKey || !toKey) return
+
+    if (!vertexNeighbors.has(fromKey)) vertexNeighbors.set(fromKey, new Set())
+    if (!vertexNeighbors.has(toKey)) vertexNeighbors.set(toKey, new Set())
+    vertexNeighbors.get(fromKey)?.add(toKey)
+    vertexNeighbors.get(toKey)?.add(fromKey)
   })
 
-  if (selectedToothId.value == null) {
-    selectedToothId.value = toothIds[0] ?? null
+  const visited = new Set<string>()
+  const loops: Point3[][] = []
+
+  const edgeKeyOf = (fromKey: string, toKey: string) =>
+    fromKey < toKey ? `${fromKey}|${toKey}` : `${toKey}|${fromKey}`
+
+  vertexNeighbors.forEach((neighbors, startKey) => {
+    for (const neighborKey of neighbors) {
+      const startEdgeKey = edgeKeyOf(startKey, neighborKey)
+      if (visited.has(startEdgeKey)) continue
+
+      const loop: Point3[] = []
+      let previousKey: string | null = null
+      let currentKey = startKey
+      let nextKey: string | null = neighborKey
+
+      while (nextKey) {
+        loop.push(pointMap.get(currentKey) ?? pointMap.get(nextKey)!)
+        visited.add(edgeKeyOf(currentKey, nextKey))
+
+        previousKey = currentKey
+        currentKey = nextKey
+
+        if (currentKey === startKey) break
+
+        const candidates = Array.from(vertexNeighbors.get(currentKey) ?? []).filter((key) => key !== previousKey)
+        nextKey = candidates.find((key) => !visited.has(edgeKeyOf(currentKey, key))) ?? null
+      }
+
+      if (loop.length >= 3) {
+        const closingPoint = pointMap.get(currentKey)
+        if (closingPoint) loop.push(closingPoint)
+        loops.push(loop)
+      }
+    }
+  })
+
+  return loops
+}
+
+function getPointDistance(a: Point3, b: Point3) {
+  const dx = a[0] - b[0]
+  const dy = a[1] - b[1]
+  const dz = a[2] - b[2]
+  return Math.hypot(dx, dy, dz)
+}
+
+function normalizeClosedLoop(loop: Point3[]) {
+  if (loop.length < 2) return [...loop]
+  const normalized = [...loop]
+  const first = normalized[0]
+  const last = normalized[normalized.length - 1]
+  if (first && last && getPointDistance(first, last) < 1e-6) {
+    normalized.pop()
+  }
+  return normalized
+}
+
+function closeLoop(loop: Point3[]) {
+  if (!loop.length) return []
+  const closed = [...loop]
+  const first = closed[0]
+  const last = closed[closed.length - 1]
+  if (first && last && getPointDistance(first, last) >= 1e-6) {
+    closed.push([...first] as Point3)
+  }
+  return closed
+}
+
+function getLoopPerimeter(loop: Point3[]) {
+  const normalized = normalizeClosedLoop(loop)
+  if (normalized.length < 2) return 0
+
+  let perimeter = 0
+  for (let index = 0; index < normalized.length; index++) {
+    const current = normalized[index]
+    const next = normalized[(index + 1) % normalized.length]
+    if (!current || !next) continue
+    perimeter += getPointDistance(current, next)
+  }
+  return perimeter
+}
+
+function simplifyClosedLoop(loop: Point3[], minSegmentLength: number) {
+  let current = normalizeClosedLoop(loop)
+  if (current.length < 4 || minSegmentLength <= 0) return current
+
+  let changed = true
+  while (changed && current.length >= 4) {
+    changed = false
+    const next: Point3[] = []
+
+    for (let index = 0; index < current.length; index++) {
+      const previous = current[(index - 1 + current.length) % current.length]
+      const point = current[index]
+      const following = current[(index + 1) % current.length]
+      if (!previous || !point || !following) continue
+
+      const prevDistance = getPointDistance(previous, point)
+      const nextDistance = getPointDistance(point, following)
+      if (prevDistance < minSegmentLength && nextDistance < minSegmentLength) {
+        changed = true
+        continue
+      }
+
+      next.push(point)
+    }
+
+    if (next.length >= 3) {
+      current = next
+    } else {
+      break
+    }
+  }
+
+  return current
+}
+
+function smoothClosedLoop(loop: Point3[], iterations = 4) {
+  let current = normalizeClosedLoop(loop)
+  if (current.length < 3) return closeLoop(current)
+
+  const perimeter = getLoopPerimeter(current)
+  const minSegmentLength = perimeter > 0 ? perimeter / Math.max(current.length * 3, 1) : 0
+  current = simplifyClosedLoop(current, minSegmentLength)
+  if (current.length < 3) return closeLoop(current)
+
+  for (let iteration = 0; iteration < iterations; iteration++) {
+    const next: Point3[] = []
+    for (let index = 0; index < current.length; index++) {
+      const point = current[index]
+      const following = current[(index + 1) % current.length]
+      if (!point || !following) continue
+
+      next.push([
+        point[0] * 0.75 + following[0] * 0.25,
+        point[1] * 0.75 + following[1] * 0.25,
+        point[2] * 0.75 + following[2] * 0.25,
+      ])
+      next.push([
+        point[0] * 0.25 + following[0] * 0.75,
+        point[1] * 0.25 + following[1] * 0.75,
+        point[2] * 0.25 + following[2] * 0.75,
+      ])
+    }
+    current = next
+  }
+
+  return closeLoop(current)
+}
+
+function smoothContourLoops(loops: Point3[][]) {
+  return loops.map((loop) => smoothClosedLoop(loop))
+}
+
+function buildToothRegion(
+  mesh: THREE.Mesh,
+  jaw: JawType,
+  toothId: number,
+  labelsOverride?: ArrayLike<number> | null,
+): ToothRegionRecord | null {
+  const labels = labelsOverride ?? faceLabelMap.get(mesh)
+  if (!labels) return null
+
+  const triangleIndices: number[] = []
+  const triangles: ToothTriangleRecord[] = []
+  const bounds = new THREE.Box3()
+  const centroidSum = new THREE.Vector3()
+  let area = 0
+
+  for (let triangleIndex = 0; triangleIndex < labels.length; triangleIndex++) {
+    if ((labels[triangleIndex] ?? 0) !== toothId) continue
+
+    const vertices = getTriangleVertices(mesh, triangleIndex)
+    if (!vertices) continue
+
+    const { a, b, c } = vertices
+    const centroid = new THREE.Vector3().copy(a).add(b).add(c).multiplyScalar(1 / 3)
+    const triangle = new THREE.Triangle(a, b, c)
+
+    triangleIndices.push(triangleIndex)
+    triangles.push({
+      triangleIndex,
+      centroid: toPoint3(centroid),
+      vertices: [toPoint3(a), toPoint3(b), toPoint3(c)],
+    })
+
+    centroidSum.add(centroid)
+    bounds.expandByPoint(a)
+    bounds.expandByPoint(b)
+    bounds.expandByPoint(c)
+    area += triangle.getArea()
+  }
+
+  if (!triangleIndices.length || bounds.isEmpty()) return null
+
+  const size = new THREE.Vector3()
+  bounds.getSize(size)
+  centroidSum.multiplyScalar(1 / triangleIndices.length)
+  const rawContourLoops = buildContourLoopsFromTriangles(triangles)
+
+  return {
+    toothId,
+    jaw,
+    triangleCount: triangleIndices.length,
+    area,
+    centroid: toPoint3(centroidSum),
+    bounds: {
+      min: toPoint3(bounds.min),
+      max: toPoint3(bounds.max),
+      size: toPoint3(size),
+    },
+    rawContourLoops,
+    contourLoops: smoothContourLoops(rawContourLoops),
+    triangleIndices,
+    triangles,
   }
 }
 
-function getExportLabels(mesh: THREE.Mesh | null) {
-  if (!mesh) return []
-  const labels = faceLabelMap.get(mesh)
-  return labels ? Array.from(labels) : []
+function getLabeledToothIdsFromLabels(labels: ArrayLike<number>) {
+  return Array.from(new Set(Array.from(labels).filter((label) => label > 0))).sort((a, b) => a - b)
+}
+
+function getJawMesh(jaw: JawType) {
+  return jaw === 'upper' ? upperMesh : lowerMesh
+}
+
+function countLabeledTriangles(labels: number[]) {
+  return labels.reduce((count, label) => count + (label > 0 ? 1 : 0), 0)
+}
+
+function buildVertexLabelsFromFaceLabels(mesh: THREE.Mesh, faceLabels: number[]) {
+  const position = mesh.geometry.attributes.position as THREE.BufferAttribute | undefined
+  const index = mesh.geometry.index
+  if (!position || !faceLabels.length) return []
+
+  if (!index && position.count === faceLabels.length * 3) {
+    return faceLabels.flatMap((label) => [label, label, label])
+  }
+
+  const vertexLabels = new Uint16Array(position.count)
+  for (let tri = 0; tri < faceLabels.length; tri++) {
+    const label = faceLabels[tri] ?? 0
+    if (index) {
+      vertexLabels[index.getX(tri * 3)] = label
+      vertexLabels[index.getX(tri * 3 + 1)] = label
+      vertexLabels[index.getX(tri * 3 + 2)] = label
+      continue
+    }
+
+    const base = tri * 3
+    vertexLabels[base] = label
+    vertexLabels[base + 1] = label
+    vertexLabels[base + 2] = label
+  }
+
+  return Array.from(vertexLabels)
+}
+
+function buildJawExport(jaw: JawType): JawLabelExport | null {
+  const mesh = getJawMesh(jaw)
+  if (!mesh) return null
+  const position = mesh.geometry.attributes.position as THREE.BufferAttribute | undefined
+  if (!position) return null
+
+  const faceLabels = getExportFaceLabels(mesh)
+  const labels = buildVertexLabelsFromFaceLabels(mesh, faceLabels)
+  const toothIds = getLabeledToothIdsFromLabels(faceLabels)
+  const teeth = toothIds
+    .map((toothId) => buildToothRegion(mesh, jaw, toothId, faceLabels))
+    .filter((region): region is ToothRegionRecord => region !== null)
+
+  return {
+    format: 'stl-labels',
+    version: 3,
+    jaw,
+    triangleCount: faceLabels.length,
+    vertexCount: position.count,
+    labeledTriangleCount: countLabeledTriangles(faceLabels),
+    toothIds,
+    labels,
+    faceLabels,
+    teeth,
+  }
 }
 
 function downloadJson(filename: string, payload: Record<string, unknown>) {
@@ -691,11 +1369,62 @@ function downloadJson(filename: string, payload: Record<string, unknown>) {
 }
 
 function exportJawLabels(jaw: JawType) {
-  const mesh = jaw === 'upper' ? upperMesh : lowerMesh
-  downloadJson(`${jaw}-labels.json`, {
-    jaw,
-    version: 1,
-    labels: getExportLabels(mesh),
+  const payload = buildJawExport(jaw)
+  if (!payload) {
+    window.alert(`${jaw === 'upper' ? '上颌' : '下颌'}模型尚未加载完成`)
+    return
+  }
+
+  downloadJson(`${jaw}-labels.json`, payload)
+}
+
+function exportSelectedToothRegion() {
+  const toothId = normalizeLabel(selectedToothId.value ?? 0)
+  if (!toothId) {
+    window.alert('请先选择牙号，再导出当前牙号数据')
+    return
+  }
+
+  const jawCandidates = [
+    { jaw: 'upper' as JawType, mesh: upperMesh },
+    { jaw: 'lower' as JawType, mesh: lowerMesh },
+  ] as const
+
+  const target =
+    jawCandidates.find(({ mesh }) => {
+      const labels = mesh ? faceLabelMap.get(mesh) : null
+      return labels ? Array.from(labels).includes(toothId) : false
+    }) ?? jawCandidates.find(({ jaw }) => (toothId < 30 ? jaw === 'upper' : jaw === 'lower'))
+  if (!target?.mesh) {
+    window.alert(`当前牙号 ${toothId} 没有对应的模型`)
+    return
+  }
+  const position = target.mesh.geometry.attributes.position as THREE.BufferAttribute | undefined
+  if (!position) {
+    window.alert(`当前牙号 ${toothId} 的模型缺少顶点数据`)
+    return
+  }
+
+  const anchorTriangleIndex = getToothAnchorTriangle(target.mesh, toothId)
+  const faceLabels = getLargestConnectedToothLabels(target.mesh, toothId, anchorTriangleIndex)
+  const labels = buildVertexLabelsFromFaceLabels(target.mesh, faceLabels)
+  const region = buildToothRegion(target.mesh, target.jaw, toothId, faceLabels)
+  if (!region) {
+    window.alert(`当前牙号 ${toothId} 还没有标注结果`)
+    return
+  }
+
+  downloadJson(`tooth-${toothId}.json`, {
+    format: 'stl-labels',
+    version: 3,
+    jaw: target.jaw,
+    toothId,
+    triangleCount: faceLabels.length,
+    vertexCount: position.count,
+    labeledTriangleCount: region.triangleCount,
+    labels,
+    faceLabels,
+    region,
   })
 }
 
@@ -1032,3 +1761,5 @@ button.active {
   border-color: #409eff;
 }
 </style>
+
+
