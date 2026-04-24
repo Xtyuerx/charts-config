@@ -35,7 +35,17 @@
         <span>{{ brushRadius.toFixed(1) }}</span>
       </label>
 
+      <div class="mode-group">
+        <button :class="{ active: paintGranularity === 'face' }" @click="paintGranularity = 'face'">
+          面级标注
+        </button>
+        <button :class="{ active: paintGranularity === 'vertex' }" @click="paintGranularity = 'vertex'">
+          顶点级标注
+        </button>
+      </div>
+
       <button @click="resetSegmentation">重置标注</button>
+      <button @click="openImportDialog">导入分割 JSON</button>
       <button @click="toggleSegmentPreview">
         {{ previewSegmentResult ? '返回编辑' : '预览分割结果' }}
       </button>
@@ -58,9 +68,23 @@
     </div>
 
     <div class="tips">
-      这里只加载 STL，本次涂色结果直接写在三角面标签上。一个牙号对应一种颜色，导出 JSON 后可按
-      `faceLabels` 或 `labels` 直接还原每颗牙齿的范围。
+      STL 本身不写回颜色，分割信息完全保存在 JSON 中。当前使用
+      `{{ paintGranularity === 'face' ? 'face' : 'vertex' }}` 标注；导出时会同时附带
+      `faceLabels`、`vertexLabels`、`labelColorMap` 以及基于几何坐标生成的稳定
+      `faceStableIds`/`vertexStableIds`，重新加载时优先按稳定 ID 回填颜色。
     </div>
+
+    <div v-if="lastImportMessage" class="import-status">
+      {{ lastImportMessage }}
+    </div>
+
+    <input
+      ref="fileInputRef"
+      class="file-input"
+      type="file"
+      accept=".json,application/json"
+      @change="onImportFileChange"
+    />
 
     <div ref="containerRef" class="container"></div>
   </div>
@@ -74,6 +98,7 @@ import { STLLoader, TrackballControls } from 'three-stdlib'
 import { MATERIAL_CONFIG, SCENE_CONFIG } from '@/page/newAnalysis/modelAnalysis/constants'
 
 type BrushMode = 'tooth' | 'gingiva'
+type PaintGranularity = 'face' | 'vertex'
 type JawType = 'upper' | 'lower'
 
 type BVHGeometry = THREE.BufferGeometry & {
@@ -101,6 +126,9 @@ type ToothTriangleRecord = {
   vertices: [Point3, Point3, Point3]
 }
 
+// 单颗牙齿区域的业务导出结构。
+// 它描述的是“这个牙号对应了哪些三角面、空间位置大概在哪、轮廓大概长什么样”，
+// 后续可直接用于局部重建、轮廓提取、统计分析或人工复核。
 type ToothRegionRecord = {
   toothId: number
   jaw: JawType
@@ -118,20 +146,67 @@ type ToothRegionRecord = {
   triangles: ToothTriangleRecord[]
 }
 
+type SegmentationAssignment = {
+  stableId: string
+  labelId: number
+}
+
+// 整个上颌/下颌的分割导出结构。
+// 这里既保存顺序标签数组，也保存 stableId 映射：
+// 顺序数组适合同一份几何直接回放，stableId 适合在面顺序变化后尽量恢复标注。
 type JawLabelExport = {
-  format: 'stl-labels'
-  version: 3
+  format: 'stl-segmentation'
+  version: 4
   jaw: JawType
+  granularity: PaintGranularity
+  geometrySignature: string
   triangleCount: number
   vertexCount: number
   labeledTriangleCount: number
+  labeledVertexCount: number
   toothIds: number[]
-  labels: number[]
   faceLabels: number[]
+  labels: number[]
+  vertexLabels: number[]
+  faceStableIds: string[]
+  vertexStableIds: string[]
+  faceAssignments: SegmentationAssignment[]
+  vertexAssignments: SegmentationAssignment[]
+  labelColorMap: Record<string, string>
   teeth: ToothRegionRecord[]
 }
 
+// 单颗牙号的局部导出结构，适合按牙存档或单牙重建。
+type ToothRegionExport = {
+  format: 'stl-segmentation'
+  version: 4
+  jaw: JawType
+  toothId: number
+  granularity: PaintGranularity
+  geometrySignature: string
+  triangleCount: number
+  vertexCount: number
+  labeledTriangleCount: number
+  labeledVertexCount: number
+  faceLabels: number[]
+  labels: number[]
+  vertexLabels: number[]
+  faceStableIds: string[]
+  vertexStableIds: string[]
+  faceAssignments: SegmentationAssignment[]
+  vertexAssignments: SegmentationAssignment[]
+  labelColorMap: Record<string, string>
+  region: ToothRegionRecord
+}
+
+type SegmentationImportPayload = Partial<JawLabelExport> &
+  Partial<ToothRegionExport> & {
+    region?: ToothRegionRecord
+    toothId?: number
+  }
+
 const containerRef = ref<HTMLDivElement>()
+const fileInputRef = ref<HTMLInputElement>()
 
 let scene: THREE.Scene | null = null
 let camera: THREE.PerspectiveCamera | null = null
@@ -152,9 +227,12 @@ const showUpper = ref(true)
 const showLower = ref(true)
 const brushRadius = ref(4)
 const brushMode = ref<BrushMode>('tooth')
+const paintGranularity = ref<PaintGranularity>('face')
 const toothOptions = [11, 12, 13, 14, 15, 16, 17, 18, 21, 22, 23, 24, 25, 26, 27, 28, 31, 32, 33, 34, 35, 36, 37, 38, 41, 42, 43, 44, 45, 46, 47, 48]
 const selectedToothId = ref<number | null>(toothOptions[0] ?? null)
 const previewSegmentResult = ref(false)
+const lastImportMessage = ref('')
+const labelColorMap = ref<Record<string, string>>({})
 
 const modelConfig = {
   upper: '/models/upper.stl',
@@ -165,9 +243,14 @@ const toothColor = new THREE.Color(0xffffff)
 const gingivaColor = new THREE.Color(0xc97f88)
 
 const faceLabelMap = new WeakMap<THREE.Mesh, Uint16Array>()
+const vertexLabelMap = new WeakMap<THREE.Mesh, Uint16Array>()
 const triangleAdjacencyMap = new WeakMap<THREE.Mesh, number[][]>()
 const triangleCenterMap = new WeakMap<THREE.Mesh, Float32Array>()
 const toothAnchorTriangleMap = new WeakMap<THREE.Mesh, Map<number, number>>()
+const stableFaceIdMap = new WeakMap<THREE.Mesh, string[]>()
+const stableVertexIdMap = new WeakMap<THREE.Mesh, string[]>()
+const logicalVertexGroupMap = new WeakMap<THREE.Mesh, number[][]>()
+const geometrySignatureMap = new WeakMap<THREE.Mesh, string>()
 const preparedMeshSet = new WeakSet<THREE.Mesh>()
 
 const raycaster = new THREE.Raycaster()
@@ -184,6 +267,7 @@ const STROKE_LINK_FACTOR = 8
 const TOOTH_EXPORT_RADIUS_FACTOR = 0.065
 const TOOTH_EXPORT_RADIUS_MIN = 2.8
 const TOOTH_EXPORT_RADIUS_MAX = 5.2
+const STABLE_ID_PRECISION = 1e5
 
 function getAllMeshes() {
   return [upperMesh, lowerMesh].filter(Boolean) as THREE.Mesh[]
@@ -213,8 +297,144 @@ function toPaintGeometry(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
   return nextGeometry
 }
 
+function quantizeCoordinate(value: number) {
+  return Math.round(value * STABLE_ID_PRECISION)
+}
+
+function pointToStableKey(x: number, y: number, z: number) {
+  return `${quantizeCoordinate(x)},${quantizeCoordinate(y)},${quantizeCoordinate(z)}`
+}
+
+function getVertexIndex(geometry: THREE.BufferGeometry, triangleIndex: number, vertexOffset: number) {
+  return geometry.index ? geometry.index.getX(triangleIndex * 3 + vertexOffset) : triangleIndex * 3 + vertexOffset
+}
+
+function getTriangleVertexIndices(geometry: THREE.BufferGeometry, triangleIndex: number) {
+  return [
+    getVertexIndex(geometry, triangleIndex, 0),
+    getVertexIndex(geometry, triangleIndex, 1),
+    getVertexIndex(geometry, triangleIndex, 2),
+  ]
+}
+
+function hashStringList(values: string[]) {
+  let hash = 2166136261
+  for (const value of values) {
+    for (let index = 0; index < value.length; index++) {
+      hash ^= value.charCodeAt(index)
+      hash = Math.imul(hash, 16777619)
+    }
+    hash ^= 124
+    hash = Math.imul(hash, 16777619)
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0')
+}
+
+function buildStableVertexData(geometry: THREE.BufferGeometry) {
+  const position = geometry.attributes.position as THREE.BufferAttribute | undefined
+  if (!position) {
+    return {
+      stableIds: [] as string[],
+      groupsByIndex: [] as number[][],
+    }
+  }
+
+  const stableIds = new Array<string>(position.count)
+  const keyToIndices = new Map<string, number[]>()
+
+  for (let index = 0; index < position.count; index++) {
+    const stableId = pointToStableKey(position.getX(index), position.getY(index), position.getZ(index))
+    stableIds[index] = stableId
+    const indices = keyToIndices.get(stableId)
+    if (indices) {
+      indices.push(index)
+    } else {
+      keyToIndices.set(stableId, [index])
+    }
+  }
+
+  const groupsByIndex = Array.from({ length: position.count }, () => [] as number[])
+  keyToIndices.forEach((indices) => {
+    indices.forEach((index) => {
+      groupsByIndex[index] = indices
+    })
+  })
+
+  return { stableIds, groupsByIndex }
+}
+
+function buildStableFaceIds(geometry: THREE.BufferGeometry) {
+  const position = geometry.attributes.position as THREE.BufferAttribute | undefined
+  if (!position) return [] as string[]
+
+  const triangleCount = geometry.index ? geometry.index.count / 3 : Math.floor(position.count / 3)
+  const stableIds = new Array<string>(triangleCount)
+  const center = new THREE.Vector3()
+  const a = new THREE.Vector3()
+  const b = new THREE.Vector3()
+  const c = new THREE.Vector3()
+
+  for (let triangleIndex = 0; triangleIndex < triangleCount; triangleIndex++) {
+    const vertexIndices = getTriangleVertexIndices(geometry, triangleIndex)
+    // 这里不用当前运行时的 triangleIndex 直接当唯一标识，
+    // 而是用量化后的顶点坐标 + 面心坐标生成稳定 faceId。
+    // 这样重新加载 STL 时，JSON 回放尽量依赖几何本身，而不是依赖当前面顺序。
+    const vertexKeys = vertexIndices
+      .map((vertexIndex) =>
+        pointToStableKey(
+          position.getX(vertexIndex),
+          position.getY(vertexIndex),
+          position.getZ(vertexIndex),
+        ),
+      )
+      .sort()
+    getTriangleCenter(geometry, triangleIndex, center, a, b, c)
+    stableIds[triangleIndex] = `${vertexKeys.join('|')}#${pointToStableKey(center.x, center.y, center.z)}`
+  }
+
+  return stableIds
+}
+
+function buildGeometrySignature(mesh: THREE.Mesh, stableFaceIds: string[], stableVertexIds: string[]) {
+  const position = mesh.geometry.attributes.position as THREE.BufferAttribute | undefined
+  if (!position) return `${mesh.name}|empty`
+
+  if (!mesh.geometry.boundingBox) {
+    mesh.geometry.computeBoundingBox()
+  }
+
+  const bounds = mesh.geometry.boundingBox
+  const minKey = bounds ? pointToStableKey(bounds.min.x, bounds.min.y, bounds.min.z) : '0,0,0'
+  const maxKey = bounds ? pointToStableKey(bounds.max.x, bounds.max.y, bounds.max.z) : '0,0,0'
+  const triangleCount = mesh.geometry.index ? mesh.geometry.index.count / 3 : Math.floor(position.count / 3)
+
+  return [
+    mesh.name,
+    triangleCount,
+    position.count,
+    minKey,
+    maxKey,
+    hashStringList(stableFaceIds),
+    hashStringList(stableVertexIds),
+  ].join('|')
+}
+
+// 颜色只负责前端视觉反馈，不是分割结果本体。
+// 真正需要保存和回放的是 labelId、faceLabels、vertexLabels 以及 stableId 映射。
+function getLabelHexColor(label: number) {
+  if (!label) return '#c97f88'
+  const customColor = labelColorMap.value[String(label)]
+  if (customColor) {
+    return `#${new THREE.Color(customColor).getHexString()}`
+  }
+  const h = (((label * 2654435761) >>> 0) % 360) / 360
+  return `#${new THREE.Color().setHSL(h, 0.65, 0.55).getHexString()}`
+}
+
 function colorForLabel(label: number): THREE.Color {
   if (!label) return gingivaColor
+  const customColor = labelColorMap.value[String(label)]
+  if (customColor) return new THREE.Color(customColor)
   const h = (((label * 2654435761) >>> 0) % 360) / 360
   return new THREE.Color().setHSL(h, 0.65, 0.55)
 }
@@ -360,6 +580,13 @@ function ensureFaceLabels(mesh: THREE.Mesh) {
   faceLabelMap.set(mesh, new Uint16Array(triCount))
 }
 
+function ensureVertexLabels(mesh: THREE.Mesh) {
+  if (vertexLabelMap.has(mesh)) return
+  const position = mesh.geometry.attributes.position as THREE.BufferAttribute | undefined
+  if (!position) return
+  vertexLabelMap.set(mesh, new Uint16Array(position.count))
+}
+
 function enableVertexColors(mesh: THREE.Mesh) {
   const apply = (material: THREE.Material) => {
     if (material instanceof THREE.MeshPhongMaterial || material instanceof THREE.MeshStandardMaterial) {
@@ -375,13 +602,81 @@ function enableVertexColors(mesh: THREE.Mesh) {
   }
 }
 
+function buildVertexLabelsFromFaceLabelsData(mesh: THREE.Mesh, faceLabels: ArrayLike<number>) {
+  const position = mesh.geometry.attributes.position as THREE.BufferAttribute | undefined
+  if (!position) return new Uint16Array()
+
+  const nextVertexLabels = new Uint16Array(position.count)
+  const triangleCount = mesh.geometry.index ? mesh.geometry.index.count / 3 : Math.floor(position.count / 3)
+  for (let triangleIndex = 0; triangleIndex < triangleCount; triangleIndex++) {
+    const label = normalizeLabel(faceLabels[triangleIndex] ?? 0)
+    const vertexIndices = getTriangleVertexIndices(mesh.geometry, triangleIndex)
+    vertexIndices.forEach((vertexIndex) => {
+      nextVertexLabels[vertexIndex] = label
+    })
+  }
+  return nextVertexLabels
+}
+
+function resolveTriangleLabelFromVertexLabels(vertexLabels: number[]) {
+  // 顶点模式下，真实标注结果是 vertexLabels。
+  // 但很多后续处理仍然需要 face 视角，所以这里把顶点标签折算成三角面标签。
+  // 业务上要求至少 2 个顶点同标签，避免只碰到一个角点就把整面都判成该牙号。
+  const positiveLabels = vertexLabels.filter((label) => label > 0)
+  if (positiveLabels.length < 2) return 0
+
+  const countMap = new Map<number, number>()
+  positiveLabels.forEach((label) => {
+    countMap.set(label, (countMap.get(label) ?? 0) + 1)
+  })
+
+  let bestLabel = positiveLabels[0] ?? 0
+  let bestCount = -1
+  countMap.forEach((count, label) => {
+    if (count > bestCount) {
+      bestLabel = label
+      bestCount = count
+    }
+  })
+  return bestLabel
+}
+
+function syncFaceLabelsFromVertexLabels(mesh: THREE.Mesh, sourceVertexLabels?: ArrayLike<number> | null) {
+  const faceLabels = faceLabelMap.get(mesh)
+  const vertexLabels = sourceVertexLabels ?? vertexLabelMap.get(mesh)
+  if (!faceLabels || !vertexLabels) return faceLabels ?? null
+
+  for (let triangleIndex = 0; triangleIndex < faceLabels.length; triangleIndex++) {
+    const vertexIndices = getTriangleVertexIndices(mesh.geometry, triangleIndex)
+    faceLabels[triangleIndex] = resolveTriangleLabelFromVertexLabels(
+      vertexIndices.map((vertexIndex) => normalizeLabel(vertexLabels[vertexIndex] ?? 0)),
+    )
+  }
+
+  return faceLabels
+}
+
 function repaintMesh(mesh: THREE.Mesh) {
   const colorAttr = mesh.geometry.getAttribute('color') as THREE.BufferAttribute | undefined
-  const labels = faceLabelMap.get(mesh)
-  if (!colorAttr || !labels) return
+  if (!colorAttr) return
+
+  const activeGranularity = paintGranularity.value
+  const faceLabels = faceLabelMap.get(mesh)
+  const vertexLabels = vertexLabelMap.get(mesh)
+
+  if (activeGranularity === 'vertex' && vertexLabels?.length === colorAttr.count) {
+    for (let vertexIndex = 0; vertexIndex < colorAttr.count; vertexIndex++) {
+      const color = colorForLabel(vertexLabels[vertexIndex] ?? 0)
+      colorAttr.setXYZ(vertexIndex, color.r, color.g, color.b)
+    }
+    colorAttr.needsUpdate = true
+    return
+  }
+
+  if (!faceLabels) return
 
   const paintTriangle = (tri: number, a: number, b: number, c: number) => {
-    const color = colorForLabel(labels[tri] ?? 0)
+    const color = colorForLabel(faceLabels[tri] ?? 0)
     colorAttr.setXYZ(a, color.r, color.g, color.b)
     colorAttr.setXYZ(b, color.r, color.g, color.b)
     colorAttr.setXYZ(c, color.r, color.g, color.b)
@@ -389,11 +684,11 @@ function repaintMesh(mesh: THREE.Mesh) {
 
   if (mesh.geometry.index) {
     const index = mesh.geometry.index
-    for (let tri = 0; tri < labels.length; tri++) {
+    for (let tri = 0; tri < faceLabels.length; tri++) {
       paintTriangle(tri, index.getX(tri * 3), index.getX(tri * 3 + 1), index.getX(tri * 3 + 2))
     }
   } else {
-    for (let tri = 0; tri < labels.length; tri++) {
+    for (let tri = 0; tri < faceLabels.length; tri++) {
       paintTriangle(tri, tri * 3, tri * 3 + 1, tri * 3 + 2)
     }
   }
@@ -418,6 +713,14 @@ function preparePaintMesh(mesh: THREE.Mesh) {
   }
 
   ensureFaceLabels(mesh)
+  ensureVertexLabels(mesh)
+
+  const { stableIds: stableVertexIds, groupsByIndex } = buildStableVertexData(mesh.geometry)
+  const stableFaceIds = buildStableFaceIds(mesh.geometry)
+  stableVertexIdMap.set(mesh, stableVertexIds)
+  stableFaceIdMap.set(mesh, stableFaceIds)
+  logicalVertexGroupMap.set(mesh, groupsByIndex)
+  geometrySignatureMap.set(mesh, buildGeometrySignature(mesh, stableFaceIds, stableVertexIds))
 
   ensureGeometryBoundsTree(mesh.geometry)
   mesh.raycast = acceleratedRaycast
@@ -717,17 +1020,11 @@ function resolveStrokeSeeds(mesh: THREE.Mesh, triangleIndex: number) {
   ) ?? [triangleIndex]
 }
 
-function paintMesh(mesh: THREE.Mesh, seedTriangleIndices: number[]) {
+function collectTrianglesWithinBrush(mesh: THREE.Mesh, seedTriangleIndices: number[]) {
   const geometry = mesh.geometry as BVHGeometry
   const labels = faceLabelMap.get(mesh)
   const { adjacency, centers } = ensureMeshTopology(mesh)
-  if (!geometry.boundsTree || !labels || !adjacency?.length || !centers?.length) return false
-
-  const nextLabel = getBrushLabel()
-  if (nextLabel == null) {
-    window.alert('请先选择牙号，再进行涂色')
-    return false
-  }
+  if (!geometry.boundsTree || !labels || !adjacency?.length || !centers?.length) return [] as number[]
 
   const safeSeeds = Array.from(
     new Set(
@@ -736,13 +1033,13 @@ function paintMesh(mesh: THREE.Mesh, seedTriangleIndices: number[]) {
         .filter((triangleIndex) => Number.isFinite(triangleIndex)),
     ),
   )
-  if (!safeSeeds.length) return false
+  if (!safeSeeds.length) return [] as number[]
 
   const localBrushRadius = getLocalBrushRadius(mesh) * BRUSH_PAINT_FACTOR
   const visited = new Uint8Array(labels.length)
   const queue = [...safeSeeds]
   const distanceMap = new Map<number, number>()
-  let painted = false
+  const triangles: number[] = []
   safeSeeds.forEach((triangleIndex) => {
     distanceMap.set(triangleIndex, 0)
   })
@@ -769,8 +1066,7 @@ function paintMesh(mesh: THREE.Mesh, seedTriangleIndices: number[]) {
       continue
     }
 
-    painted = true
-    labels[triangleIndex] = nextLabel
+    triangles.push(triangleIndex)
 
     for (const neighborTriangleIndex of adjacency[triangleIndex] ?? []) {
       if (visited[neighborTriangleIndex]) continue
@@ -785,11 +1081,82 @@ function paintMesh(mesh: THREE.Mesh, seedTriangleIndices: number[]) {
     }
   }
 
-  if (painted) {
-    repaintMesh(mesh)
+  return triangles
+}
+
+function paintMesh(mesh: THREE.Mesh, seedTriangleIndices: number[]) {
+  const labels = faceLabelMap.get(mesh)
+  const vertexLabels = vertexLabelMap.get(mesh)
+  if (!labels) return false
+
+  const nextLabel = getBrushLabel()
+  if (nextLabel == null) {
+    window.alert('请先选择牙号，再进行涂色')
+    return false
   }
 
-  return painted
+  const triangles = collectTrianglesWithinBrush(mesh, seedTriangleIndices)
+  if (!triangles.length) return false
+
+  triangles.forEach((triangleIndex) => {
+    labels[triangleIndex] = nextLabel
+  })
+
+  if (vertexLabels) {
+    vertexLabels.set(buildVertexLabelsFromFaceLabelsData(mesh, labels))
+  }
+
+  repaintMesh(mesh)
+  return true
+}
+
+function paintVerticesAtIntersect(
+  mesh: THREE.Mesh,
+  seedTriangleIndices: number[],
+  localPoint: THREE.Vector3,
+) {
+  const vertexLabels = vertexLabelMap.get(mesh)
+  const position = mesh.geometry.attributes.position as THREE.BufferAttribute | undefined
+  const logicalGroups = logicalVertexGroupMap.get(mesh)
+  if (!vertexLabels || !position || !logicalGroups?.length) return false
+
+  const nextLabel = getBrushLabel()
+  if (nextLabel == null) {
+    window.alert('请先选择牙号，再进行涂色')
+    return false
+  }
+
+  const triangles = collectTrianglesWithinBrush(mesh, seedTriangleIndices)
+  if (!triangles.length) return false
+
+  const localBrushRadius = getLocalBrushRadius(mesh) * BRUSH_PAINT_FACTOR
+  const paintedVertexIndices = new Set<number>()
+  const vertexPoint = new THREE.Vector3()
+
+  for (const triangleIndex of triangles) {
+    const vertexIndices = getTriangleVertexIndices(mesh.geometry, triangleIndex)
+    for (const vertexIndex of vertexIndices) {
+      vertexPoint.set(
+        position.getX(vertexIndex),
+        position.getY(vertexIndex),
+        position.getZ(vertexIndex),
+      )
+      if (vertexPoint.distanceTo(localPoint) > localBrushRadius) continue
+      // STL 转成当前可绘制几何后，经常会出现“坐标相同但索引不同”的重复顶点。
+      // 业务上这些点应视为同一个逻辑顶点，所以这里整组一起写入 label，
+      // 避免视觉上出现裂缝，也避免导出的 vertexLabels 自相矛盾。
+      for (const groupedVertexIndex of logicalGroups[vertexIndex] ?? [vertexIndex]) {
+        vertexLabels[groupedVertexIndex] = nextLabel
+        paintedVertexIndices.add(groupedVertexIndex)
+      }
+    }
+  }
+
+  if (!paintedVertexIndices.size) return false
+
+  syncFaceLabelsFromVertexLabels(mesh, vertexLabels)
+  repaintMesh(mesh)
+  return true
 }
 
 function paintAtIntersect(intersect: THREE.Intersection) {
@@ -797,7 +1164,11 @@ function paintAtIntersect(intersect: THREE.Intersection) {
   const faceIndex = typeof intersect.faceIndex === 'number' ? intersect.faceIndex : -1
   if (faceIndex < 0) return false
   const currentLabel = getBrushLabel()
-  const painted = paintMesh(mesh, resolveStrokeSeeds(mesh, faceIndex))
+  const seedTriangleIndices = resolveStrokeSeeds(mesh, faceIndex)
+  const painted =
+    paintGranularity.value === 'vertex'
+      ? paintVerticesAtIntersect(mesh, seedTriangleIndices, mesh.worldToLocal(intersect.point.clone()))
+      : paintMesh(mesh, seedTriangleIndices)
   if (painted && currentLabel != null && currentLabel > 0) {
     setToothAnchorTriangle(mesh, currentLabel, faceIndex)
   }
@@ -882,11 +1253,16 @@ function unbindPointerEvents() {
 
 function resetSegmentation() {
   targets.forEach((mesh) => {
-    const labels = faceLabelMap.get(mesh)
-    if (!labels) return
-    labels.fill(0)
+    const faceLabels = faceLabelMap.get(mesh)
+    const vertexLabels = vertexLabelMap.get(mesh)
+    if (faceLabels) faceLabels.fill(0)
+    if (vertexLabels) vertexLabels.fill(0)
+    toothAnchorTriangleMap.set(mesh, new Map())
     repaintMesh(mesh)
   })
+  labelColorMap.value = {}
+  lastImportMessage.value = ''
+  refreshPreviewIfNeeded()
 }
 
 function getExportFaceLabels(mesh: THREE.Mesh | null, toothId: number | null = null) {
@@ -899,6 +1275,48 @@ function getExportFaceLabels(mesh: THREE.Mesh | null, toothId: number | null = n
   }
 
   return Array.from(labels, (label) => (label === toothId ? toothId : 0))
+}
+
+function getExportVertexLabels(mesh: THREE.Mesh | null) {
+  if (!mesh) return []
+  const vertexLabels = vertexLabelMap.get(mesh)
+  if (paintGranularity.value === 'vertex' && vertexLabels?.length) {
+    return Array.from(vertexLabels)
+  }
+
+  const faceLabels = faceLabelMap.get(mesh)
+  return faceLabels ? Array.from(buildVertexLabelsFromFaceLabelsData(mesh, faceLabels)) : []
+}
+
+function buildAssignments(stableIds: string[], labels: number[]) {
+  const assignmentMap = new Map<string, number>()
+  for (let index = 0; index < Math.min(stableIds.length, labels.length); index++) {
+    const labelId = normalizeLabel(labels[index] ?? 0)
+    if (!labelId) continue
+    const stableId = stableIds[index]
+    if (!stableId) continue
+    assignmentMap.set(stableId, labelId)
+  }
+  return Array.from(assignmentMap.entries()).map(([stableId, labelId]) => ({ stableId, labelId }))
+}
+
+// 这里导出的颜色字典只负责 labelId -> color 的显示映射，
+// 不参与“某个面/顶点属于哪个牙号”的业务判定。
+function buildLabelColorMap(labels: ArrayLike<number>) {
+  return getLabeledToothIdsFromLabels(labels).reduce<Record<string, string>>((acc, toothId) => {
+    acc[String(toothId)] = getLabelHexColor(toothId)
+    return acc
+  }, {})
+}
+
+function refreshPreviewIfNeeded() {
+  if (previewSegmentResult.value) {
+    buildPreview()
+  }
+}
+
+function openImportDialog() {
+  fileInputRef.value?.click()
 }
 
 function setToothAnchorTriangle(mesh: THREE.Mesh, toothId: number, triangleIndex: number) {
@@ -1033,9 +1451,10 @@ function getTriangleVertices(mesh: THREE.Mesh, triangleIndex: number) {
   const position = mesh.geometry.attributes.position as THREE.BufferAttribute | undefined
   if (!position) return null
 
-  const a = new THREE.Vector3().fromBufferAttribute(position, triangleIndex * 3)
-  const b = new THREE.Vector3().fromBufferAttribute(position, triangleIndex * 3 + 1)
-  const c = new THREE.Vector3().fromBufferAttribute(position, triangleIndex * 3 + 2)
+  const [aIndex, bIndex, cIndex] = getTriangleVertexIndices(mesh.geometry, triangleIndex)
+  const a = new THREE.Vector3().fromBufferAttribute(position, aIndex)
+  const b = new THREE.Vector3().fromBufferAttribute(position, bIndex)
+  const c = new THREE.Vector3().fromBufferAttribute(position, cIndex)
   return { a, b, c }
 }
 
@@ -1303,32 +1722,16 @@ function countLabeledTriangles(labels: number[]) {
   return labels.reduce((count, label) => count + (label > 0 ? 1 : 0), 0)
 }
 
+function countLabeledVertices(labels: number[]) {
+  return labels.reduce((count, label) => count + (label > 0 ? 1 : 0), 0)
+}
+
 function buildVertexLabelsFromFaceLabels(mesh: THREE.Mesh, faceLabels: number[]) {
-  const position = mesh.geometry.attributes.position as THREE.BufferAttribute | undefined
-  const index = mesh.geometry.index
-  if (!position || !faceLabels.length) return []
+  return Array.from(buildVertexLabelsFromFaceLabelsData(mesh, faceLabels))
+}
 
-  if (!index && position.count === faceLabels.length * 3) {
-    return faceLabels.flatMap((label) => [label, label, label])
-  }
-
-  const vertexLabels = new Uint16Array(position.count)
-  for (let tri = 0; tri < faceLabels.length; tri++) {
-    const label = faceLabels[tri] ?? 0
-    if (index) {
-      vertexLabels[index.getX(tri * 3)] = label
-      vertexLabels[index.getX(tri * 3 + 1)] = label
-      vertexLabels[index.getX(tri * 3 + 2)] = label
-      continue
-    }
-
-    const base = tri * 3
-    vertexLabels[base] = label
-    vertexLabels[base + 1] = label
-    vertexLabels[base + 2] = label
-  }
-
-  return Array.from(vertexLabels)
+function getMeshGeometrySignature(mesh: THREE.Mesh) {
+  return geometrySignatureMap.get(mesh) ?? `${mesh.name}|unknown`
 }
 
 function buildJawExport(jaw: JawType): JawLabelExport | null {
@@ -1337,23 +1740,39 @@ function buildJawExport(jaw: JawType): JawLabelExport | null {
   const position = mesh.geometry.attributes.position as THREE.BufferAttribute | undefined
   if (!position) return null
 
+  // 导出时同时保留三层信息：
+  // 1. faceLabels：适合区域提取、轮廓计算、面级回放
+  // 2. vertexLabels：适合更细粒度的局部修整
+  // 3. stableIds / assignments：适合重新加载后尽量稳定恢复
   const faceLabels = getExportFaceLabels(mesh)
-  const labels = buildVertexLabelsFromFaceLabels(mesh, faceLabels)
-  const toothIds = getLabeledToothIdsFromLabels(faceLabels)
+  const vertexLabels = getExportVertexLabels(mesh)
+  const toothIds = getLabeledToothIdsFromLabels([...faceLabels, ...vertexLabels])
   const teeth = toothIds
     .map((toothId) => buildToothRegion(mesh, jaw, toothId, faceLabels))
     .filter((region): region is ToothRegionRecord => region !== null)
+  const faceStableIds = stableFaceIdMap.get(mesh) ?? []
+  const vertexStableIds = stableVertexIdMap.get(mesh) ?? []
 
   return {
-    format: 'stl-labels',
-    version: 3,
+    format: 'stl-segmentation',
+    version: 4,
     jaw,
+    granularity: paintGranularity.value,
+    geometrySignature: getMeshGeometrySignature(mesh),
     triangleCount: faceLabels.length,
     vertexCount: position.count,
     labeledTriangleCount: countLabeledTriangles(faceLabels),
+    labeledVertexCount: countLabeledVertices(vertexLabels),
     toothIds,
-    labels,
     faceLabels,
+    labels: vertexLabels,
+    vertexLabels,
+    faceStableIds,
+    vertexStableIds,
+    faceAssignments: buildAssignments(faceStableIds, faceLabels),
+    vertexAssignments:
+      paintGranularity.value === 'vertex' ? buildAssignments(vertexStableIds, vertexLabels) : [],
+    labelColorMap: buildLabelColorMap([...faceLabels, ...vertexLabels]),
     teeth,
   }
 }
@@ -1414,18 +1833,32 @@ function exportSelectedToothRegion() {
     return
   }
 
-  downloadJson(`tooth-${toothId}.json`, {
-    format: 'stl-labels',
-    version: 3,
+  const faceStableIds = stableFaceIdMap.get(target.mesh) ?? []
+  const vertexStableIds = stableVertexIdMap.get(target.mesh) ?? []
+  const payload: ToothRegionExport = {
+    format: 'stl-segmentation',
+    version: 4,
     jaw: target.jaw,
     toothId,
+    granularity: paintGranularity.value,
+    geometrySignature: getMeshGeometrySignature(target.mesh),
     triangleCount: faceLabels.length,
     vertexCount: position.count,
     labeledTriangleCount: region.triangleCount,
-    labels,
+    labeledVertexCount: countLabeledVertices(labels),
     faceLabels,
+    labels,
+    vertexLabels: labels,
+    faceStableIds,
+    vertexStableIds,
+    faceAssignments: buildAssignments(faceStableIds, faceLabels),
+    vertexAssignments:
+      paintGranularity.value === 'vertex' ? buildAssignments(vertexStableIds, labels) : [],
+    labelColorMap: buildLabelColorMap([...faceLabels, ...labels]),
     region,
-  })
+  }
+
+  downloadJson(`tooth-${toothId}.json`, payload)
 }
 
 function exportUpperLabels() {
@@ -1434,6 +1867,194 @@ function exportUpperLabels() {
 
 function exportLowerLabels() {
   exportJawLabels('lower')
+}
+
+function getImportedAssignments(
+  payload: SegmentationImportPayload,
+  stableIds: string[],
+  labels: number[],
+  kind: 'face' | 'vertex',
+) {
+  const directAssignments = kind === 'face' ? payload.faceAssignments : payload.vertexAssignments
+  if (Array.isArray(directAssignments) && directAssignments.length) {
+    return directAssignments
+      .filter(
+        (item): item is SegmentationAssignment =>
+          !!item && typeof item.stableId === 'string' && Number.isFinite(item.labelId),
+      )
+      .map((item) => ({
+        stableId: item.stableId,
+        labelId: normalizeLabel(item.labelId),
+      }))
+  }
+
+  // 兼容旧版 JSON：
+  // 老数据可能只有顺序标签数组，没有 stableId assignments。
+  // 如果同时拿到了 stableIds，这里就临时补成 stableId -> labelId 映射，后续统一处理。
+  if (stableIds.length === labels.length && labels.length) {
+    return stableIds
+      .map((stableId, index) => ({
+        stableId,
+        labelId: normalizeLabel(labels[index] ?? 0),
+      }))
+      .filter((item) => item.labelId > 0)
+  }
+
+  return [] as SegmentationAssignment[]
+}
+
+function applyAssignmentsByStableId(
+  targetLabels: Uint16Array,
+  stableIds: string[],
+  assignments: SegmentationAssignment[],
+) {
+  if (!targetLabels.length || !stableIds.length || !assignments.length) return 0
+
+  const stableIndexMap = new Map<string, number[]>()
+  stableIds.forEach((stableId, index) => {
+    const indices = stableIndexMap.get(stableId)
+    if (indices) {
+      indices.push(index)
+    } else {
+      stableIndexMap.set(stableId, [index])
+    }
+  })
+
+  let matched = 0
+  assignments.forEach(({ stableId, labelId }) => {
+    for (const index of stableIndexMap.get(stableId) ?? []) {
+      targetLabels[index] = normalizeLabel(labelId)
+      matched += 1
+    }
+  })
+
+  return matched
+}
+
+function inferJawFromPayload(payload: SegmentationImportPayload): JawType | null {
+  if (payload.jaw === 'upper' || payload.jaw === 'lower') return payload.jaw
+  const toothId = normalizeLabel(payload.toothId ?? 0)
+  if (!toothId) return null
+  return toothId < 30 ? 'upper' : 'lower'
+}
+
+async function onImportFileChange(event: Event) {
+  const input = event.target as HTMLInputElement | null
+  const file = input?.files?.[0]
+  if (!file) return
+
+  try {
+    const payload = JSON.parse(await file.text()) as SegmentationImportPayload
+    applyImportedSegmentation(payload)
+  } catch (error) {
+    console.error(error)
+    window.alert('分割 JSON 解析失败，请确认文件格式正确')
+  } finally {
+    if (input) input.value = ''
+  }
+}
+
+function applyImportedSegmentation(payload: SegmentationImportPayload) {
+  const jaw = inferJawFromPayload(payload)
+  const mesh = jaw ? getJawMesh(jaw) : null
+  if (!jaw || !mesh) {
+    window.alert('无法从 JSON 判断对应的上下颌模型')
+    return
+  }
+
+  const faceLabels = faceLabelMap.get(mesh)
+  const vertexLabels = vertexLabelMap.get(mesh)
+  if (!faceLabels || !vertexLabels) {
+    window.alert('模型标签缓存尚未准备完成')
+    return
+  }
+
+  faceLabels.fill(0)
+  vertexLabels.fill(0)
+  const signatureMatches =
+    !payload.geometrySignature || payload.geometrySignature === getMeshGeometrySignature(mesh)
+
+  const importedFaceLabels = Array.isArray(payload.faceLabels)
+    ? payload.faceLabels.map((label) => normalizeLabel(label))
+    : Array.isArray(payload.labels) && payload.labels.length === faceLabels.length
+      ? payload.labels.map((label) => normalizeLabel(label))
+      : []
+  const importedVertexLabels =
+    Array.isArray(payload.vertexLabels) && payload.vertexLabels.length
+      ? payload.vertexLabels.map((label) => normalizeLabel(label))
+      : Array.isArray(payload.labels) && payload.labels.length === vertexLabels.length
+        ? payload.labels.map((label) => normalizeLabel(label))
+        : []
+
+  const faceAssignments = getImportedAssignments(
+    payload,
+    Array.isArray(payload.faceStableIds) ? payload.faceStableIds : [],
+    importedFaceLabels,
+    'face',
+  )
+  const vertexAssignments = getImportedAssignments(
+    payload,
+    Array.isArray(payload.vertexStableIds) ? payload.vertexStableIds : [],
+    importedVertexLabels,
+    'vertex',
+  )
+
+  let matchedFaces = applyAssignmentsByStableId(faceLabels, stableFaceIdMap.get(mesh) ?? [], faceAssignments)
+  let matchedVertices = applyAssignmentsByStableId(
+    vertexLabels,
+    stableVertexIdMap.get(mesh) ?? [],
+    vertexAssignments,
+  )
+
+  // 导入优先级：
+  // 1. 先按 stableId 恢复，因为它尽量不依赖当前三角面顺序
+  // 2. 如果 stableId 一个都对不上，再退回顺序数组
+  //    这种退回方式要求当前 STL 与导出时基本还是同一份几何
+  if (!matchedFaces && importedFaceLabels.length === faceLabels.length) {
+    faceLabels.set(importedFaceLabels)
+    matchedFaces = faceLabels.length
+  }
+
+  if (!matchedVertices && importedVertexLabels.length === vertexLabels.length) {
+    vertexLabels.set(importedVertexLabels)
+    matchedVertices = vertexLabels.length
+  }
+
+  if (!matchedVertices && matchedFaces) {
+    vertexLabels.set(buildVertexLabelsFromFaceLabelsData(mesh, faceLabels))
+  }
+
+  if (!matchedFaces && matchedVertices) {
+    syncFaceLabelsFromVertexLabels(mesh, vertexLabels)
+  }
+
+  if (payload.labelColorMap && typeof payload.labelColorMap === 'object') {
+    labelColorMap.value = Object.entries(payload.labelColorMap).reduce<Record<string, string>>(
+      (acc, [labelId, color]) => {
+        if (typeof color === 'string') {
+          acc[labelId] = color
+        }
+        return acc
+      },
+      {},
+    )
+  }
+
+  if (payload.granularity === 'face' || payload.granularity === 'vertex') {
+    paintGranularity.value = payload.granularity
+  } else if (matchedVertices && !matchedFaces) {
+    paintGranularity.value = 'vertex'
+  } else {
+    paintGranularity.value = 'face'
+  }
+
+  if (payload.toothId) {
+    selectedToothId.value = normalizeLabel(payload.toothId)
+  }
+
+  repaintMesh(mesh)
+  refreshPreviewIfNeeded()
+  lastImportMessage.value = `${jaw === 'upper' ? '上颌' : '下颌'}分割已恢复：匹配 ${matchedFaces} 个面，${matchedVertices} 个顶点${signatureMatches ? '' : '；注意当前 STL 与 JSON 的 geometrySignature 不一致，结果依赖 stableId 匹配'}`
 }
 
 function buildSegmentedGeometry(mesh: THREE.Mesh, isTooth: boolean) {
@@ -1637,6 +2258,10 @@ function disposeScene() {
 
 watch(brushRadius, updateBrushIndicator)
 watch([brushMode, selectedToothId], updateBrushIndicator)
+watch(paintGranularity, () => {
+  getAllMeshes().forEach(repaintMesh)
+  refreshPreviewIfNeeded()
+})
 
 onMounted(async () => {
   if (!containerRef.value) return
@@ -1717,7 +2342,7 @@ onUnmounted(() => {
 
 .quick-tooth-list {
   position: absolute;
-  top: 78px;
+  top: 122px;
   left: 12px;
   z-index: 10;
   display: flex;
@@ -1742,7 +2367,7 @@ onUnmounted(() => {
 
 .tips {
   position: absolute;
-  top: 126px;
+  top: 170px;
   left: 12px;
   z-index: 10;
   max-width: min(900px, calc(100% - 24px));
@@ -1755,11 +2380,28 @@ onUnmounted(() => {
   box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
 }
 
+.import-status {
+  position: absolute;
+  top: 246px;
+  left: 12px;
+  z-index: 10;
+  max-width: min(720px, calc(100% - 24px));
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #0f766e;
+  background: rgba(236, 253, 245, 0.96);
+  border: 1px solid rgba(15, 118, 110, 0.18);
+  border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+}
+
+.file-input {
+  display: none;
+}
+
 button.active {
   color: #fff;
   background: #409eff;
   border-color: #409eff;
 }
 </style>
-
-
