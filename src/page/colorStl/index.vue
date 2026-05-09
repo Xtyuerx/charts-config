@@ -39,7 +39,10 @@
         <button :class="{ active: paintGranularity === 'face' }" @click="paintGranularity = 'face'">
           面级标注
         </button>
-        <button :class="{ active: paintGranularity === 'vertex' }" @click="paintGranularity = 'vertex'">
+        <button
+          :class="{ active: paintGranularity === 'vertex' }"
+          @click="paintGranularity = 'vertex'"
+        >
           顶点级标注
         </button>
       </div>
@@ -68,10 +71,11 @@
     </div>
 
     <div class="tips">
-      STL 本身不写回颜色，分割信息完全保存在 JSON 中。当前使用
-      `{{ paintGranularity === 'face' ? 'face' : 'vertex' }}` 标注；导出时会同时附带
-      `faceLabels`、`vertexLabels`、`labelColorMap` 以及基于几何坐标生成的稳定
-      `faceStableIds`/`vertexStableIds`，重新加载时优先按稳定 ID 回填颜色。
+      STL 本身不写回颜色，分割信息完全保存在 JSON 中。当前使用 `{{
+        paintGranularity === 'face' ? 'face' : 'vertex'
+      }}` 标注；导出时会同时附带 `faceLabels`、`vertexLabels`、`labelColorMap`
+      以及基于几何坐标生成的稳定 `faceStableIds`/`vertexStableIds`，重新加载时优先按稳定 ID
+      回填颜色。
     </div>
 
     <div v-if="lastImportMessage" class="import-status">
@@ -137,8 +141,8 @@ type ToothRegionRecord = {
   centroid: Point3
   bounds: {
     min: Point3
-      max: Point3
-      size: Point3
+    max: Point3
+    size: Point3
   }
   rawContourLoops: Point3[][]
   contourLoops: Point3[][]
@@ -228,20 +232,29 @@ const showLower = ref(true)
 const brushRadius = ref(4)
 const brushMode = ref<BrushMode>('tooth')
 const paintGranularity = ref<PaintGranularity>('face')
-const toothOptions = [11, 12, 13, 14, 15, 16, 17, 18, 21, 22, 23, 24, 25, 26, 27, 28, 31, 32, 33, 34, 35, 36, 37, 38, 41, 42, 43, 44, 45, 46, 47, 48]
+const toothOptions = [
+  11, 12, 13, 14, 15, 16, 17, 18, 21, 22, 23, 24, 25, 26, 27, 28, 31, 32, 33, 34, 35, 36, 37, 38,
+  41, 42, 43, 44, 45, 46, 47, 48,
+]
 const selectedToothId = ref<number | null>(toothOptions[0] ?? null)
 const previewSegmentResult = ref(false)
 const lastImportMessage = ref('')
 const labelColorMap = ref<Record<string, string>>({})
 
 const modelConfig = {
-  upper: '/models/upper.stl',
-  lower: '/models/lower.stl',
+  upper:
+    'http://175.154.206.51:9000/cy-stl/3D/2602000150/2027188515489452032/stl/2602000150_2027188515489452032_upper.stl?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20260429%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260429T061541Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=b748cbae8f152b5ea6f6e62be78fc51184451a0f6e5b73ca8fc1fbda0ab4252b',
+  lower:
+    'http://175.154.206.51:9000/cy-stl/3D/2602000152/2027194528095539200/stl/2602000152_2027194528095539200_lower.stl?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20260427%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260427T062857Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=6fa29ad4741c40e0439de30913d5895390e2201492fab4e7ac1fa034d1893085',
 }
 
 const toothColor = new THREE.Color(0xffffff)
 const gingivaColor = new THREE.Color(0xc97f88)
 
+// 这些 WeakMap/WeakSet 是“运行时缓存层”：
+// 1. 不把大型派生数据直接挂在 geometry/material 上，避免和 three 的原生字段混在一起。
+// 2. key 是 mesh，对应模型销毁后缓存也能自然释放，减少长期占用内存。
+// 3. 这里缓存的内容大多可以从几何重新推导出来，所以适合按需构建、按 mesh 复用。
 const faceLabelMap = new WeakMap<THREE.Mesh, Uint16Array>()
 const vertexLabelMap = new WeakMap<THREE.Mesh, Uint16Array>()
 const triangleAdjacencyMap = new WeakMap<THREE.Mesh, number[][]>()
@@ -269,6 +282,8 @@ const TOOTH_EXPORT_RADIUS_MIN = 2.8
 const TOOTH_EXPORT_RADIUS_MAX = 5.2
 const STABLE_ID_PRECISION = 1e5
 
+// 项目里同时存在上下颌两个 mesh，很多逻辑都要“对所有当前可编辑模型批量执行”。
+// 单独封装这个函数后，后续无论是重绘、重置、预览还是导出都只需要面向这一层处理。
 function getAllMeshes() {
   return [upperMesh, lowerMesh].filter(Boolean) as THREE.Mesh[]
 }
@@ -288,6 +303,11 @@ function toPoint3(vector: THREE.Vector3): Point3 {
   return [vector.x, vector.y, vector.z]
 }
 
+// 统一把 STL 几何转换成当前页面可编辑的绘制几何。
+// 这里做了两件事：
+// 1. 尽量转成 non-indexed，后续按三角面/顶点直接写颜色时更直观。
+// 2. 清掉旧的 color attribute，避免重复导入或重新准备 mesh 时沿用脏颜色。
+// computeVertexNormals 只服务于当前编辑视图的光照表现，不影响导出 JSON 的标签结果。
 function toPaintGeometry(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
   const nextGeometry = geometry.index ? geometry.toNonIndexed() : geometry.clone()
   if (nextGeometry.getAttribute('color')) {
@@ -305,8 +325,14 @@ function pointToStableKey(x: number, y: number, z: number) {
   return `${quantizeCoordinate(x)},${quantizeCoordinate(y)},${quantizeCoordinate(z)}`
 }
 
-function getVertexIndex(geometry: THREE.BufferGeometry, triangleIndex: number, vertexOffset: number) {
-  return geometry.index ? geometry.index.getX(triangleIndex * 3 + vertexOffset) : triangleIndex * 3 + vertexOffset
+function getVertexIndex(
+  geometry: THREE.BufferGeometry,
+  triangleIndex: number,
+  vertexOffset: number,
+) {
+  return geometry.index
+    ? geometry.index.getX(triangleIndex * 3 + vertexOffset)
+    : triangleIndex * 3 + vertexOffset
 }
 
 function getTriangleVertexIndices(geometry: THREE.BufferGeometry, triangleIndex: number) {
@@ -330,6 +356,9 @@ function hashStringList(values: string[]) {
   return (hash >>> 0).toString(16).padStart(8, '0')
 }
 
+// 为每个顶点生成稳定 ID，并把“坐标完全相同的顶点”归成一组。
+// STL/非索引几何里经常会出现视觉上是同一个点、但索引不同的重复顶点；
+// 导出/回填/顶点级涂色时，业务上希望它们视作同一个逻辑顶点。
 function buildStableVertexData(geometry: THREE.BufferGeometry) {
   const position = geometry.attributes.position as THREE.BufferAttribute | undefined
   if (!position) {
@@ -343,7 +372,11 @@ function buildStableVertexData(geometry: THREE.BufferGeometry) {
   const keyToIndices = new Map<string, number[]>()
 
   for (let index = 0; index < position.count; index++) {
-    const stableId = pointToStableKey(position.getX(index), position.getY(index), position.getZ(index))
+    const stableId = pointToStableKey(
+      position.getX(index),
+      position.getY(index),
+      position.getZ(index),
+    )
     stableIds[index] = stableId
     const indices = keyToIndices.get(stableId)
     if (indices) {
@@ -363,6 +396,11 @@ function buildStableVertexData(geometry: THREE.BufferGeometry) {
   return { stableIds, groupsByIndex }
 }
 
+// faceStableId 的目标不是绝对数学唯一，而是“在同一份或极相近几何中尽量稳定”。
+// 这里组合了：
+// 1. 三个顶点的量化坐标
+// 2. 三角面中心点的量化坐标
+// 这样即便 triangleIndex 顺序变化，只要几何本身没明显变化，仍有较大概率命中回填。
 function buildStableFaceIds(geometry: THREE.BufferGeometry) {
   const position = geometry.attributes.position as THREE.BufferAttribute | undefined
   if (!position) return [] as string[]
@@ -389,13 +427,22 @@ function buildStableFaceIds(geometry: THREE.BufferGeometry) {
       )
       .sort()
     getTriangleCenter(geometry, triangleIndex, center, a, b, c)
-    stableIds[triangleIndex] = `${vertexKeys.join('|')}#${pointToStableKey(center.x, center.y, center.z)}`
+    stableIds[triangleIndex] =
+      `${vertexKeys.join('|')}#${pointToStableKey(center.x, center.y, center.z)}`
   }
 
   return stableIds
 }
 
-function buildGeometrySignature(mesh: THREE.Mesh, stableFaceIds: string[], stableVertexIds: string[]) {
+function buildGeometrySignature(
+  mesh: THREE.Mesh,
+  stableFaceIds: string[],
+  stableVertexIds: string[],
+) {
+  // geometrySignature 用来快速判断“当前 STL 与导出 JSON 是否大致还是同一份几何”。
+  // 它不直接参与赋值，只用于提示导入结果的可信度：
+  // - 一致：顺序标签和 stableId 命中通常都比较可靠
+  // - 不一致：仍会尝试按 stableId 恢复，但用户需要知道当前结果可能只是近似匹配
   const position = mesh.geometry.attributes.position as THREE.BufferAttribute | undefined
   if (!position) return `${mesh.name}|empty`
 
@@ -406,7 +453,9 @@ function buildGeometrySignature(mesh: THREE.Mesh, stableFaceIds: string[], stabl
   const bounds = mesh.geometry.boundingBox
   const minKey = bounds ? pointToStableKey(bounds.min.x, bounds.min.y, bounds.min.z) : '0,0,0'
   const maxKey = bounds ? pointToStableKey(bounds.max.x, bounds.max.y, bounds.max.z) : '0,0,0'
-  const triangleCount = mesh.geometry.index ? mesh.geometry.index.count / 3 : Math.floor(position.count / 3)
+  const triangleCount = mesh.geometry.index
+    ? mesh.geometry.index.count / 3
+    : Math.floor(position.count / 3)
 
   return [
     mesh.name,
@@ -462,7 +511,11 @@ function getTriangleCenter(
   b.fromBufferAttribute(position, triangleIndex * 3 + 1)
   c.fromBufferAttribute(position, triangleIndex * 3 + 2)
 
-  return target.copy(a).add(b).add(c).multiplyScalar(1 / 3)
+  return target
+    .copy(a)
+    .add(b)
+    .add(c)
+    .multiplyScalar(1 / 3)
 }
 
 function buildTriangleAdjacency(geometry: THREE.BufferGeometry) {
@@ -476,7 +529,9 @@ function buildTriangleAdjacency(geometry: THREE.BufferGeometry) {
   const tempB = new THREE.Vector3()
 
   const getVertexIndex = (triangleIndex: number, vertexOffset: number) =>
-    geometry.index ? geometry.index.getX(triangleIndex * 3 + vertexOffset) : triangleIndex * 3 + vertexOffset
+    geometry.index
+      ? geometry.index.getX(triangleIndex * 3 + vertexOffset)
+      : triangleIndex * 3 + vertexOffset
 
   const toKey = (vertex: THREE.Vector3) =>
     `${(vertex.x * 1e5).toFixed(0)},${(vertex.y * 1e5).toFixed(0)},${(vertex.z * 1e5).toFixed(0)}`
@@ -550,6 +605,9 @@ function buildTriangleCenters(geometry: THREE.BufferGeometry) {
   return centers
 }
 
+// 上下颌 mesh 的几何数据是核心，材质只是编辑阶段的视觉承载。
+// 这里保留了项目原本的 Phong 材质风格，让编辑视图继续有立体感；
+// 真正的“标签状态”全部保存在 faceLabelMap / vertexLabelMap，不保存在材质里。
 function createJawMesh(geometry: THREE.BufferGeometry, jaw: JawType): THREE.Mesh {
   const isUpper = jaw === 'upper'
   const material = new THREE.MeshPhongMaterial({
@@ -587,9 +645,14 @@ function ensureVertexLabels(mesh: THREE.Mesh) {
   vertexLabelMap.set(mesh, new Uint16Array(position.count))
 }
 
+// three 的材质默认不会使用几何上的 color attribute。
+// 这一步是在“材质层”打开顶点色开关；真正的颜色值仍然由 repaintMesh 写入几何。
 function enableVertexColors(mesh: THREE.Mesh) {
   const apply = (material: THREE.Material) => {
-    if (material instanceof THREE.MeshPhongMaterial || material instanceof THREE.MeshStandardMaterial) {
+    if (
+      material instanceof THREE.MeshPhongMaterial ||
+      material instanceof THREE.MeshStandardMaterial
+    ) {
       material.vertexColors = true
       material.needsUpdate = true
     }
@@ -602,12 +665,16 @@ function enableVertexColors(mesh: THREE.Mesh) {
   }
 }
 
+// face 模式是编辑时最稳定的主视角，但很多导出或预览又需要 vertexLabels。
+// 因此这里提供一个“面标签 -> 顶点标签”的单向投影，便于统一后续流程。
 function buildVertexLabelsFromFaceLabelsData(mesh: THREE.Mesh, faceLabels: ArrayLike<number>) {
   const position = mesh.geometry.attributes.position as THREE.BufferAttribute | undefined
   if (!position) return new Uint16Array()
 
   const nextVertexLabels = new Uint16Array(position.count)
-  const triangleCount = mesh.geometry.index ? mesh.geometry.index.count / 3 : Math.floor(position.count / 3)
+  const triangleCount = mesh.geometry.index
+    ? mesh.geometry.index.count / 3
+    : Math.floor(position.count / 3)
   for (let triangleIndex = 0; triangleIndex < triangleCount; triangleIndex++) {
     const label = normalizeLabel(faceLabels[triangleIndex] ?? 0)
     const vertexIndices = getTriangleVertexIndices(mesh.geometry, triangleIndex)
@@ -641,7 +708,10 @@ function resolveTriangleLabelFromVertexLabels(vertexLabels: number[]) {
   return bestLabel
 }
 
-function syncFaceLabelsFromVertexLabels(mesh: THREE.Mesh, sourceVertexLabels?: ArrayLike<number> | null) {
+function syncFaceLabelsFromVertexLabels(
+  mesh: THREE.Mesh,
+  sourceVertexLabels?: ArrayLike<number> | null,
+) {
   const faceLabels = faceLabelMap.get(mesh)
   const vertexLabels = sourceVertexLabels ?? vertexLabelMap.get(mesh)
   if (!faceLabels || !vertexLabels) return faceLabels ?? null
@@ -660,6 +730,8 @@ function repaintMesh(mesh: THREE.Mesh) {
   const colorAttr = mesh.geometry.getAttribute('color') as THREE.BufferAttribute | undefined
   if (!colorAttr) return
 
+  // 这里是“标签 -> 视觉颜色”的唯一落点。
+  // 不管前面是导入 JSON、重置标签还是笔刷改色，最终都要回到这里把 label 数组刷到 color attribute。
   const activeGranularity = paintGranularity.value
   const faceLabels = faceLabelMap.get(mesh)
   const vertexLabels = vertexLabelMap.get(mesh)
@@ -702,6 +774,8 @@ function preparePaintMesh(mesh: THREE.Mesh) {
   const position = mesh.geometry.attributes.position as THREE.BufferAttribute | undefined
   if (!position) return
 
+  // 初始化默认颜色时全部按牙龈粉色处理，意味着“未标注 = 牙龈/背景区域”。
+  // 后续只有 label > 0 的位置才会被刷成具体牙号颜色。
   if (!mesh.geometry.attributes.color) {
     const colors = new Float32Array(position.count * 3)
     for (let i = 0; i < position.count; i++) {
@@ -715,6 +789,10 @@ function preparePaintMesh(mesh: THREE.Mesh) {
   ensureFaceLabels(mesh)
   ensureVertexLabels(mesh)
 
+  // 这一段是整个导入/导出/顶点模式一致性的基础：
+  // - stable ids：给后续 JSON 回填提供尽量稳定的几何锚点
+  // - logical vertex groups：把重复顶点当作同一个逻辑点处理
+  // - geometry signature：帮助判断导入结果是否可靠
   const { stableIds: stableVertexIds, groupsByIndex } = buildStableVertexData(mesh.geometry)
   const stableFaceIds = buildStableFaceIds(mesh.geometry)
   stableVertexIdMap.set(mesh, stableVertexIds)
@@ -913,7 +991,11 @@ function updateHover(event: PointerEvent) {
   return hit
 }
 
-function getTriangleCenterDistance(centers: Float32Array, fromTriangleIndex: number, toTriangleIndex: number) {
+function getTriangleCenterDistance(
+  centers: Float32Array,
+  fromTriangleIndex: number,
+  toTriangleIndex: number,
+) {
   const fromBase = fromTriangleIndex * 3
   const toBase = toTriangleIndex * 3
   const dx = (centers[fromBase] ?? 0) - (centers[toBase] ?? 0)
@@ -923,6 +1005,8 @@ function getTriangleCenterDistance(centers: Float32Array, fromTriangleIndex: num
 }
 
 function ensureMeshTopology(mesh: THREE.Mesh) {
+  // 邻接表和三角面中心既用于笔刷扩散，也用于拖拽路径补桥、连通域提取等算法。
+  // 这些数据推导成本不低，所以缓存起来，第一次没有时再构建。
   let adjacency = triangleAdjacencyMap.get(mesh)
   if (!adjacency?.length) {
     adjacency = buildTriangleAdjacency(mesh.geometry)
@@ -945,6 +1029,9 @@ function buildSurfacePath(
   toTriangleIndex: number,
   maxDistance: number,
 ) {
+  // 拖动画笔时，如果相邻两次命中的三角面之间存在一小段空隙，
+  // 这里会沿 mesh 表面寻找一条“短路径”把中间面补上，避免画出来断断续续。
+  // 算法本质上是一个带距离约束的最短路径搜索，边权取三角面中心点之间的距离。
   if (fromTriangleIndex === toTriangleIndex) return [toTriangleIndex]
 
   const queue = [fromTriangleIndex]
@@ -984,7 +1071,10 @@ function buildSurfacePath(
       const nextDistance =
         currentDistance + getTriangleCenterDistance(centers, triangleIndex, neighborTriangleIndex)
       const previousDistance = bestDistanceMap.get(neighborTriangleIndex)
-      if (nextDistance <= maxDistance && (previousDistance == null || nextDistance < previousDistance)) {
+      if (
+        nextDistance <= maxDistance &&
+        (previousDistance == null || nextDistance < previousDistance)
+      ) {
         bestDistanceMap.set(neighborTriangleIndex, nextDistance)
         previousMap.set(neighborTriangleIndex, triangleIndex)
         queue.push(neighborTriangleIndex)
@@ -1011,20 +1101,23 @@ function resolveStrokeSeeds(mesh: THREE.Mesh, triangleIndex: number) {
     return [triangleIndex]
   }
 
-  return buildSurfacePath(
-    adjacency,
-    centers,
-    lastStrokeTriangleIndex,
-    triangleIndex,
-    directDistance * 2 + localBrushRadius,
-  ) ?? [triangleIndex]
+  return (
+    buildSurfacePath(
+      adjacency,
+      centers,
+      lastStrokeTriangleIndex,
+      triangleIndex,
+      directDistance * 2 + localBrushRadius,
+    ) ?? [triangleIndex]
+  )
 }
 
 function collectTrianglesWithinBrush(mesh: THREE.Mesh, seedTriangleIndices: number[]) {
   const geometry = mesh.geometry as BVHGeometry
   const labels = faceLabelMap.get(mesh)
   const { adjacency, centers } = ensureMeshTopology(mesh)
-  if (!geometry.boundsTree || !labels || !adjacency?.length || !centers?.length) return [] as number[]
+  if (!geometry.boundsTree || !labels || !adjacency?.length || !centers?.length)
+    return [] as number[]
 
   const safeSeeds = Array.from(
     new Set(
@@ -1035,6 +1128,8 @@ function collectTrianglesWithinBrush(mesh: THREE.Mesh, seedTriangleIndices: numb
   )
   if (!safeSeeds.length) return [] as number[]
 
+  // 笔刷扩散不是简单的欧氏球体查询，而是沿三角面邻接关系在“网格表面”传播。
+  // 这样能避免隔着牙缝或空洞把另一侧表面误刷到，更符合实际“沿表面涂抹”的手感。
   const localBrushRadius = getLocalBrushRadius(mesh) * BRUSH_PAINT_FACTOR
   const visited = new Uint8Array(labels.length)
   const queue = [...safeSeeds]
@@ -1074,7 +1169,10 @@ function collectTrianglesWithinBrush(mesh: THREE.Mesh, seedTriangleIndices: numb
       const nextDistance =
         currentDistance + getTriangleCenterDistance(centers, triangleIndex, neighborTriangleIndex)
       const previousDistance = distanceMap.get(neighborTriangleIndex)
-      if (nextDistance <= localBrushRadius && (previousDistance == null || nextDistance < previousDistance)) {
+      if (
+        nextDistance <= localBrushRadius &&
+        (previousDistance == null || nextDistance < previousDistance)
+      ) {
         distanceMap.set(neighborTriangleIndex, nextDistance)
         queue.push(neighborTriangleIndex)
       }
@@ -1098,6 +1196,8 @@ function paintMesh(mesh: THREE.Mesh, seedTriangleIndices: number[]) {
   const triangles = collectTrianglesWithinBrush(mesh, seedTriangleIndices)
   if (!triangles.length) return false
 
+  // face 模式下直接改三角面标签，然后再整体同步回 vertexLabels。
+  // 这样可以保证无论当前查看模式是什么，导出时两套标签始终尽量保持一致。
   triangles.forEach((triangleIndex) => {
     labels[triangleIndex] = nextLabel
   })
@@ -1129,6 +1229,10 @@ function paintVerticesAtIntersect(
   const triangles = collectTrianglesWithinBrush(mesh, seedTriangleIndices)
   if (!triangles.length) return false
 
+  // vertex 模式分两层过滤：
+  // 1. 先找出笔刷覆盖到的三角面，限定一个局部候选区域
+  // 2. 再按“顶点到命中点的距离”精确判断哪些顶点真正落在半径内
+  // 这样既避免全局扫顶点，也保证顶点模式比 face 模式更细。
   const localBrushRadius = getLocalBrushRadius(mesh) * BRUSH_PAINT_FACTOR
   const paintedVertexIndices = new Set<number>()
   const vertexPoint = new THREE.Vector3()
@@ -1167,7 +1271,11 @@ function paintAtIntersect(intersect: THREE.Intersection) {
   const seedTriangleIndices = resolveStrokeSeeds(mesh, faceIndex)
   const painted =
     paintGranularity.value === 'vertex'
-      ? paintVerticesAtIntersect(mesh, seedTriangleIndices, mesh.worldToLocal(intersect.point.clone()))
+      ? paintVerticesAtIntersect(
+          mesh,
+          seedTriangleIndices,
+          mesh.worldToLocal(intersect.point.clone()),
+        )
       : paintMesh(mesh, seedTriangleIndices)
   if (painted && currentLabel != null && currentLabel > 0) {
     setToothAnchorTriangle(mesh, currentLabel, faceIndex)
@@ -1228,6 +1336,8 @@ function onPointerLeave() {
 function bindPointerEvents() {
   if (!renderer) return
   eventCanvas = renderer.domElement
+  // pointerdown 用 capture 是为了尽量抢先接管绘制手势，
+  // 避免 Orbit/Trackball 控件先消费事件，导致“按下想画，结果先转模型”。
   eventCanvas.addEventListener('pointerdown', onPointerDown, {
     capture: true,
     passive: false,
@@ -1284,6 +1394,8 @@ function getExportVertexLabels(mesh: THREE.Mesh | null) {
     return Array.from(vertexLabels)
   }
 
+  // 即便当前是 face 模式，导出也仍然补齐 vertexLabels。
+  // 这样下游使用方不需要关心用户当时是按哪种粒度编辑的。
   const faceLabels = faceLabelMap.get(mesh)
   return faceLabels ? Array.from(buildVertexLabelsFromFaceLabelsData(mesh, faceLabels)) : []
 }
@@ -1345,6 +1457,8 @@ function getToothExportRadius(mesh: THREE.Mesh) {
 
   const size = new THREE.Vector3()
   boundingBox.getSize(size)
+  // 单牙导出时会围绕一个锚点三角面截取“最大连通牙块”。
+  // 半径如果太小会截断同一颗牙，太大又可能把相邻区域带进去，所以这里按整体模型尺寸自适应。
   const radius = Math.max(size.x, size.y) * TOOTH_EXPORT_RADIUS_FACTOR
   return Math.min(TOOTH_EXPORT_RADIUS_MAX, Math.max(TOOTH_EXPORT_RADIUS_MIN, radius))
 }
@@ -1354,6 +1468,9 @@ function getLargestConnectedToothLabels(
   toothId: number,
   anchorTriangleIndex?: number | null,
 ) {
+  // 同一个 toothId 可能因为误刷、噪声或历史导入，散落成多个不连通小岛。
+  // 导出单颗牙时，我们只取“锚点附近的主要连通块”或“最大连通块”，
+  // 避免把远处的脏标签一起导出，影响单牙区域的几何质量。
   const labels = faceLabelMap.get(mesh)
   if (!labels) return []
 
@@ -1459,6 +1576,11 @@ function getTriangleVertices(mesh: THREE.Mesh, triangleIndex: number) {
 }
 
 function buildContourLoopsFromTriangles(triangles: ToothTriangleRecord[]) {
+  // 轮廓提取思路：
+  // 1. 统计所有三角边被使用的次数
+  // 2. 只出现 1 次的边就是区域边界
+  // 3. 再把这些边按邻接关系串成闭环
+  // 这种做法不要求几何是规则网格，只依赖当前三角面集合本身。
   const pointMap = new Map<string, Point3>()
   const edgeUseCount = new Map<string, number>()
   const vertexNeighbors = new Map<string, Set<string>>()
@@ -1516,7 +1638,9 @@ function buildContourLoopsFromTriangles(triangles: ToothTriangleRecord[]) {
 
         if (currentKey === startKey) break
 
-        const candidates = Array.from(vertexNeighbors.get(currentKey) ?? []).filter((key) => key !== previousKey)
+        const candidates = Array.from(vertexNeighbors.get(currentKey) ?? []).filter(
+          (key) => key !== previousKey,
+        )
         nextKey = candidates.find((key) => !visited.has(edgeKeyOf(currentKey, key))) ?? null
       }
 
@@ -1610,6 +1734,9 @@ function simplifyClosedLoop(loop: Point3[], minSegmentLength: number) {
 }
 
 function smoothClosedLoop(loop: Point3[], iterations = 4) {
+  // 导出的 rawContourLoops 保留原始边界，便于复核；
+  // contourLoops 则做轻量平滑，便于前端展示或下游轮廓使用。
+  // 这里不是追求 CAD 级拟合，只做温和的视觉顺滑处理。
   let current = normalizeClosedLoop(loop)
   if (current.length < 3) return closeLoop(current)
 
@@ -1652,6 +1779,13 @@ function buildToothRegion(
   toothId: number,
   labelsOverride?: ArrayLike<number> | null,
 ): ToothRegionRecord | null {
+  // 单牙区域导出时，除了标签数组，还会补充一份“几何摘要”：
+  // - 三角面列表
+  // - 包围盒
+  // - 面积
+  // - 质心
+  // - 原始/平滑轮廓
+  // 这样后续做单牙重建、轮廓分析或人工审查时，不必重新从整颌 STL 中二次扫描。
   const labels = labelsOverride ?? faceLabelMap.get(mesh)
   if (!labels) return null
 
@@ -1668,7 +1802,11 @@ function buildToothRegion(
     if (!vertices) continue
 
     const { a, b, c } = vertices
-    const centroid = new THREE.Vector3().copy(a).add(b).add(c).multiplyScalar(1 / 3)
+    const centroid = new THREE.Vector3()
+      .copy(a)
+      .add(b)
+      .add(c)
+      .multiplyScalar(1 / 3)
     const triangle = new THREE.Triangle(a, b, c)
 
     triangleIndices.push(triangleIndex)
@@ -1910,6 +2048,9 @@ function applyAssignmentsByStableId(
 ) {
   if (!targetLabels.length || !stableIds.length || !assignments.length) return 0
 
+  // stableId 不是一对一假设。
+  // 尤其在 vertex 模式下，相同坐标点可能映射到多个索引，
+  // 因此这里先建立 stableId -> indices 的反向索引，再批量写回所有命中的位置。
   const stableIndexMap = new Map<string, number[]>()
   stableIds.forEach((stableId, index) => {
     const indices = stableIndexMap.get(stableId)
@@ -1974,6 +2115,8 @@ function applyImportedSegmentation(payload: SegmentationImportPayload) {
   const signatureMatches =
     !payload.geometrySignature || payload.geometrySignature === getMeshGeometrySignature(mesh)
 
+  // 导入时同时解析 face / vertex 两套标签，但不强行要求两者都存在。
+  // 因为历史 JSON、局部导出 JSON、外部修订 JSON 的结构可能不完全一致。
   const importedFaceLabels = Array.isArray(payload.faceLabels)
     ? payload.faceLabels.map((label) => normalizeLabel(label))
     : Array.isArray(payload.labels) && payload.labels.length === faceLabels.length
@@ -1999,7 +2142,11 @@ function applyImportedSegmentation(payload: SegmentationImportPayload) {
     'vertex',
   )
 
-  let matchedFaces = applyAssignmentsByStableId(faceLabels, stableFaceIdMap.get(mesh) ?? [], faceAssignments)
+  let matchedFaces = applyAssignmentsByStableId(
+    faceLabels,
+    stableFaceIdMap.get(mesh) ?? [],
+    faceAssignments,
+  )
   let matchedVertices = applyAssignmentsByStableId(
     vertexLabels,
     stableVertexIdMap.get(mesh) ?? [],
@@ -2028,6 +2175,8 @@ function applyImportedSegmentation(payload: SegmentationImportPayload) {
     syncFaceLabelsFromVertexLabels(mesh, vertexLabels)
   }
 
+  // labelColorMap 只恢复“某个牙号应该显示成什么颜色”，
+  // 不影响标签归属；即便缺失，也仍能根据牙号哈希出默认颜色。
   if (payload.labelColorMap && typeof payload.labelColorMap === 'object') {
     labelColorMap.value = Object.entries(payload.labelColorMap).reduce<Record<string, string>>(
       (acc, [labelId, color]) => {
@@ -2067,6 +2216,11 @@ function buildSegmentedGeometry(mesh: THREE.Mesh, isTooth: boolean) {
   const nextPositions: number[] = []
   const nextNormals: number[] = []
 
+  // 预览模式不是直接给原 mesh 换材质，
+  // 而是重新拆两份几何：
+  // - label > 0 视为牙体
+  // - label = 0 视为牙龈
+  // 这样预览效果更接近“真实分割结果”，也不会污染编辑态颜色。
   const pushVertex = (vertexIndex: number) => {
     nextPositions.push(
       positions.getX(vertexIndex),
@@ -2130,6 +2284,9 @@ function buildPreview() {
   disposePreviewGroup()
   previewGroup = new THREE.Group()
 
+  // 预览组完全独立于编辑 mesh：
+  // 编辑态保留原始模型和逐牙颜色，预览态则只看“牙体 vs 牙龈”的最终拆分结果。
+  // 两套对象分开，切换预览时逻辑更干净，也避免频繁改原 mesh 的材质和可见性状态。
   targets.forEach((mesh) => {
     const toothGeometry = buildSegmentedGeometry(mesh, true)
     const gingivaGeometry = buildSegmentedGeometry(mesh, false)
