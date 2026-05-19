@@ -81,6 +81,12 @@ const router = createRouter({
       component: () => import('@/page/f/demo.vue'),
       meta: { title: 'STL复原demoJSON' },
     },
+    {
+      path: '/editStl',
+      name: 'editStl',
+      component: () => import('@/page/editStl/index.vue'),
+      meta: { title: '修改stl' },
+    },
   ],
 })
 

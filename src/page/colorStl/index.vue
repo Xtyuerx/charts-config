@@ -243,9 +243,9 @@ const labelColorMap = ref<Record<string, string>>({})
 
 const modelConfig = {
   upper:
-    'http://175.154.206.51:9000/cy-stl/3D/2602000150/2027188515489452032/stl/2602000150_2027188515489452032_upper.stl?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20260429%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260429T061541Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=b748cbae8f152b5ea6f6e62be78fc51184451a0f6e5b73ca8fc1fbda0ab4252b',
+    'http://175.154.206.51:9000/cy-stl/3D/2605000338/2054820463892238336/stl/2605000338_2054820463892238336_upper.stl?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20260519%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260519T030942Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=dd22690da0cce28595fcadbc8beb940ec532ae638b317edb35c96a385e018f7f',
   lower:
-    'http://175.154.206.51:9000/cy-stl/3D/2602000152/2027194528095539200/stl/2602000152_2027194528095539200_lower.stl?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20260427%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260427T062857Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=6fa29ad4741c40e0439de30913d5895390e2201492fab4e7ac1fa034d1893085',
+    'http://175.154.206.51:9000/cy-stl/3D/2605000338/2054820463892238336/stl/2605000338_2054820463892238336_lower.stl?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20260519%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260519T030942Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=b84617d764e856f8bc3aa46178f92cee0d621c9b72f07773b8f2f4022c8a24be',
 }
 
 const toothColor = new THREE.Color(0xffffff)
