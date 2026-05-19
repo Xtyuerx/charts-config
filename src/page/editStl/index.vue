@@ -98,7 +98,7 @@ const toothColorMap: Record<number, number> = {
 
 const gumColor = new THREE.Color(0xd9b1a8)
 const missingColor = new THREE.Color(0xcfd6dd)
-const boundarySampleSize = 0.9
+const boundarySampleSize = 1.8
 const meshes: Partial<Record<JawType, THREE.Mesh>> = {}
 const labelGroups: Partial<Record<JawType, THREE.Group>> = {}
 const boundaryGroups: Partial<Record<JawType, THREE.Group>> = {}
@@ -226,6 +226,26 @@ function createTextSprite(text: string, color: THREE.Color) {
   sprite.renderOrder = 20
   sprite.scale.set(4.8, 4.8, 1)
   return sprite
+}
+
+function createCirclePointTexture() {
+  const canvas = document.createElement('canvas')
+  const size = 64
+  canvas.width = size
+  canvas.height = size
+
+  const context = canvas.getContext('2d')
+  if (!context) return null
+
+  context.clearRect(0, 0, size, size)
+  context.beginPath()
+  context.arc(size / 2, size / 2, size * 0.42, 0, Math.PI * 2)
+  context.fillStyle = '#ffffff'
+  context.fill()
+
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.colorSpace = THREE.SRGBColorSpace
+  return texture
 }
 
 function buildToothLabelGroup(geometry: THREE.BufferGeometry, labels: number[]) {
@@ -416,7 +436,9 @@ function buildBoundaryGroup(geometry: THREE.BufferGeometry, labels: number[]) {
     pointGeometry.setAttribute('color', new THREE.Float32BufferAttribute(pointColors, 3))
 
     const pointMaterial = new THREE.PointsMaterial({
-      size: 0.7,
+      size: 1,
+      map: createCirclePointTexture() ?? undefined,
+      alphaTest: 0.35,
       vertexColors: true,
       transparent: true,
       opacity: 0.96,
