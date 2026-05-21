@@ -102,7 +102,35 @@ const boundarySampleSize = 1.8
 const meshes: Partial<Record<JawType, THREE.Mesh>> = {}
 const labelGroups: Partial<Record<JawType, THREE.Group>> = {}
 const boundaryGroups: Partial<Record<JawType, THREE.Group>> = {}
+const raycaster = new THREE.Raycaster()
+const pointer = new THREE.Vector2()
+const dragPoint = new THREE.Vector3()
+const dragTarget = new THREE.Vector3()
+const dragPlaneNormal = new THREE.Vector3()
+const movablePointColor = new THREE.Color(0x00ff66)
+const hoverPointColor = new THREE.Color(0xfff000)
+const pointHitRadiusPx = 9
 
+type BoundaryDragState = {
+  points: THREE.Points
+  lines?: THREE.LineSegments
+  pointIndex: number
+  plane: THREE.Plane
+  offset: THREE.Vector3
+  originalColor: THREE.Color
+}
+
+type BoundaryPickResult = {
+  points: THREE.Points
+  pointIndex: number
+}
+
+type BoundaryHoverState = BoundaryPickResult & {
+  originalColor: THREE.Color
+}
+
+let boundaryDragState: BoundaryDragState | null = null
+let boundaryHoverState: BoundaryHoverState | null = null
 let scene: THREE.Scene | null = null
 let camera: THREE.PerspectiveCamera | null = null
 let renderer: THREE.WebGLRenderer | null = null
@@ -375,6 +403,8 @@ function buildBoundaryGroup(geometry: THREE.BufferGeometry, labels: number[]) {
   const pointColors: number[] = []
   const samplePoints = new Map<string, { point: THREE.Vector3; count: number; label: number }>()
   const sampledEdges = new Set<string>()
+  const pointIndexes = new Map<string, number>()
+  const boundaryEdges: [number, number][] = []
 
   edgeMap.forEach((edge) => {
     const nonZeroLabels = Array.from(edge.labels).filter(Boolean)
@@ -388,9 +418,10 @@ function buildBoundaryGroup(geometry: THREE.BufferGeometry, labels: number[]) {
     sampledEdges.add(fromKey < toKey ? `${fromKey}|${toKey}` : `${toKey}|${fromKey}`)
   })
 
-  samplePoints.forEach((sample) => {
+  samplePoints.forEach((sample, key) => {
     sample.point.multiplyScalar(1 / sample.count)
     const color = colorForLabel(sample.label)
+    pointIndexes.set(key, pointPositions.length / 3)
     pointPositions.push(sample.point.x, sample.point.y, sample.point.z)
     pointColors.push(color.r, color.g, color.b)
   })
@@ -401,9 +432,12 @@ function buildBoundaryGroup(geometry: THREE.BufferGeometry, labels: number[]) {
 
     const from = samplePoints.get(fromKey)
     const to = samplePoints.get(toKey)
-    if (!from || !to) return
+    const fromIndex = pointIndexes.get(fromKey)
+    const toIndex = pointIndexes.get(toKey)
+    if (!from || !to || fromIndex == null || toIndex == null) return
 
     const color = colorForLabel(from.label)
+    boundaryEdges.push([fromIndex, toIndex])
     linePositions.push(from.point.x, from.point.y, from.point.z, to.point.x, to.point.y, to.point.z)
     lineColors.push(color.r, color.g, color.b, color.r, color.g, color.b)
   })
@@ -427,6 +461,7 @@ function buildBoundaryGroup(geometry: THREE.BufferGeometry, labels: number[]) {
     const lines = new THREE.LineSegments(lineGeometry, lineMaterial)
     lines.name = 'tooth-boundary-lines'
     lines.renderOrder = 14
+    lines.userData.boundaryEdges = boundaryEdges
     group.add(lines)
   }
 
@@ -449,6 +484,7 @@ function buildBoundaryGroup(geometry: THREE.BufferGeometry, labels: number[]) {
     const points = new THREE.Points(pointGeometry, pointMaterial)
     points.name = 'tooth-boundary-points'
     points.renderOrder = 15
+    points.userData.boundaryLines = group.getObjectByName('tooth-boundary-lines')
     group.add(points)
   }
 
@@ -548,6 +584,218 @@ function resetCamera() {
   fitCameraToMeshes()
 }
 
+function getVisibleBoundaryPoints() {
+  const groups = Object.values(boundaryGroups).filter(Boolean) as THREE.Group[]
+  return groups
+    .filter((group) => group.visible)
+    .map((group) => group.getObjectByName('tooth-boundary-points'))
+    .filter(Boolean) as THREE.Points[]
+}
+
+function updatePointer(event: PointerEvent) {
+  if (!renderer) return false
+  const rect = renderer.domElement.getBoundingClientRect()
+  pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
+  pointer.y = -(((event.clientY - rect.top) / rect.height) * 2 - 1)
+  return true
+}
+
+function getCanvasPoint(event: PointerEvent) {
+  if (!renderer) return null
+  const rect = renderer.domElement.getBoundingClientRect()
+  return {
+    x: event.clientX - rect.left,
+    y: event.clientY - rect.top,
+    width: rect.width,
+    height: rect.height,
+  }
+}
+
+function getPointWorldPosition(points: THREE.Points, pointIndex: number, target: THREE.Vector3) {
+  const position = points.geometry.getAttribute('position') as THREE.BufferAttribute
+  target.set(position.getX(pointIndex), position.getY(pointIndex), position.getZ(pointIndex))
+  return points.localToWorld(target)
+}
+
+function setPointLocalPosition(points: THREE.Points, pointIndex: number, worldPosition: THREE.Vector3) {
+  const position = points.geometry.getAttribute('position') as THREE.BufferAttribute
+  const localPosition = points.worldToLocal(worldPosition.clone())
+  position.setXYZ(pointIndex, localPosition.x, localPosition.y, localPosition.z)
+  position.needsUpdate = true
+  points.geometry.computeBoundingSphere()
+  return localPosition
+}
+
+function syncBoundaryLines(lines: THREE.LineSegments | undefined, movedPointIndex: number, localPosition: THREE.Vector3) {
+  if (!lines) return
+  const edges = lines.userData.boundaryEdges as [number, number][] | undefined
+  const linePosition = lines.geometry.getAttribute('position') as THREE.BufferAttribute | undefined
+  if (!edges || !linePosition) return
+
+  edges.forEach(([fromIndex, toIndex], edgeIndex) => {
+    if (fromIndex !== movedPointIndex && toIndex !== movedPointIndex) return
+    const vertexIndex = edgeIndex * 2 + (fromIndex === movedPointIndex ? 0 : 1)
+    linePosition.setXYZ(vertexIndex, localPosition.x, localPosition.y, localPosition.z)
+  })
+
+  linePosition.needsUpdate = true
+  lines.geometry.computeBoundingSphere()
+}
+
+function setBoundaryPointColor(points: THREE.Points, pointIndex: number, color: THREE.Color) {
+  const colors = points.geometry.getAttribute('color') as THREE.BufferAttribute | undefined
+  if (!colors) return
+  colors.setXYZ(pointIndex, color.r, color.g, color.b)
+  colors.needsUpdate = true
+}
+
+function getBoundaryPointColor(points: THREE.Points, pointIndex: number) {
+  const colors = points.geometry.getAttribute('color') as THREE.BufferAttribute | undefined
+  if (!colors) return new THREE.Color()
+  return new THREE.Color(colors.getX(pointIndex), colors.getY(pointIndex), colors.getZ(pointIndex))
+}
+
+function sameBoundaryPoint(a: BoundaryPickResult | null, b: BoundaryPickResult | null) {
+  return !!a && !!b && a.points === b.points && a.pointIndex === b.pointIndex
+}
+
+function clearBoundaryHover() {
+  if (!boundaryHoverState) return
+  if (!sameBoundaryPoint(boundaryHoverState, boundaryDragState)) {
+    setBoundaryPointColor(
+      boundaryHoverState.points,
+      boundaryHoverState.pointIndex,
+      boundaryHoverState.originalColor,
+    )
+  }
+  boundaryHoverState = null
+}
+
+function setBoundaryHover(pick: BoundaryPickResult | null) {
+  if (boundaryDragState || sameBoundaryPoint(boundaryHoverState, pick)) return
+  clearBoundaryHover()
+  if (!pick) return
+
+  boundaryHoverState = {
+    ...pick,
+    originalColor: getBoundaryPointColor(pick.points, pick.pointIndex),
+  }
+  setBoundaryPointColor(pick.points, pick.pointIndex, hoverPointColor)
+}
+
+function pickNearestBoundaryPoint(event: PointerEvent) {
+  if (!camera) return null
+  const canvasPoint = getCanvasPoint(event)
+  if (!canvasPoint) return null
+
+  let closest: BoundaryPickResult | null = null
+  let closestDistanceSq = pointHitRadiusPx * pointHitRadiusPx
+  const projected = new THREE.Vector3()
+
+  getVisibleBoundaryPoints().forEach((points) => {
+    const position = points.geometry.getAttribute('position') as THREE.BufferAttribute | undefined
+    if (!position) return
+
+    for (let index = 0; index < position.count; index++) {
+      projected.set(position.getX(index), position.getY(index), position.getZ(index))
+      points.localToWorld(projected)
+      projected.project(camera)
+
+      if (projected.z < -1 || projected.z > 1) continue
+
+      const x = (projected.x * 0.5 + 0.5) * canvasPoint.width
+      const y = (-projected.y * 0.5 + 0.5) * canvasPoint.height
+      const distanceSq = (x - canvasPoint.x) ** 2 + (y - canvasPoint.y) ** 2
+
+      if (distanceSq < closestDistanceSq) {
+        closestDistanceSq = distanceSq
+        closest = { points, pointIndex: index }
+      }
+    }
+  })
+
+  return closest
+}
+
+function onPointerDown(event: PointerEvent) {
+  if (!camera || !controls || !renderer || !updatePointer(event)) return
+
+  raycaster.setFromCamera(pointer, camera)
+
+  const hit = pickNearestBoundaryPoint(event)
+  if (!hit) return
+
+  const { points, pointIndex } = hit
+  const originalColor = sameBoundaryPoint(boundaryHoverState, hit)
+    ? boundaryHoverState.originalColor
+    : getBoundaryPointColor(points, pointIndex)
+  clearBoundaryHover()
+  getPointWorldPosition(points, pointIndex, dragPoint)
+  camera.getWorldDirection(dragPlaneNormal)
+
+  const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(dragPlaneNormal, dragPoint)
+  const planeHit = raycaster.ray.intersectPlane(plane, dragTarget)
+
+  boundaryDragState = {
+    points,
+    lines: points.userData.boundaryLines as THREE.LineSegments | undefined,
+    pointIndex,
+    plane,
+    offset: planeHit ? dragPoint.clone().sub(planeHit) : new THREE.Vector3(),
+    originalColor,
+  }
+
+  setBoundaryPointColor(points, pointIndex, movablePointColor)
+  controls.enabled = false
+  renderer.domElement.setPointerCapture(event.pointerId)
+  renderer.domElement.classList.add('dragging-boundary-point')
+  event.preventDefault()
+}
+
+function onPointerMove(event: PointerEvent) {
+  if (!camera || !renderer || !updatePointer(event)) return
+
+  if (!boundaryDragState) {
+    setBoundaryHover(pickNearestBoundaryPoint(event))
+    return
+  }
+
+  raycaster.setFromCamera(pointer, camera)
+  const planeHit = raycaster.ray.intersectPlane(boundaryDragState.plane, dragTarget)
+  if (!planeHit) return
+
+  const nextWorldPosition = dragTarget.add(boundaryDragState.offset)
+  const nextLocalPosition = setPointLocalPosition(
+    boundaryDragState.points,
+    boundaryDragState.pointIndex,
+    nextWorldPosition,
+  )
+  syncBoundaryLines(boundaryDragState.lines, boundaryDragState.pointIndex, nextLocalPosition)
+  event.preventDefault()
+}
+
+function endBoundaryDrag(event?: PointerEvent) {
+  if (!boundaryDragState) return
+  setBoundaryPointColor(
+    boundaryDragState.points,
+    boundaryDragState.pointIndex,
+    boundaryDragState.originalColor,
+  )
+  if (controls) controls.enabled = true
+  if (renderer) {
+    renderer.domElement.classList.remove('dragging-boundary-point')
+    if (event && renderer.domElement.hasPointerCapture(event.pointerId)) {
+      renderer.domElement.releasePointerCapture(event.pointerId)
+    }
+  }
+  boundaryDragState = null
+  if (event) setBoundaryHover(pickNearestBoundaryPoint(event))
+}
+
+function onPointerLeave() {
+  if (!boundaryDragState) clearBoundaryHover()
+}
+
 function onResize() {
   if (!containerRef.value || !renderer || !camera) return
   const width = containerRef.value.clientWidth
@@ -580,6 +828,11 @@ async function init() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   renderer.setSize(width, height)
   container.appendChild(renderer.domElement)
+  renderer.domElement.addEventListener('pointerdown', onPointerDown)
+  renderer.domElement.addEventListener('pointermove', onPointerMove)
+  renderer.domElement.addEventListener('pointerup', endBoundaryDrag)
+  renderer.domElement.addEventListener('pointercancel', endBoundaryDrag)
+  renderer.domElement.addEventListener('pointerleave', onPointerLeave)
 
   scene.add(new THREE.HemisphereLight(0xffffff, 0x76808f, 1.4))
 
@@ -642,6 +895,11 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('resize', onResize)
   cancelAnimationFrame(rafId)
+  renderer?.domElement.removeEventListener('pointerdown', onPointerDown)
+  renderer?.domElement.removeEventListener('pointermove', onPointerMove)
+  renderer?.domElement.removeEventListener('pointerup', endBoundaryDrag)
+  renderer?.domElement.removeEventListener('pointercancel', endBoundaryDrag)
+  renderer?.domElement.removeEventListener('pointerleave', onPointerLeave)
   controls?.dispose()
   disposeObject(meshes.upper)
   disposeObject(meshes.lower)
@@ -710,5 +968,13 @@ onUnmounted(() => {
 .viewer {
   flex: 1;
   min-height: 0;
+}
+
+.viewer :deep(canvas) {
+  cursor: grab;
+}
+
+.viewer :deep(canvas.dragging-boundary-point) {
+  cursor: grabbing;
 }
 </style>
