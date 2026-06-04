@@ -8,6 +8,9 @@
         下颌
       </button>
       <button class="tool-button" type="button" @click="resetCamera">重置视角</button>
+      <button class="tool-button" type="button" @click="triggerImportJson">Import JSON</button>
+      <button class="tool-button" type="button" @click="exportJawJson('upper')">Export Upper</button>
+      <button class="tool-button" type="button" @click="exportJawJson('lower')">Export Lower</button>
       <button
         class="tool-button"
         :class="{ active: showBoundaries }"
@@ -18,6 +21,13 @@
       </button>
       <span class="status">{{ statusText }}</span>
     </div>
+    <input
+      ref="jsonInputRef"
+      class="json-input"
+      type="file"
+      accept="application/json,.json"
+      @change="handleImportJson"
+    />
     <div ref="containerRef" class="viewer"></div>
   </div>
 </template>
@@ -44,6 +54,7 @@ type JawConfig = {
 }
 
 const containerRef = ref<HTMLDivElement | null>(null)
+const jsonInputRef = ref<HTMLInputElement | null>(null)
 const statusText = ref('正在准备 3D 场景...')
 const showUpper = ref(true)
 const showLower = ref(true)
@@ -172,6 +183,22 @@ type BoundaryLoopData = {
   toothId: number
   edgeKeys: string[]
   controlPointIndices: number[]
+}
+
+type ExportedBoundaryLoop = {
+  toothId: number
+  edgeKeys: string[]
+  controlEdgeKeys: string[]
+}
+
+type ExportedJawJson = {
+  version: 1
+  jaw: JawType
+  faceLabels: number[]
+  labels: number[]
+  boundary: {
+    loops: ExportedBoundaryLoop[]
+  }
 }
 
 let boundaryDragState: BoundaryDragState | null = null
@@ -755,6 +782,104 @@ function buildBoundaryGroup(geometry: THREE.BufferGeometry, labels: number[]) {
   return group
 }
 
+function buildBoundaryGroupFromExportedLoops(
+  geometry: THREE.BufferGeometry,
+  exportedLoops: ExportedBoundaryLoop[],
+) {
+  const topology = buildMeshFaceTopology(geometry)
+  const linePositions: number[] = []
+  const lineColors: number[] = []
+  const pointPositions: number[] = []
+  const pointColors: number[] = []
+  const pointLabels: number[] = []
+  const controlPoints: BoundaryControlPointData[] = []
+  const boundaryLoops: BoundaryLoopData[] = []
+  const boundaryEdgeKeys: string[] = []
+
+  exportedLoops.forEach((exportedLoop, loopId) => {
+    const color = colorForLabel(exportedLoop.toothId)
+    const edgeKeys = exportedLoop.edgeKeys.filter((edgeKey) => topology.edgeByKey.has(edgeKey))
+    const controlEdgeKeys = (
+      exportedLoop.controlEdgeKeys?.length ? exportedLoop.controlEdgeKeys : chooseBoundaryControlEdges(edgeKeys)
+    ).filter((edgeKey) => topology.edgeByKey.has(edgeKey))
+    const controlPointIndices: number[] = []
+
+    edgeKeys.forEach((edgeKey) => {
+      const edge = topology.edgeByKey.get(edgeKey)
+      if (!edge) return
+      boundaryEdgeKeys.push(edgeKey)
+      linePositions.push(edge.from.x, edge.from.y, edge.from.z, edge.to.x, edge.to.y, edge.to.z)
+      lineColors.push(color.r, color.g, color.b, color.r, color.g, color.b)
+    })
+
+    controlEdgeKeys.forEach((edgeKey) => {
+      const edge = topology.edgeByKey.get(edgeKey)
+      if (!edge) return
+      controlPointIndices.push(pointPositions.length / 3)
+      pointPositions.push(edge.midpoint.x, edge.midpoint.y, edge.midpoint.z)
+      pointColors.push(color.r, color.g, color.b)
+      pointLabels.push(exportedLoop.toothId)
+      controlPoints.push({ edgeKey, toothId: exportedLoop.toothId, loopId })
+    })
+
+    boundaryLoops.push({
+      toothId: exportedLoop.toothId,
+      edgeKeys,
+      controlPointIndices,
+    })
+  })
+
+  const group = new THREE.Group()
+  group.name = 'tooth-boundaries'
+
+  if (linePositions.length) {
+    const lineGeometry = new THREE.BufferGeometry()
+    lineGeometry.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3))
+    lineGeometry.setAttribute('color', new THREE.Float32BufferAttribute(lineColors, 3))
+    const lineMaterial = new THREE.LineBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.92,
+      depthTest: false,
+      depthWrite: false,
+    })
+    const lines = new THREE.LineSegments(lineGeometry, lineMaterial)
+    lines.name = 'tooth-boundary-lines'
+    lines.renderOrder = 14
+    lines.userData.boundaryEdgeKeys = boundaryEdgeKeys
+    group.add(lines)
+  }
+
+  if (pointPositions.length) {
+    const pointGeometry = new THREE.BufferGeometry()
+    pointGeometry.setAttribute('position', new THREE.Float32BufferAttribute(pointPositions, 3))
+    pointGeometry.setAttribute('color', new THREE.Float32BufferAttribute(pointColors, 3))
+    const pointMaterial = new THREE.PointsMaterial({
+      size: 1,
+      map: createCirclePointTexture() ?? undefined,
+      alphaTest: 0.35,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.96,
+      depthTest: false,
+      depthWrite: false,
+    })
+    const points = new THREE.Points(pointGeometry, pointMaterial)
+    points.name = 'tooth-boundary-points'
+    points.renderOrder = 15
+    points.userData.boundaryLines = group.getObjectByName('tooth-boundary-lines')
+    points.userData.boundaryControlPoints = controlPoints
+    points.userData.boundaryLoops = boundaryLoops
+    points.userData.boundaryPointLabels = pointLabels
+    group.add(points)
+  }
+
+  group.userData.boundaryLoops = boundaryLoops
+  group.userData.boundarySegmentCount = linePositions.length / 6
+  group.userData.boundaryPointCount = pointPositions.length / 3
+  return group
+}
+
 function loadSTL(url: string) {
   const loader = new STLLoader()
   return new Promise<THREE.BufferGeometry>((resolve, reject) => {
@@ -848,6 +973,122 @@ function toggleBoundaries() {
 
 function resetCamera() {
   fitCameraToMeshes()
+}
+
+function triggerImportJson() {
+  if (!jsonInputRef.value) return
+  jsonInputRef.value.value = ''
+  jsonInputRef.value.click()
+}
+
+function getExportedBoundaryLoops(jaw: JawType) {
+  const group = boundaryGroups[jaw]
+  const loops = (group?.userData.boundaryLoops as BoundaryLoopData[] | undefined) ?? []
+  const points = group?.getObjectByName('tooth-boundary-points') as THREE.Points | undefined
+  const controls = points?.userData.boundaryControlPoints as BoundaryControlPointData[] | undefined
+
+  return loops.map((loop): ExportedBoundaryLoop => {
+    const controlEdgeKeys = loop.controlPointIndices
+      .map((pointIndex) => controls?.[pointIndex]?.edgeKey)
+      .filter((edgeKey): edgeKey is string => !!edgeKey)
+    return {
+      toothId: loop.toothId,
+      edgeKeys: loop.edgeKeys,
+      controlEdgeKeys,
+    }
+  })
+}
+
+function exportJawJson(jaw: JawType) {
+  const mesh = meshes[jaw]
+  const labels = mesh ? meshLabelMap.get(mesh) : undefined
+  if (!mesh || !labels?.length) {
+    statusText.value = `Cannot export ${jaw}: mesh labels are not ready.`
+    return
+  }
+
+  const payload: ExportedJawJson = {
+    version: 1,
+    jaw,
+    faceLabels: vertexLabelsToFaceLabels(labels),
+    labels: [...labels],
+    boundary: {
+      loops: getExportedBoundaryLoops(jaw),
+    },
+  }
+
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${jaw}-tooth-boundary-labels.json`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+  statusText.value = `Exported ${jaw} JSON.`
+}
+
+function replaceBoundaryGroup(mesh: THREE.Mesh, jaw: JawType, nextGroup: THREE.Group) {
+  const oldGroup = boundaryGroups[jaw]
+  if (oldGroup) {
+    mesh.remove(oldGroup)
+    disposeObject(oldGroup)
+  }
+  mesh.add(nextGroup)
+  boundaryGroups[jaw] = nextGroup
+  mesh.userData.boundarySegmentCount = nextGroup.userData.boundarySegmentCount
+  syncVisibility()
+}
+
+function applyImportedJawJson(payload: ExportedJawJson) {
+  const mesh = meshes[payload.jaw]
+  if (!mesh) throw new Error(`Mesh ${payload.jaw} is not loaded.`)
+
+  const position = mesh.geometry.getAttribute('position') as THREE.BufferAttribute
+  const faceCount = Math.floor(position.count / 3)
+  const vertexCount = position.count
+  const importedLabels =
+    payload.faceLabels?.length === faceCount
+      ? faceLabelsToVertexLabels(payload.faceLabels.map(Number))
+      : payload.labels?.length === vertexCount
+        ? payload.labels.map(Number)
+        : null
+
+  if (!importedLabels) {
+    throw new Error(
+      `JSON labels do not match ${payload.jaw}: expected ${faceCount} face labels or ${vertexCount} vertex labels.`,
+    )
+  }
+
+  meshLabelMap.set(mesh, importedLabels)
+  refreshMeshLabels(mesh)
+
+  const boundaryLoops = payload.boundary?.loops ?? []
+  const boundaryGroup = boundaryLoops.length
+    ? buildBoundaryGroupFromExportedLoops(mesh.geometry, boundaryLoops)
+    : buildBoundaryGroup(mesh.geometry, importedLabels)
+  replaceBoundaryGroup(mesh, payload.jaw, boundaryGroup)
+  statusText.value = `Imported ${payload.jaw} JSON.`
+}
+
+async function handleImportJson(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+
+  try {
+    const payload = JSON.parse(await file.text()) as ExportedJawJson
+    if (payload.version !== 1 || (payload.jaw !== 'upper' && payload.jaw !== 'lower')) {
+      throw new Error('Unsupported JSON payload.')
+    }
+    applyImportedJawJson(payload)
+  } catch (error) {
+    console.error(error)
+    statusText.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    input.value = ''
+  }
 }
 
 function getVisibleBoundaryPoints() {
@@ -1652,6 +1893,10 @@ onUnmounted(() => {
   line-height: 20px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.json-input {
+  display: none;
 }
 
 .viewer {
