@@ -87,6 +87,12 @@ const router = createRouter({
       component: () => import('@/page/editStl/index.vue'),
       meta: { title: '修改stl' },
     },
+    {
+      path: '/allStl',
+      name: 'allStl',
+      component: () => import('@/page/allStl/index.vue'),
+      meta: { title: 'STL联合编辑' },
+    },
   ],
 })
 
