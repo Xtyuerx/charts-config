@@ -8,7 +8,12 @@
         下颌
       </button>
       <button class="tool-button" type="button" @click="resetCamera">重置视角</button>
-      <button class="tool-button" :class="{ active: showBoundaries }" type="button" @click="toggleBoundaries">
+      <button
+        class="tool-button"
+        :class="{ active: showBoundaries }"
+        type="button"
+        @click="toggleBoundaries"
+      >
         Boundary
       </button>
       <span class="status">{{ statusText }}</span>
@@ -102,6 +107,7 @@ const boundarySampleSize = 1.8
 const meshes: Partial<Record<JawType, THREE.Mesh>> = {}
 const labelGroups: Partial<Record<JawType, THREE.Group>> = {}
 const boundaryGroups: Partial<Record<JawType, THREE.Group>> = {}
+const meshLabelMap = new WeakMap<THREE.Mesh, number[]>()
 const raycaster = new THREE.Raycaster()
 const pointer = new THREE.Vector2()
 const dragPoint = new THREE.Vector3()
@@ -118,6 +124,10 @@ type BoundaryDragState = {
   plane: THREE.Plane
   offset: THREE.Vector3
   originalColor: THREE.Color
+  originalLocalPosition: THREE.Vector3
+  mesh: THREE.Mesh
+  topology: MeshFaceTopology
+  toothId: number
 }
 
 type BoundaryPickResult = {
@@ -127,6 +137,41 @@ type BoundaryPickResult = {
 
 type BoundaryHoverState = BoundaryPickResult & {
   originalColor: THREE.Color
+}
+
+type FaceEdgeRef = {
+  edgeKey: string
+  neighbor: number | null
+}
+
+type MeshEdgeRecord = {
+  edgeKey: string
+  fromKey: string
+  toKey: string
+  faceIndices: number[]
+  from: THREE.Vector3
+  to: THREE.Vector3
+  midpoint: THREE.Vector3
+}
+
+type MeshFaceTopology = {
+  faceEdges: FaceEdgeRef[][]
+  edgeRecords: MeshEdgeRecord[]
+  edgeByKey: Map<string, MeshEdgeRecord>
+  vertexGraph: Map<string, Array<{ vertexKey: string; edgeKey: string; weight: number }>>
+  vertexPositions: Map<string, THREE.Vector3>
+}
+
+type BoundaryControlPointData = {
+  edgeKey: string
+  toothId: number
+  loopId: number
+}
+
+type BoundaryLoopData = {
+  toothId: number
+  edgeKeys: string[]
+  controlPointIndices: number[]
 }
 
 let boundaryDragState: BoundaryDragState | null = null
@@ -355,92 +400,305 @@ function addSamplePoint(
   return key
 }
 
-function buildBoundaryGroup(geometry: THREE.BufferGeometry, labels: number[]) {
-  const position = geometry.getAttribute('position') as THREE.BufferAttribute
-  const faceCount = position.count / 3
-  const edgeMap = new Map<
-    string,
-    {
-      from: THREE.Vector3
-      to: THREE.Vector3
-      labels: Set<number>
+function orderEdgeLoops(edgeKeys: string[], edgeByKey: Map<string, MeshEdgeRecord>) {
+  const edgeSet = new Set(edgeKeys)
+  const vertexEdges = new Map<string, string[]>()
+
+  edgeKeys.forEach((edgeKey) => {
+    const edge = edgeByKey.get(edgeKey)
+    if (!edge) return
+    const fromEdges = vertexEdges.get(edge.fromKey) ?? []
+    const toEdges = vertexEdges.get(edge.toKey) ?? []
+    fromEdges.push(edgeKey)
+    toEdges.push(edgeKey)
+    vertexEdges.set(edge.fromKey, fromEdges)
+    vertexEdges.set(edge.toKey, toEdges)
+  })
+
+  const loops: string[][] = []
+  while (edgeSet.size) {
+    const firstEdgeKey = edgeSet.values().next().value as string | undefined
+    const firstEdge = firstEdgeKey ? edgeByKey.get(firstEdgeKey) : undefined
+    if (!firstEdgeKey || !firstEdge) break
+
+    const component: string[] = []
+    const openStart =
+      Array.from(vertexEdges.entries()).find(([, edges]) =>
+        edges.some((edgeKey) => edgeSet.has(edgeKey)) && edges.filter((edgeKey) => edgeSet.has(edgeKey)).length === 1,
+      )?.[0] ?? firstEdge.fromKey
+    let currentVertexKey = openStart
+    let previousEdgeKey = ''
+
+    while (true) {
+      const nextEdgeKey = (vertexEdges.get(currentVertexKey) ?? []).find(
+        (edgeKey) => edgeKey !== previousEdgeKey && edgeSet.has(edgeKey),
+      )
+      if (!nextEdgeKey) break
+
+      const edge = edgeByKey.get(nextEdgeKey)
+      if (!edge) break
+
+      edgeSet.delete(nextEdgeKey)
+      component.push(nextEdgeKey)
+      previousEdgeKey = nextEdgeKey
+      currentVertexKey = edge.fromKey === currentVertexKey ? edge.toKey : edge.fromKey
     }
-  >()
 
-  const addEdge = (fromIndex: number, toIndex: number, label: number) => {
-    const fromKey = vertexKey(position, fromIndex)
-    const toKey = vertexKey(position, toIndex)
-    const edgeKey = fromKey < toKey ? `${fromKey}|${toKey}` : `${toKey}|${fromKey}`
-    let edge = edgeMap.get(edgeKey)
+    if (!component.length) {
+      edgeSet.delete(firstEdgeKey)
+      component.push(firstEdgeKey)
+    }
+    loops.push(component)
+  }
 
-    if (!edge) {
-      edge = {
-        from: new THREE.Vector3(
-          position.getX(fromIndex),
-          position.getY(fromIndex),
-          position.getZ(fromIndex),
-        ),
-        to: new THREE.Vector3(position.getX(toIndex), position.getY(toIndex), position.getZ(toIndex)),
-        labels: new Set<number>(),
+  return loops
+}
+
+function chooseBoundaryControlEdges(edgeKeys: string[]) {
+  if (edgeKeys.length <= 36) return edgeKeys
+  const step = Math.max(1, Math.ceil(edgeKeys.length / 36))
+  return edgeKeys.filter((_, index) => index % step === 0)
+}
+
+function findNearestMeshEdge(
+  topology: MeshFaceTopology,
+  localPoint: THREE.Vector3,
+): MeshEdgeRecord | null {
+  let nearest: MeshEdgeRecord | null = null
+  let nearestDistanceSq = Number.POSITIVE_INFINITY
+
+  topology.edgeRecords.forEach((edge) => {
+    const distanceSq = distancePointToSegmentSq(localPoint, edge.from, edge.to)
+    if (distanceSq >= nearestDistanceSq) return
+    nearestDistanceSq = distanceSq
+    nearest = edge
+  })
+
+  return nearest
+}
+
+function shortestEdgePath(
+  topology: MeshFaceTopology,
+  startVertexKey: string,
+  endVertexKey: string,
+) {
+  if (startVertexKey === endVertexKey) return [] as string[]
+
+  const distances = new Map<string, number>([[startVertexKey, 0]])
+  const previous = new Map<string, { vertexKey: string; edgeKey: string }>()
+  const visited = new Set<string>()
+
+  while (true) {
+    let currentKey = ''
+    let currentDistance = Number.POSITIVE_INFINITY
+    distances.forEach((distance, vertexKey) => {
+      if (visited.has(vertexKey) || distance >= currentDistance) return
+      currentKey = vertexKey
+      currentDistance = distance
+    })
+
+    if (!currentKey || currentKey === endVertexKey) break
+    visited.add(currentKey)
+
+    for (const neighbor of topology.vertexGraph.get(currentKey) ?? []) {
+      if (visited.has(neighbor.vertexKey)) continue
+      const nextDistance = currentDistance + neighbor.weight
+      if (nextDistance >= (distances.get(neighbor.vertexKey) ?? Number.POSITIVE_INFINITY)) continue
+      distances.set(neighbor.vertexKey, nextDistance)
+      previous.set(neighbor.vertexKey, { vertexKey: currentKey, edgeKey: neighbor.edgeKey })
+    }
+  }
+
+  if (!previous.has(endVertexKey)) return []
+
+  const path: string[] = []
+  let currentKey = endVertexKey
+  while (currentKey !== startVertexKey) {
+    const prev = previous.get(currentKey)
+    if (!prev) break
+    path.push(prev.edgeKey)
+    currentKey = prev.vertexKey
+  }
+
+  return path.reverse()
+}
+
+function shortestPathBetweenEdges(
+  topology: MeshFaceTopology,
+  fromEdgeKey: string,
+  toEdgeKey: string,
+) {
+  const fromEdge = topology.edgeByKey.get(fromEdgeKey)
+  const toEdge = topology.edgeByKey.get(toEdgeKey)
+  if (!fromEdge || !toEdge) return [] as string[]
+
+  const endpointPairs: Array<[string, string]> = [
+    [fromEdge.fromKey, toEdge.fromKey],
+    [fromEdge.fromKey, toEdge.toKey],
+    [fromEdge.toKey, toEdge.fromKey],
+    [fromEdge.toKey, toEdge.toKey],
+  ]
+
+  let bestPath: string[] = []
+  let bestLength = Number.POSITIVE_INFINITY
+  endpointPairs.forEach(([start, end]) => {
+    const path = shortestEdgePath(topology, start, end)
+    if (!path.length && start !== end) return
+    const length = path.reduce((sum, edgeKey) => {
+      const edge = topology.edgeByKey.get(edgeKey)
+      return sum + (edge ? edge.from.distanceTo(edge.to) : 0)
+    }, 0)
+    if (length >= bestLength) return
+    bestLength = length
+    bestPath = path
+  })
+
+  return Array.from(new Set([fromEdgeKey, ...bestPath, toEdgeKey]))
+}
+
+function updateBoundaryLinesFromLoops(
+  lines: THREE.LineSegments | undefined,
+  loops: BoundaryLoopData[],
+  topology: MeshFaceTopology,
+) {
+  if (!lines) return
+
+  const linePositions: number[] = []
+  const lineColors: number[] = []
+  const boundaryEdgeKeys: string[] = []
+
+  loops.forEach((loop) => {
+    const color = colorForLabel(loop.toothId)
+    loop.edgeKeys.forEach((edgeKey) => {
+      const edge = topology.edgeByKey.get(edgeKey)
+      if (!edge) return
+      boundaryEdgeKeys.push(edgeKey)
+      linePositions.push(edge.from.x, edge.from.y, edge.from.z, edge.to.x, edge.to.y, edge.to.z)
+      lineColors.push(color.r, color.g, color.b, color.r, color.g, color.b)
+    })
+  })
+
+  lines.geometry.dispose()
+  const lineGeometry = new THREE.BufferGeometry()
+  lineGeometry.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3))
+  lineGeometry.setAttribute('color', new THREE.Float32BufferAttribute(lineColors, 3))
+  lines.geometry = lineGeometry
+  lines.userData.boundaryEdgeKeys = boundaryEdgeKeys
+}
+
+function rebuildBoundaryLoopsFromControlPoints(points: THREE.Points, topology: MeshFaceTopology) {
+  const controls = points.userData.boundaryControlPoints as BoundaryControlPointData[] | undefined
+  const lines = points.userData.boundaryLines as THREE.LineSegments | undefined
+  if (!controls?.length) return [] as BoundaryLoopData[]
+
+  const loopsById = new Map<number, BoundaryLoopData>()
+  controls.forEach((control, pointIndex) => {
+    let loop = loopsById.get(control.loopId)
+    if (!loop) {
+      loop = { toothId: control.toothId, edgeKeys: [], controlPointIndices: [] }
+      loopsById.set(control.loopId, loop)
+    }
+    loop.controlPointIndices.push(pointIndex)
+  })
+
+  const loops = Array.from(loopsById.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([, loop]) => {
+      const edgeKeys: string[] = []
+      const pointIndices = loop.controlPointIndices
+      pointIndices.forEach((pointIndex, index) => {
+        const current = controls[pointIndex]
+        const nextPointIndex = pointIndices[(index + 1) % pointIndices.length]
+        if (nextPointIndex == null) return
+        const next = controls[nextPointIndex]
+        if (!current || !next) return
+        if (pointIndices.length === 1) {
+          edgeKeys.push(current.edgeKey)
+          return
+        }
+        edgeKeys.push(...shortestPathBetweenEdges(topology, current.edgeKey, next.edgeKey))
+      })
+
+      return {
+        ...loop,
+        edgeKeys: Array.from(new Set(edgeKeys)),
       }
-      edgeMap.set(edgeKey, edge)
-    }
+    })
 
-    edge.labels.add(label)
-  }
+  const position = points.geometry.getAttribute('position') as THREE.BufferAttribute
+  controls.forEach((control, pointIndex) => {
+    const edge = topology.edgeByKey.get(control.edgeKey)
+    if (!edge) return
+    position.setXYZ(pointIndex, edge.midpoint.x, edge.midpoint.y, edge.midpoint.z)
+  })
+  position.needsUpdate = true
+  points.geometry.computeBoundingSphere()
 
-  for (let faceIndex = 0; faceIndex < faceCount; faceIndex++) {
-    const label = faceLabel(labels, faceIndex)
-    const base = faceIndex * 3
-    addEdge(base, base + 1, label)
-    addEdge(base + 1, base + 2, label)
-    addEdge(base + 2, base, label)
-  }
+  points.userData.boundaryLoops = loops
+  if (points.parent) points.parent.userData.boundaryLoops = loops
+  updateBoundaryLinesFromLoops(lines, loops, topology)
+  return loops
+}
+
+function buildBoundaryGroup(geometry: THREE.BufferGeometry, labels: number[]) {
+  const topology = buildMeshFaceTopology(geometry)
+  const faceLabels = vertexLabelsToFaceLabels(labels)
+  const boundaryByTooth = new Map<number, string[]>()
+
+  topology.edgeRecords.forEach((edge) => {
+    const edgeLabels = Array.from(
+      new Set(edge.faceIndices.map((faceIndex) => faceLabels[faceIndex] ?? 0)),
+    )
+    const nonZeroLabels = edgeLabels.filter(Boolean)
+    if (!nonZeroLabels.length || edgeLabels.length < 2) return
+
+    nonZeroLabels.forEach((toothId) => {
+      const edgeKeys = boundaryByTooth.get(toothId) ?? []
+      edgeKeys.push(edge.edgeKey)
+      boundaryByTooth.set(toothId, edgeKeys)
+    })
+  })
 
   const linePositions: number[] = []
   const lineColors: number[] = []
   const pointPositions: number[] = []
   const pointColors: number[] = []
-  const samplePoints = new Map<string, { point: THREE.Vector3; count: number; label: number }>()
-  const sampledEdges = new Set<string>()
-  const pointIndexes = new Map<string, number>()
-  const boundaryEdges: [number, number][] = []
+  const pointLabels: number[] = []
+  const controlPoints: BoundaryControlPointData[] = []
+  const boundaryLoops: BoundaryLoopData[] = []
+  const boundaryEdgeKeys: string[] = []
+  let loopId = 0
 
-  edgeMap.forEach((edge) => {
-    const nonZeroLabels = Array.from(edge.labels).filter(Boolean)
-    if (!nonZeroLabels.length || edge.labels.size < 2) return
+  Array.from(boundaryByTooth.entries())
+    .sort(([a], [b]) => a - b)
+    .forEach(([toothId, edgeKeys]) => {
+      const orderedLoops = orderEdgeLoops(Array.from(new Set(edgeKeys)), topology.edgeByKey)
+      orderedLoops.forEach((loopEdgeKeys) => {
+        const controlPointIndices: number[] = []
+        const color = colorForLabel(toothId)
 
-    const label = nonZeroLabels[0] ?? 0
-    const fromKey = addSamplePoint(samplePoints, label, edge.from)
-    const toKey = addSamplePoint(samplePoints, label, edge.to)
+        loopEdgeKeys.forEach((edgeKey) => {
+          const edge = topology.edgeByKey.get(edgeKey)
+          if (!edge) return
+          boundaryEdgeKeys.push(edgeKey)
+          linePositions.push(edge.from.x, edge.from.y, edge.from.z, edge.to.x, edge.to.y, edge.to.z)
+          lineColors.push(color.r, color.g, color.b, color.r, color.g, color.b)
+        })
 
-    if (fromKey === toKey) return
-    sampledEdges.add(fromKey < toKey ? `${fromKey}|${toKey}` : `${toKey}|${fromKey}`)
-  })
+        chooseBoundaryControlEdges(loopEdgeKeys).forEach((edgeKey) => {
+          const edge = topology.edgeByKey.get(edgeKey)
+          if (!edge) return
+          controlPointIndices.push(pointPositions.length / 3)
+          pointPositions.push(edge.midpoint.x, edge.midpoint.y, edge.midpoint.z)
+          pointColors.push(color.r, color.g, color.b)
+          pointLabels.push(toothId)
+          controlPoints.push({ edgeKey, toothId, loopId })
+        })
 
-  samplePoints.forEach((sample, key) => {
-    sample.point.multiplyScalar(1 / sample.count)
-    const color = colorForLabel(sample.label)
-    pointIndexes.set(key, pointPositions.length / 3)
-    pointPositions.push(sample.point.x, sample.point.y, sample.point.z)
-    pointColors.push(color.r, color.g, color.b)
-  })
-
-  sampledEdges.forEach((edgeKey) => {
-    const [fromKey, toKey] = edgeKey.split('|')
-    if (!fromKey || !toKey) return
-
-    const from = samplePoints.get(fromKey)
-    const to = samplePoints.get(toKey)
-    const fromIndex = pointIndexes.get(fromKey)
-    const toIndex = pointIndexes.get(toKey)
-    if (!from || !to || fromIndex == null || toIndex == null) return
-
-    const color = colorForLabel(from.label)
-    boundaryEdges.push([fromIndex, toIndex])
-    linePositions.push(from.point.x, from.point.y, from.point.z, to.point.x, to.point.y, to.point.z)
-    lineColors.push(color.r, color.g, color.b, color.r, color.g, color.b)
-  })
+        boundaryLoops.push({ toothId, edgeKeys: loopEdgeKeys, controlPointIndices })
+        loopId += 1
+      })
+    })
 
   const group = new THREE.Group()
   group.name = 'tooth-boundaries'
@@ -461,7 +719,7 @@ function buildBoundaryGroup(geometry: THREE.BufferGeometry, labels: number[]) {
     const lines = new THREE.LineSegments(lineGeometry, lineMaterial)
     lines.name = 'tooth-boundary-lines'
     lines.renderOrder = 14
-    lines.userData.boundaryEdges = boundaryEdges
+    lines.userData.boundaryEdgeKeys = boundaryEdgeKeys
     group.add(lines)
   }
 
@@ -485,9 +743,13 @@ function buildBoundaryGroup(geometry: THREE.BufferGeometry, labels: number[]) {
     points.name = 'tooth-boundary-points'
     points.renderOrder = 15
     points.userData.boundaryLines = group.getObjectByName('tooth-boundary-lines')
+    points.userData.boundaryControlPoints = controlPoints
+    points.userData.boundaryLoops = boundaryLoops
+    points.userData.boundaryPointLabels = pointLabels
     group.add(points)
   }
 
+  group.userData.boundaryLoops = boundaryLoops
   group.userData.boundarySegmentCount = linePositions.length / 6
   group.userData.boundaryPointCount = pointPositions.length / 3
   return group
@@ -519,6 +781,8 @@ async function createJawMesh(config: JawConfig) {
   mesh.name = `${config.jaw}-jaw`
   mesh.userData.labelSource = labelResult.source
   mesh.userData.usedFallback = labelResult.usedFallback
+  mesh.userData.jaw = config.jaw
+  meshLabelMap.set(mesh, labelResult.labels)
 
   const labelGroup = buildToothLabelGroup(geometry, labelResult.labels)
   mesh.add(labelGroup)
@@ -547,7 +811,9 @@ function fitCameraToMeshes() {
 
   const maxDim = Math.max(size.x, size.y, size.z) || 1
   const distance = maxDim / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)))
-  camera.position.copy(center).add(new THREE.Vector3(distance * 1.18, -distance * 1.25, distance * 0.9))
+  camera.position
+    .copy(center)
+    .add(new THREE.Vector3(distance * 1.18, -distance * 1.25, distance * 0.9))
   camera.near = Math.max(maxDim / 100, 0.01)
   camera.far = maxDim * 100
   camera.updateProjectionMatrix()
@@ -617,7 +883,11 @@ function getPointWorldPosition(points: THREE.Points, pointIndex: number, target:
   return points.localToWorld(target)
 }
 
-function setPointLocalPosition(points: THREE.Points, pointIndex: number, worldPosition: THREE.Vector3) {
+function setPointLocalPosition(
+  points: THREE.Points,
+  pointIndex: number,
+  worldPosition: THREE.Vector3,
+) {
   const position = points.geometry.getAttribute('position') as THREE.BufferAttribute
   const localPosition = points.worldToLocal(worldPosition.clone())
   position.setXYZ(pointIndex, localPosition.x, localPosition.y, localPosition.z)
@@ -626,7 +896,11 @@ function setPointLocalPosition(points: THREE.Points, pointIndex: number, worldPo
   return localPosition
 }
 
-function syncBoundaryLines(lines: THREE.LineSegments | undefined, movedPointIndex: number, localPosition: THREE.Vector3) {
+function syncBoundaryLines(
+  lines: THREE.LineSegments | undefined,
+  movedPointIndex: number,
+  localPosition: THREE.Vector3,
+) {
   if (!lines) return
   const edges = lines.userData.boundaryEdges as [number, number][] | undefined
   const linePosition = lines.geometry.getAttribute('position') as THREE.BufferAttribute | undefined
@@ -640,6 +914,397 @@ function syncBoundaryLines(lines: THREE.LineSegments | undefined, movedPointInde
 
   linePosition.needsUpdate = true
   lines.geometry.computeBoundingSphere()
+}
+
+function getMeshFromBoundaryPoints(points: THREE.Points) {
+  const maybeMesh = points.parent?.parent
+  return maybeMesh instanceof THREE.Mesh ? maybeMesh : null
+}
+
+function getTriangleCenter(
+  geometry: THREE.BufferGeometry,
+  faceIndex: number,
+  target = new THREE.Vector3(),
+) {
+  const position = geometry.getAttribute('position') as THREE.BufferAttribute
+  const base = faceIndex * 3
+  target.set(
+    (position.getX(base) + position.getX(base + 1) + position.getX(base + 2)) / 3,
+    (position.getY(base) + position.getY(base + 1) + position.getY(base + 2)) / 3,
+    (position.getZ(base) + position.getZ(base + 1) + position.getZ(base + 2)) / 3,
+  )
+  return target
+}
+
+function buildMeshFaceTopology(geometry: THREE.BufferGeometry): MeshFaceTopology {
+  const position = geometry.getAttribute('position') as THREE.BufferAttribute
+  const faceCount = Math.floor(position.count / 3)
+  const faceEdges = Array.from({ length: faceCount }, () => [] as FaceEdgeRef[])
+  const edgeMap = new Map<string, MeshEdgeRecord>()
+  const vertexGraph = new Map<
+    string,
+    Array<{ vertexKey: string; edgeKey: string; weight: number }>
+  >()
+  const vertexPositions = new Map<string, THREE.Vector3>()
+
+  const addEdge = (faceIndex: number, fromIndex: number, toIndex: number) => {
+    const fromKey = vertexKey(position, fromIndex)
+    const toKey = vertexKey(position, toIndex)
+    const edgeKey = fromKey < toKey ? `${fromKey}|${toKey}` : `${toKey}|${fromKey}`
+    let edge = edgeMap.get(edgeKey)
+
+    if (!edge) {
+      const from = new THREE.Vector3(
+        position.getX(fromIndex),
+        position.getY(fromIndex),
+        position.getZ(fromIndex),
+      )
+      const to = new THREE.Vector3(
+        position.getX(toIndex),
+        position.getY(toIndex),
+        position.getZ(toIndex),
+      )
+      vertexPositions.set(fromKey, from.clone())
+      vertexPositions.set(toKey, to.clone())
+      edge = {
+        edgeKey,
+        fromKey,
+        toKey,
+        faceIndices: [],
+        from,
+        to,
+        midpoint: from.clone().add(to).multiplyScalar(0.5),
+      }
+      edgeMap.set(edgeKey, edge)
+
+      const weight = from.distanceTo(to)
+      const fromNeighbors = vertexGraph.get(fromKey) ?? []
+      const toNeighbors = vertexGraph.get(toKey) ?? []
+      fromNeighbors.push({ vertexKey: toKey, edgeKey, weight })
+      toNeighbors.push({ vertexKey: fromKey, edgeKey, weight })
+      vertexGraph.set(fromKey, fromNeighbors)
+      vertexGraph.set(toKey, toNeighbors)
+    }
+
+    edge.faceIndices.push(faceIndex)
+    faceEdges[faceIndex]?.push({ edgeKey, neighbor: null })
+  }
+
+  for (let faceIndex = 0; faceIndex < faceCount; faceIndex++) {
+    const base = faceIndex * 3
+    addEdge(faceIndex, base, base + 1)
+    addEdge(faceIndex, base + 1, base + 2)
+    addEdge(faceIndex, base + 2, base)
+  }
+
+  edgeMap.forEach((edge) => {
+    if (edge.faceIndices.length < 2) return
+    edge.faceIndices.forEach((faceIndex) => {
+      const edgeRef = faceEdges[faceIndex]?.find((item) => item.edgeKey === edge.edgeKey)
+      if (edgeRef) edgeRef.neighbor = edge.faceIndices.find((item) => item !== faceIndex) ?? null
+    })
+  })
+
+  return {
+    faceEdges,
+    edgeRecords: Array.from(edgeMap.values()),
+    edgeByKey: edgeMap,
+    vertexGraph,
+    vertexPositions,
+  }
+}
+
+function setFaceLabel(labels: number[], faceIndex: number, label: number) {
+  const base = faceIndex * 3
+  labels[base] = label
+  labels[base + 1] = label
+  labels[base + 2] = label
+}
+
+function vertexLabelsToFaceLabels(labels: number[]) {
+  const faceCount = Math.floor(labels.length / 3)
+  const faceLabels = new Array<number>(faceCount)
+  for (let faceIndex = 0; faceIndex < faceCount; faceIndex++) {
+    faceLabels[faceIndex] = faceLabel(labels, faceIndex)
+  }
+  return faceLabels
+}
+
+function faceLabelsToVertexLabels(faceLabels: number[]) {
+  const labels = new Array<number>(faceLabels.length * 3)
+  faceLabels.forEach((label, faceIndex) => setFaceLabel(labels, faceIndex, label))
+  return labels
+}
+
+function distancePointToSegmentSq(point: THREE.Vector3, from: THREE.Vector3, to: THREE.Vector3) {
+  const segment = to.clone().sub(from)
+  const lengthSq = segment.lengthSq()
+  if (!lengthSq) return point.distanceToSquared(from)
+
+  const t = THREE.MathUtils.clamp(point.clone().sub(from).dot(segment) / lengthSq, 0, 1)
+  return point.distanceToSquared(from.clone().add(segment.multiplyScalar(t)))
+}
+
+function getBoundarySegmentsFromMesh(mesh: THREE.Mesh) {
+  const jaw = mesh.userData.jaw as JawType | undefined
+  const lines = jaw
+    ? (boundaryGroups[jaw]?.getObjectByName('tooth-boundary-lines') as
+        | THREE.LineSegments
+        | undefined)
+    : undefined
+  const position = lines?.geometry.getAttribute('position') as THREE.BufferAttribute | undefined
+  if (!position) return [] as Array<{ from: THREE.Vector3; to: THREE.Vector3 }>
+
+  const segments: Array<{ from: THREE.Vector3; to: THREE.Vector3 }> = []
+  for (let index = 0; index + 1 < position.count; index += 2) {
+    segments.push({
+      from: new THREE.Vector3(position.getX(index), position.getY(index), position.getZ(index)),
+      to: new THREE.Vector3(
+        position.getX(index + 1),
+        position.getY(index + 1),
+        position.getZ(index + 1),
+      ),
+    })
+  }
+  return segments
+}
+
+function boundarySegmentsToBlockedEdges(
+  topology: MeshFaceTopology,
+  segments: Array<{ from: THREE.Vector3; to: THREE.Vector3 }>,
+) {
+  const blockedEdges = new Set<string>()
+  const averageEdgeLength =
+    topology.edgeRecords.reduce((sum, edge) => sum + edge.from.distanceTo(edge.to), 0) /
+    Math.max(topology.edgeRecords.length, 1)
+  const threshold = Math.max(averageEdgeLength * 0.9, boundarySampleSize * 0.25)
+  const thresholdSq = threshold * threshold
+  const segmentHitCounts: number[] = []
+
+  segments.forEach((segment) => {
+    let nearestEdgeKey = ''
+    let nearestDistanceSq = Number.POSITIVE_INFINITY
+    let hitCount = 0
+
+    topology.edgeRecords.forEach((edge) => {
+      const distanceSq = distancePointToSegmentSq(edge.midpoint, segment.from, segment.to)
+      if (distanceSq <= thresholdSq) {
+        blockedEdges.add(edge.edgeKey)
+        hitCount += 1
+      }
+      if (distanceSq < nearestDistanceSq) {
+        nearestDistanceSq = distanceSq
+        nearestEdgeKey = edge.edgeKey
+      }
+    })
+
+    if (nearestEdgeKey) {
+      blockedEdges.add(nearestEdgeKey)
+      if (!hitCount) hitCount = 1
+    }
+    segmentHitCounts.push(hitCount)
+  })
+
+  return { blockedEdges, threshold, segmentHitCounts }
+}
+
+function getBoundaryLoopsFromMesh(mesh: THREE.Mesh) {
+  const jaw = mesh.userData.jaw as JawType | undefined
+  if (!jaw) return [] as BoundaryLoopData[]
+  return (boundaryGroups[jaw]?.userData.boundaryLoops as BoundaryLoopData[] | undefined) ?? []
+}
+
+function getBlockedEdgesFromBoundaryLoops(mesh: THREE.Mesh) {
+  const loops = getBoundaryLoopsFromMesh(mesh)
+  const blockedEdges = new Set<string>()
+  loops.forEach((loop) => loop.edgeKeys.forEach((edgeKey) => blockedEdges.add(edgeKey)))
+  return { loops, blockedEdges }
+}
+
+function getToothSeedFaces(geometry: THREE.BufferGeometry, faceLabels: number[]) {
+  const sums = new Map<number, { center: THREE.Vector3; count: number }>()
+  const center = new THREE.Vector3()
+
+  faceLabels.forEach((label, faceIndex) => {
+    if (label < 0) return
+    let sum = sums.get(label)
+    if (!sum) {
+      sum = { center: new THREE.Vector3(), count: 0 }
+      sums.set(label, sum)
+    }
+    getTriangleCenter(geometry, faceIndex, center)
+    sum.center.add(center)
+    sum.count += 1
+  })
+
+  const seeds = new Map<number, number>()
+  sums.forEach((sum, toothId) => {
+    const targetCenter = sum.center.multiplyScalar(1 / Math.max(sum.count, 1))
+    let bestFaceIndex = -1
+    let bestDistanceSq = Number.POSITIVE_INFINITY
+    faceLabels.forEach((label, faceIndex) => {
+      if (label !== toothId) return
+      getTriangleCenter(geometry, faceIndex, center)
+      const distanceSq = center.distanceToSquared(targetCenter)
+      if (distanceSq < bestDistanceSq) {
+        bestDistanceSq = distanceSq
+        bestFaceIndex = faceIndex
+      }
+    })
+    if (bestFaceIndex >= 0) seeds.set(toothId, bestFaceIndex)
+  })
+
+  return seeds
+}
+
+function recomputeAllToothLabels(mesh: THREE.Mesh) {
+  const labels = meshLabelMap.get(mesh)
+  const position = mesh.geometry.getAttribute('position') as THREE.BufferAttribute | undefined
+  if (!labels || !position) return false
+
+  const topology = buildMeshFaceTopology(mesh.geometry)
+  const { loops: boundaryLoops, blockedEdges } = getBlockedEdgesFromBoundaryLoops(mesh)
+  const previousFaceLabels = vertexLabelsToFaceLabels(labels)
+  const nextFaceLabels = new Array<number>(previousFaceLabels.length).fill(-1)
+  const seeds = getToothSeedFaces(mesh.geometry, previousFaceLabels)
+  const queue: Array<{ faceIndex: number; toothId: number }> = []
+  const floodFillCounts = new Map<number, number>()
+
+  Array.from(seeds.entries())
+    .sort(([a], [b]) => (a === 0 ? 1 : b === 0 ? -1 : a - b))
+    .forEach(([toothId, seedFaceIndex]) => {
+      nextFaceLabels[seedFaceIndex] = toothId
+      queue.push({ faceIndex: seedFaceIndex, toothId })
+      floodFillCounts.set(toothId, 1)
+    })
+
+  for (let cursor = 0; cursor < queue.length; cursor++) {
+    const current = queue[cursor]
+    if (!current) continue
+
+    for (const edgeRef of topology.faceEdges[current.faceIndex] ?? []) {
+      if (blockedEdges.has(edgeRef.edgeKey)) continue
+      const neighbor = edgeRef.neighbor
+      if (neighbor == null || nextFaceLabels[neighbor] !== -1) continue
+      nextFaceLabels[neighbor] = current.toothId
+      floodFillCounts.set(current.toothId, (floodFillCounts.get(current.toothId) ?? 0) + 1)
+      queue.push({ faceIndex: neighbor, toothId: current.toothId })
+    }
+  }
+
+  nextFaceLabels.forEach((label, faceIndex) => {
+    if (label !== -1) return
+    nextFaceLabels[faceIndex] = 0
+  })
+
+  const nextVertexLabels = faceLabelsToVertexLabels(nextFaceLabels)
+  let changed = false
+  for (let index = 0; index < Math.min(labels.length, nextVertexLabels.length); index++) {
+    const nextLabel = nextVertexLabels[index] ?? 0
+    if (labels[index] === nextLabel) continue
+    labels[index] = nextLabel
+    changed = true
+  }
+
+  const toothFaceCounts = new Map<number, number>()
+  nextFaceLabels.forEach((label) => {
+    if (!label || label < 0) return
+    toothFaceCounts.set(label, (toothFaceCounts.get(label) ?? 0) + 1)
+  })
+
+  console.info('[editStl] recomputeAllToothLabels', {
+    boundaryLoopCount: boundaryLoops.length,
+    boundaryEdgeCount: boundaryLoops.reduce((sum, loop) => sum + loop.edgeKeys.length, 0),
+    blockedEdgeCount: blockedEdges.size,
+    floodFillFaceCount: Array.from(floodFillCounts.entries()).reduce(
+      (sum, [, count]) => sum + count,
+      0,
+    ),
+    floodFillCounts: Object.fromEntries(floodFillCounts),
+    toothFaceCount: Object.fromEntries(toothFaceCounts),
+  })
+
+  if (changed) refreshMeshLabels(mesh)
+  return changed
+}
+
+function getDominantReplacementLabel(labels: number[], toothId: number, faceIndices: number[]) {
+  const counts = new Map<number, number>()
+  faceIndices.forEach((faceIndex) => {
+    const label = faceLabel(labels, faceIndex)
+    if (!label || label === toothId) return
+    counts.set(label, (counts.get(label) ?? 0) + 1)
+  })
+  return Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 0
+}
+
+function refreshMeshLabels(mesh: THREE.Mesh) {
+  const labels = meshLabelMap.get(mesh)
+  const jaw = mesh.userData.jaw as JawType | undefined
+  if (!labels || !jaw) return
+
+  paintGeometryByLabels(mesh.geometry, labels)
+  const colors = mesh.geometry.getAttribute('color') as THREE.BufferAttribute | undefined
+  if (colors) colors.needsUpdate = true
+
+  const oldLabelGroup = labelGroups[jaw]
+  if (oldLabelGroup) {
+    mesh.remove(oldLabelGroup)
+    disposeObject(oldLabelGroup)
+  }
+
+  const labelGroup = buildToothLabelGroup(mesh.geometry, labels)
+  mesh.add(labelGroup)
+  labelGroups[jaw] = labelGroup
+  syncVisibility()
+}
+
+function writeDraggedBoundaryToFaceLabels(state: BoundaryDragState) {
+  const labels = meshLabelMap.get(state.mesh)
+  const position = state.mesh.geometry.getAttribute('position') as THREE.BufferAttribute | undefined
+  const pointPosition = state.points.geometry.getAttribute('position') as
+    | THREE.BufferAttribute
+    | undefined
+  if (!labels || !position || !pointPosition || !state.toothId) return false
+
+  const nextLocalPosition = new THREE.Vector3(
+    pointPosition.getX(state.pointIndex),
+    pointPosition.getY(state.pointIndex),
+    pointPosition.getZ(state.pointIndex),
+  )
+  const faceCount = Math.floor(position.count / 3)
+  const center = new THREE.Vector3()
+  const radius = boundarySampleSize * 3.2
+  const radiusSq = radius * radius
+  const newFaceIndices: number[] = []
+  const oldFaceIndices: number[] = []
+
+  for (let faceIndex = 0; faceIndex < faceCount; faceIndex++) {
+    getTriangleCenter(state.mesh.geometry, faceIndex, center)
+    if (center.distanceToSquared(nextLocalPosition) <= radiusSq) newFaceIndices.push(faceIndex)
+    if (center.distanceToSquared(state.originalLocalPosition) <= radiusSq)
+      oldFaceIndices.push(faceIndex)
+  }
+
+  const replacementLabel = getDominantReplacementLabel(labels, state.toothId, oldFaceIndices)
+  let changed = false
+
+  oldFaceIndices.forEach((faceIndex) => {
+    getTriangleCenter(state.mesh.geometry, faceIndex, center)
+    if (center.distanceToSquared(nextLocalPosition) <= radiusSq * 0.45) return
+    if (faceLabel(labels, faceIndex) !== state.toothId) return
+    setFaceLabel(labels, faceIndex, replacementLabel)
+    changed = true
+  })
+
+  newFaceIndices.forEach((faceIndex) => {
+    if (faceLabel(labels, faceIndex) === state.toothId) return
+    setFaceLabel(labels, faceIndex, state.toothId)
+    changed = true
+  })
+
+  if (changed) refreshMeshLabels(state.mesh)
+  return changed
 }
 
 function setBoundaryPointColor(points: THREE.Points, pointIndex: number, color: THREE.Color) {
@@ -683,8 +1348,9 @@ function setBoundaryHover(pick: BoundaryPickResult | null) {
   setBoundaryPointColor(pick.points, pick.pointIndex, hoverPointColor)
 }
 
-function pickNearestBoundaryPoint(event: PointerEvent) {
-  if (!camera) return null
+function pickNearestBoundaryPoint(event: PointerEvent): BoundaryPickResult | null {
+  const activeCamera = camera
+  if (!activeCamera) return null
   const canvasPoint = getCanvasPoint(event)
   if (!canvasPoint) return null
 
@@ -699,7 +1365,7 @@ function pickNearestBoundaryPoint(event: PointerEvent) {
     for (let index = 0; index < position.count; index++) {
       projected.set(position.getX(index), position.getY(index), position.getZ(index))
       points.localToWorld(projected)
-      projected.project(camera)
+      projected.project(activeCamera)
 
       if (projected.z < -1 || projected.z > 1) continue
 
@@ -725,10 +1391,18 @@ function onPointerDown(event: PointerEvent) {
   const hit = pickNearestBoundaryPoint(event)
   if (!hit) return
 
-  const { points, pointIndex } = hit
-  const originalColor = sameBoundaryPoint(boundaryHoverState, hit)
-    ? boundaryHoverState.originalColor
-    : getBoundaryPointColor(points, pointIndex)
+  const points = hit.points
+  const pointIndex = hit.pointIndex
+  const mesh = getMeshFromBoundaryPoints(points)
+  const pointLabels = points.userData.boundaryPointLabels as number[] | undefined
+  const toothId = Number(pointLabels?.[pointIndex] ?? 0)
+  if (!mesh || !toothId) return
+  const topology = buildMeshFaceTopology(mesh.geometry)
+  const hoverState = boundaryHoverState
+  const originalColor =
+    hoverState && sameBoundaryPoint(hoverState, hit)
+      ? hoverState.originalColor
+      : getBoundaryPointColor(points, pointIndex)
   clearBoundaryHover()
   getPointWorldPosition(points, pointIndex, dragPoint)
   camera.getWorldDirection(dragPlaneNormal)
@@ -743,6 +1417,10 @@ function onPointerDown(event: PointerEvent) {
     plane,
     offset: planeHit ? dragPoint.clone().sub(planeHit) : new THREE.Vector3(),
     originalColor,
+    originalLocalPosition: points.worldToLocal(dragPoint.clone()),
+    mesh,
+    topology,
+    toothId,
   }
 
   setBoundaryPointColor(points, pointIndex, movablePointColor)
@@ -762,25 +1440,35 @@ function onPointerMove(event: PointerEvent) {
 
   raycaster.setFromCamera(pointer, camera)
   const planeHit = raycaster.ray.intersectPlane(boundaryDragState.plane, dragTarget)
-  if (!planeHit) return
+  const meshHit = raycaster.intersectObject(boundaryDragState.mesh, false)[0]
+  if (!planeHit && !meshHit) return
 
-  const nextWorldPosition = dragTarget.add(boundaryDragState.offset)
-  const nextLocalPosition = setPointLocalPosition(
+  const nextWorldPosition = meshHit ? meshHit.point : dragTarget.add(boundaryDragState.offset)
+  const nextLocalOnMesh = boundaryDragState.mesh.worldToLocal(nextWorldPosition.clone())
+  const nearestEdge = findNearestMeshEdge(boundaryDragState.topology, nextLocalOnMesh)
+  if (!nearestEdge) return
+
+  const controls = boundaryDragState.points.userData.boundaryControlPoints as
+    | BoundaryControlPointData[]
+    | undefined
+  const controlPoint = controls?.[boundaryDragState.pointIndex]
+  if (!controlPoint) return
+
+  controlPoint.edgeKey = nearestEdge.edgeKey
+  const snappedWorldPosition = boundaryDragState.mesh.localToWorld(nearestEdge.midpoint.clone())
+  setPointLocalPosition(
     boundaryDragState.points,
     boundaryDragState.pointIndex,
-    nextWorldPosition,
+    snappedWorldPosition,
   )
-  syncBoundaryLines(boundaryDragState.lines, boundaryDragState.pointIndex, nextLocalPosition)
+  rebuildBoundaryLoopsFromControlPoints(boundaryDragState.points, boundaryDragState.topology)
   event.preventDefault()
 }
 
 function endBoundaryDrag(event?: PointerEvent) {
   if (!boundaryDragState) return
-  setBoundaryPointColor(
-    boundaryDragState.points,
-    boundaryDragState.pointIndex,
-    boundaryDragState.originalColor,
-  )
+  const dragState = boundaryDragState
+  setBoundaryPointColor(dragState.points, dragState.pointIndex, dragState.originalColor)
   if (controls) controls.enabled = true
   if (renderer) {
     renderer.domElement.classList.remove('dragging-boundary-point')
@@ -788,6 +1476,7 @@ function endBoundaryDrag(event?: PointerEvent) {
       renderer.domElement.releasePointerCapture(event.pointerId)
     }
   }
+  recomputeAllToothLabels(dragState.mesh)
   boundaryDragState = null
   if (event) setBoundaryHover(pickNearestBoundaryPoint(event))
 }
