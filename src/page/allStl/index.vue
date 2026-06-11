@@ -1178,6 +1178,7 @@ function meshHasLabel(mesh: THREE.Mesh, fdi: number) {
   return !!labels?.some((label) => label === fdi)
 }
 
+// 将单个模型中整颗牙的 FDI 标签整体替换，并同步刷新颜色、牙号文字和边界。
 function changeFdiOnMesh(mesh: THREE.Mesh, fromFdi: number, toFdi: number) {
   const labels = meshLabelMap.get(mesh)
   if (!labels) return 0
@@ -1200,6 +1201,7 @@ function changeFdiOnMesh(mesh: THREE.Mesh, fromFdi: number, toFdi: number) {
   return changedVertexCount
 }
 
+// 顶部工具栏的备用修改入口：从所有可见模型中查找原 FDI，再执行整体替换。
 function applyFdiChange() {
   const fromFdi = Number(sourceFdi.value)
   const toFdi = Number(targetFdi.value)
@@ -1887,6 +1889,7 @@ function pickFdiLabel(event: PointerEvent) {
   return { mesh, fromFdi }
 }
 
+// 旧的原生 prompt 修改流程已被页面内弹窗替代，保留这里只作兼容参考，不再由事件入口调用。
 function promptChangeFdiFromLabel(event: PointerEvent) {
   const picked = pickFdiLabel(event)
   if (!picked) return false
@@ -1915,6 +1918,7 @@ function promptChangeFdiFromLabel(event: PointerEvent) {
   return true
 }
 
+// 点击 3D 牙号标签后打开的自定义 FDI 编辑弹窗。
 function openFdiEditor(mesh: THREE.Mesh, fromFdi: number) {
   fdiEditor.value = {
     visible: true,
@@ -1930,6 +1934,7 @@ function closeFdiEditor() {
   fdiEditor.value.error = ''
 }
 
+// 弹窗确认时先做全局重复检查；目标 FDI 已存在时阻止提交并在弹窗内提示。
 function confirmFdiEditor() {
   const editor = fdiEditor.value
   const mesh = editor.mesh
@@ -1957,6 +1962,7 @@ function confirmFdiEditor() {
     return
   }
 
+  // 标签拾取偶尔可能拿到旧 mesh 引用，这里兜底到当前可见模型中查找原 FDI。
   let changedVertexCount = changeFdiOnMesh(mesh, fromFdi, toFdi)
   if (!changedVertexCount) {
     const fallbackMesh = getVisibleMeshes().find(
@@ -1979,6 +1985,7 @@ function confirmFdiEditor() {
   closeFdiEditor()
 }
 
+// 左键点中牙号 sprite 时拦截画笔/边界事件，改为进入 FDI 编辑流程。
 function openFdiEditorFromLabel(event: PointerEvent) {
   const picked = pickFdiLabel(event)
   if (!picked) return false
@@ -2049,11 +2056,13 @@ function refreshBoundaryGroupFromLabels(mesh: THREE.Mesh) {
   replaceBoundaryGroup(mesh, jaw, buildBoundaryGroup(mesh.geometry, labels))
 }
 
+// 涂色可能连续触发很多次，先记录受影响模型，鼠标松开后统一重建边界。
 function flushPaintedBoundaryGroups() {
   pendingBoundaryRefreshMeshes.forEach(refreshBoundaryGroupFromLabels)
   pendingBoundaryRefreshMeshes.clear()
 }
 
+// 笔刷以命中点为圆心，按半径批量改三角面的标签；擦除/牙龈会写回 0。
 function paintAtIntersect(intersect: THREE.Intersection) {
   const mesh = intersect.object instanceof THREE.Mesh ? intersect.object : null
   if (!mesh) return false
