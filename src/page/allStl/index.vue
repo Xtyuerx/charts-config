@@ -100,8 +100,12 @@
       </label>
       <button class="tool-button" type="button" @click="applyFdiChange">修改 FDI</button>
       <button class="tool-button" type="button" @click="triggerImportJson">Import JSON</button>
-      <button class="tool-button" type="button" @click="exportJawJson('upper')">Export Upper</button>
-      <button class="tool-button" type="button" @click="exportJawJson('lower')">Export Lower</button>
+      <button class="tool-button" type="button" @click="exportJawJson('upper')">
+        Export Upper
+      </button>
+      <button class="tool-button" type="button" @click="exportJawJson('lower')">
+        Export Lower
+      </button>
       <button
         class="tool-button"
         :class="{ active: showBoundaries }"
@@ -120,36 +124,6 @@
       @change="handleImportJson"
     />
     <div ref="containerRef" class="viewer"></div>
-    <div v-if="fdiEditor.visible" class="fdi-dialog-mask" @click.self="closeFdiEditor">
-      <div class="fdi-dialog">
-        <div class="fdi-dialog__header">
-          <span>修改牙号标签</span>
-          <button class="fdi-dialog__close" type="button" @click="closeFdiEditor">×</button>
-        </div>
-        <div class="fdi-dialog__body">
-          <label class="fdi-field">
-            <span>原 FDI</span>
-            <input class="fdi-input" :value="fdiEditor.fromFdi" disabled />
-          </label>
-          <label class="fdi-field">
-            <span>新 FDI</span>
-            <input
-              v-model.number="fdiEditor.toFdi"
-              class="fdi-input"
-              type="number"
-              min="11"
-              max="48"
-              @keyup.enter="confirmFdiEditor"
-            />
-          </label>
-          <p v-if="fdiEditor.error" class="fdi-error">{{ fdiEditor.error }}</p>
-        </div>
-        <div class="fdi-dialog__footer">
-          <button class="tool-button" type="button" @click="closeFdiEditor">取消</button>
-          <button class="tool-button active" type="button" @click="confirmFdiEditor">确认修改</button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -190,20 +164,6 @@ const brushRadius = ref(4)
 const selectedToothId = ref<number | null>(11)
 const sourceFdi = ref<number | null>(11)
 const targetFdi = ref<number | null>(12)
-const fdiEditor = ref<{
-  visible: boolean
-  mesh: THREE.Mesh | null
-  fromFdi: number | null
-  toFdi: number | null
-  error: string
-}>({
-  visible: false,
-  mesh: null,
-  fromFdi: null,
-  toFdi: null,
-  error: '',
-})
-
 const jawConfigs: JawConfig[] = [
   {
     jaw: 'upper',
@@ -263,6 +223,7 @@ const meshes: Partial<Record<JawType, THREE.Mesh>> = {}
 const labelGroups: Partial<Record<JawType, THREE.Group>> = {}
 const boundaryGroups: Partial<Record<JawType, THREE.Group>> = {}
 const meshLabelMap = new WeakMap<THREE.Mesh, number[]>()
+const meshLogicalVertexGroups = new WeakMap<THREE.Mesh, number[][]>()
 const raycaster = new THREE.Raycaster()
 const pointer = new THREE.Vector2()
 const dragPoint = new THREE.Vector3()
@@ -288,6 +249,13 @@ type BoundaryDragState = {
 type BoundaryPickResult = {
   points: THREE.Points
   pointIndex: number
+}
+
+type CanvasPoint = {
+  x: number
+  y: number
+  width: number
+  height: number
 }
 
 type BoundaryHoverState = BoundaryPickResult & {
@@ -544,6 +512,23 @@ function faceLabel(labels: number[], faceIndex: number) {
   return a || b || c || 0
 }
 
+function resolvedFaceLabelFromVertexLabels(vertexLabels: number[]) {
+  const positiveLabels = vertexLabels.filter((label) => label > 0)
+  if (positiveLabels.length < 2) return 0
+
+  const counts = new Map<number, number>()
+  positiveLabels.forEach((label) => counts.set(label, (counts.get(label) ?? 0) + 1))
+
+  let bestLabel = 0
+  let bestCount = 0
+  counts.forEach((count, label) => {
+    if (count <= bestCount) return
+    bestLabel = label
+    bestCount = count
+  })
+  return bestLabel
+}
+
 function vertexKey(position: THREE.BufferAttribute, index: number) {
   return [
     Math.round(position.getX(index) * 10000),
@@ -599,8 +584,10 @@ function orderEdgeLoops(edgeKeys: string[], edgeByKey: Map<string, MeshEdgeRecor
 
     const component: string[] = []
     const openStart =
-      Array.from(vertexEdges.entries()).find(([, edges]) =>
-        edges.some((edgeKey) => edgeSet.has(edgeKey)) && edges.filter((edgeKey) => edgeSet.has(edgeKey)).length === 1,
+      Array.from(vertexEdges.entries()).find(
+        ([, edges]) =>
+          edges.some((edgeKey) => edgeSet.has(edgeKey)) &&
+          edges.filter((edgeKey) => edgeSet.has(edgeKey)).length === 1,
       )?.[0] ?? firstEdge.fromKey
     let currentVertexKey = openStart
     let previousEdgeKey = ''
@@ -949,7 +936,9 @@ function buildBoundaryGroupFromExportedLoops(
     const color = colorForLabel(exportedLoop.toothId)
     const edgeKeys = exportedLoop.edgeKeys.filter((edgeKey) => topology.edgeByKey.has(edgeKey))
     const controlEdgeKeys = (
-      exportedLoop.controlEdgeKeys?.length ? exportedLoop.controlEdgeKeys : chooseBoundaryControlEdges(edgeKeys)
+      exportedLoop.controlEdgeKeys?.length
+        ? exportedLoop.controlEdgeKeys
+        : chooseBoundaryControlEdges(edgeKeys)
     ).filter((edgeKey) => topology.edgeByKey.has(edgeKey))
     const controlPointIndices: number[] = []
 
@@ -1057,6 +1046,7 @@ async function createJawMesh(config: JawConfig) {
   mesh.userData.usedFallback = labelResult.usedFallback
   mesh.userData.jaw = config.jaw
   meshLabelMap.set(mesh, labelResult.labels)
+  meshLogicalVertexGroups.set(mesh, buildLogicalVertexGroups(geometry))
 
   const labelGroup = buildToothLabelGroup(geometry, labelResult.labels)
   mesh.add(labelGroup)
@@ -1297,6 +1287,7 @@ function applyImportedJawJson(payload: ExportedJawJson) {
   }
 
   meshLabelMap.set(mesh, importedLabels)
+  meshLogicalVertexGroups.set(mesh, buildLogicalVertexGroups(mesh.geometry))
   refreshMeshLabels(mesh)
 
   const boundaryLoops = payload.boundary?.loops ?? []
@@ -1412,6 +1403,28 @@ function getTriangleCenter(
   return target
 }
 
+function getTriangleFromFace(
+  geometry: THREE.BufferGeometry,
+  faceIndex: number,
+  target: THREE.Triangle,
+) {
+  const position = geometry.getAttribute('position') as THREE.BufferAttribute
+  const base = faceIndex * 3
+  target.a.set(position.getX(base), position.getY(base), position.getZ(base))
+  target.b.set(position.getX(base + 1), position.getY(base + 1), position.getZ(base + 1))
+  target.c.set(position.getX(base + 2), position.getY(base + 2), position.getZ(base + 2))
+  return target
+}
+
+function distancePointToTriangleSq(
+  point: THREE.Vector3,
+  triangle: THREE.Triangle,
+  closestPoint = new THREE.Vector3(),
+) {
+  triangle.closestPointToPoint(point, closestPoint)
+  return point.distanceToSquared(closestPoint)
+}
+
 function buildMeshFaceTopology(geometry: THREE.BufferGeometry): MeshFaceTopology {
   const position = geometry.getAttribute('position') as THREE.BufferAttribute
   const faceCount = Math.floor(position.count / 3)
@@ -1497,6 +1510,31 @@ function setFaceLabel(labels: number[], faceIndex: number, label: number) {
   labels[base + 2] = label
 }
 
+function setVertexLabelWithLogicalGroup(
+  labels: number[],
+  logicalVertexGroups: number[][] | undefined,
+  vertexIndex: number,
+  label: number,
+) {
+  const group = logicalVertexGroups?.[vertexIndex] ?? [vertexIndex]
+  group.forEach((index) => {
+    labels[index] = label
+  })
+}
+
+function syncFaceLabelsFromVertexMajority(labels: number[]) {
+  const faceCount = Math.floor(labels.length / 3)
+  for (let faceIndex = 0; faceIndex < faceCount; faceIndex++) {
+    const base = faceIndex * 3
+    const nextLabel = resolvedFaceLabelFromVertexLabels([
+      Number(labels[base] ?? 0),
+      Number(labels[base + 1] ?? 0),
+      Number(labels[base + 2] ?? 0),
+    ])
+    setFaceLabel(labels, faceIndex, nextLabel)
+  }
+}
+
 function vertexLabelsToFaceLabels(labels: number[]) {
   const faceCount = Math.floor(labels.length / 3)
   const faceLabels = new Array<number>(faceCount)
@@ -1512,6 +1550,31 @@ function faceLabelsToVertexLabels(faceLabels: number[]) {
   return labels
 }
 
+function buildLogicalVertexGroups(geometry: THREE.BufferGeometry) {
+  const position = geometry.getAttribute('position') as THREE.BufferAttribute | undefined
+  if (!position) return []
+
+  const groups = Array.from({ length: position.count }, () => [] as number[])
+  const indicesByKey = new Map<string, number[]>()
+
+  for (let index = 0; index < position.count; index++) {
+    const key = vertexKey(position, index)
+    const indices = indicesByKey.get(key)
+    if (indices) {
+      indices.push(index)
+    } else {
+      indicesByKey.set(key, [index])
+    }
+  }
+
+  indicesByKey.forEach((indices) => {
+    indices.forEach((index) => {
+      groups[index] = indices
+    })
+  })
+  return groups
+}
+
 function distancePointToSegmentSq(point: THREE.Vector3, from: THREE.Vector3, to: THREE.Vector3) {
   const segment = to.clone().sub(from)
   const lengthSq = segment.lengthSq()
@@ -1519,6 +1582,124 @@ function distancePointToSegmentSq(point: THREE.Vector3, from: THREE.Vector3, to:
 
   const t = THREE.MathUtils.clamp(point.clone().sub(from).dot(segment) / lengthSq, 0, 1)
   return point.distanceToSquared(from.clone().add(segment.multiplyScalar(t)))
+}
+
+function distancePointToSegment2DSq(point: THREE.Vector2, from: THREE.Vector2, to: THREE.Vector2) {
+  const segmentX = to.x - from.x
+  const segmentY = to.y - from.y
+  const lengthSq = segmentX * segmentX + segmentY * segmentY
+  if (!lengthSq) return point.distanceToSquared(from)
+
+  const t = THREE.MathUtils.clamp(
+    ((point.x - from.x) * segmentX + (point.y - from.y) * segmentY) / lengthSq,
+    0,
+    1,
+  )
+  const closestX = from.x + segmentX * t
+  const closestY = from.y + segmentY * t
+  return (point.x - closestX) ** 2 + (point.y - closestY) ** 2
+}
+
+function pointInTriangle2D(
+  point: THREE.Vector2,
+  a: THREE.Vector2,
+  b: THREE.Vector2,
+  c: THREE.Vector2,
+) {
+  const area = (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y)
+  if (!area) return false
+
+  const u = ((b.y - c.y) * (point.x - c.x) + (c.x - b.x) * (point.y - c.y)) / area
+  const v = ((c.y - a.y) * (point.x - c.x) + (a.x - c.x) * (point.y - c.y)) / area
+  const w = 1 - u - v
+  return u >= 0 && v >= 0 && w >= 0
+}
+
+function distancePointToTriangle2DSq(
+  point: THREE.Vector2,
+  a: THREE.Vector2,
+  b: THREE.Vector2,
+  c: THREE.Vector2,
+) {
+  if (pointInTriangle2D(point, a, b, c)) return 0
+  return Math.min(
+    distancePointToSegment2DSq(point, a, b),
+    distancePointToSegment2DSq(point, b, c),
+    distancePointToSegment2DSq(point, c, a),
+  )
+}
+
+function projectWorldToCanvas(
+  worldPoint: THREE.Vector3,
+  canvasPoint: CanvasPoint,
+  target: THREE.Vector2,
+) {
+  if (!camera) return false
+  const projected = worldPoint.clone().project(camera)
+  if (projected.z < -1 || projected.z > 1) return false
+  target.set(
+    (projected.x * 0.5 + 0.5) * canvasPoint.width,
+    (-projected.y * 0.5 + 0.5) * canvasPoint.height,
+  )
+  return true
+}
+
+function getBrushScreenRadiusPx(hitWorld: THREE.Vector3, canvasPoint: CanvasPoint) {
+  if (!camera) return 0
+  const center = new THREE.Vector2()
+  const edge = new THREE.Vector2()
+  const cameraRight = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0)
+  if (!projectWorldToCanvas(hitWorld, canvasPoint, center)) return 0
+  if (
+    !projectWorldToCanvas(
+      hitWorld.clone().addScaledVector(cameraRight, brushRadius.value),
+      canvasPoint,
+      edge,
+    )
+  ) {
+    return 0
+  }
+  return center.distanceTo(edge)
+}
+
+function doesFaceOverlapBrushScreen(
+  mesh: THREE.Mesh,
+  faceIndex: number,
+  brushCenter: THREE.Vector2,
+  brushRadiusPx: number,
+  canvasPoint: CanvasPoint,
+) {
+  if (!brushRadiusPx) return false
+
+  const geometry = mesh.geometry
+  const position = geometry.getAttribute('position') as THREE.BufferAttribute
+  const base = faceIndex * 3
+  const worldA = new THREE.Vector3(position.getX(base), position.getY(base), position.getZ(base))
+  const worldB = new THREE.Vector3(
+    position.getX(base + 1),
+    position.getY(base + 1),
+    position.getZ(base + 1),
+  )
+  const worldC = new THREE.Vector3(
+    position.getX(base + 2),
+    position.getY(base + 2),
+    position.getZ(base + 2),
+  )
+  mesh.localToWorld(worldA)
+  mesh.localToWorld(worldB)
+  mesh.localToWorld(worldC)
+
+  const screenA = new THREE.Vector2()
+  const screenB = new THREE.Vector2()
+  const screenC = new THREE.Vector2()
+  if (!projectWorldToCanvas(worldA, canvasPoint, screenA)) return false
+  if (!projectWorldToCanvas(worldB, canvasPoint, screenB)) return false
+  if (!projectWorldToCanvas(worldC, canvasPoint, screenC)) return false
+
+  return (
+    distancePointToTriangle2DSq(brushCenter, screenA, screenB, screenC) <=
+    brushRadiusPx * brushRadiusPx
+  )
 }
 
 function getBoundarySegmentsFromMesh(mesh: THREE.Mesh) {
@@ -1860,137 +2041,7 @@ function pickNearestBoundaryPoint(event: PointerEvent): BoundaryPickResult | nul
 }
 
 function getVisibleMeshes() {
-  return ([meshes.upper, meshes.lower].filter(
-    (mesh): mesh is THREE.Mesh => !!mesh && mesh.visible,
-  ))
-}
-
-function getVisibleFdiLabels() {
-  return Object.values(labelGroups)
-    .filter((group): group is THREE.Group => !!group && group.visible)
-    .flatMap((group) => group.children)
-    .filter((object): object is THREE.Sprite => object instanceof THREE.Sprite)
-}
-
-function getMeshFromFdiLabel(labelSprite: THREE.Sprite) {
-  const maybeMesh = labelSprite.parent?.parent
-  return maybeMesh instanceof THREE.Mesh ? maybeMesh : null
-}
-
-function pickFdiLabel(event: PointerEvent) {
-  if (!camera || !updatePointer(event)) return null
-  raycaster.setFromCamera(pointer, camera)
-  const hit = raycaster.intersectObjects(getVisibleFdiLabels(), false)[0]
-  if (!hit || !(hit.object instanceof THREE.Sprite)) return null
-
-  const fromFdi = Number(hit.object.userData.fdi ?? 0)
-  const mesh = getMeshFromFdiLabel(hit.object)
-  if (!fromFdi || !mesh) return null
-  return { mesh, fromFdi }
-}
-
-// 旧的原生 prompt 修改流程已被页面内弹窗替代，保留这里只作兼容参考，不再由事件入口调用。
-function promptChangeFdiFromLabel(event: PointerEvent) {
-  const picked = pickFdiLabel(event)
-  if (!picked) return false
-
-  const input = window.prompt(`将 FDI ${picked.fromFdi} 修改为：`, String(picked.fromFdi))
-  if (input == null) return true
-
-  const toFdi = Number(input)
-  if (!isValidFdi(toFdi)) {
-    statusText.value = '请输入有效的新 FDI。'
-    return true
-  }
-
-  if (picked.fromFdi === toFdi) {
-    statusText.value = '新 FDI 与当前标签相同，无需修改。'
-    return true
-  }
-
-  const changedVertexCount = changeFdiOnMesh(picked.mesh, picked.fromFdi, toFdi)
-  if (!changedVertexCount) return true
-
-  selectedToothId.value = toFdi
-  sourceFdi.value = toFdi
-  targetFdi.value = toFdi
-  statusText.value = `已将 FDI ${picked.fromFdi} 修改为 ${toFdi}，更新顶点 ${changedVertexCount} 个。`
-  return true
-}
-
-// 点击 3D 牙号标签后打开的自定义 FDI 编辑弹窗。
-function openFdiEditor(mesh: THREE.Mesh, fromFdi: number) {
-  fdiEditor.value = {
-    visible: true,
-    mesh,
-    fromFdi,
-    toFdi: fromFdi,
-    error: '',
-  }
-}
-
-function closeFdiEditor() {
-  fdiEditor.value.visible = false
-  fdiEditor.value.error = ''
-}
-
-// 弹窗确认时先做全局重复检查；目标 FDI 已存在时阻止提交并在弹窗内提示。
-function confirmFdiEditor() {
-  const editor = fdiEditor.value
-  const mesh = editor.mesh
-  const fromFdi = Number(editor.fromFdi)
-  const toFdi = Number(editor.toFdi)
-
-  if (!mesh || !isValidFdi(fromFdi)) {
-    editor.error = '未找到可修改的牙号标签。'
-    return
-  }
-
-  if (!isValidFdi(toFdi)) {
-    editor.error = '请输入 11 到 48 之间的有效 FDI。'
-    return
-  }
-
-  if (fromFdi === toFdi) {
-    editor.error = '新 FDI 与当前标签相同，无需修改。'
-    return
-  }
-
-  if (getVisibleMeshes().some((item) => meshHasLabel(item, toFdi))) {
-    editor.error = `FDI ${toFdi} 已存在，不能修改为重复牙号。`
-    statusText.value = editor.error
-    return
-  }
-
-  // 标签拾取偶尔可能拿到旧 mesh 引用，这里兜底到当前可见模型中查找原 FDI。
-  let changedVertexCount = changeFdiOnMesh(mesh, fromFdi, toFdi)
-  if (!changedVertexCount) {
-    const fallbackMesh = getVisibleMeshes().find(
-      (item) => item !== mesh && meshHasLabel(item, fromFdi),
-    )
-    if (fallbackMesh) {
-      changedVertexCount = changeFdiOnMesh(fallbackMesh, fromFdi, toFdi)
-    }
-  }
-
-  if (!changedVertexCount) {
-    editor.error = `未找到 FDI ${fromFdi} 对应的牙齿区域。`
-    return
-  }
-
-  selectedToothId.value = toFdi
-  sourceFdi.value = toFdi
-  targetFdi.value = toFdi
-  statusText.value = `已将 FDI ${fromFdi} 修改为 ${toFdi}，更新顶点 ${changedVertexCount} 个。`
-  closeFdiEditor()
-}
-
-// 左键点中牙号 sprite 时拦截画笔/边界事件，改为进入 FDI 编辑流程。
-function openFdiEditorFromLabel(event: PointerEvent) {
-  const picked = pickFdiLabel(event)
-  if (!picked) return false
-  openFdiEditor(picked.mesh, picked.fromFdi)
-  return true
+  return [meshes.upper, meshes.lower].filter((mesh): mesh is THREE.Mesh => !!mesh && mesh.visible)
 }
 
 function getBrushLabel() {
@@ -2063,30 +2114,47 @@ function flushPaintedBoundaryGroups() {
 }
 
 // 笔刷以命中点为圆心，按半径批量改三角面的标签；擦除/牙龈会写回 0。
-function paintAtIntersect(intersect: THREE.Intersection) {
+function paintAtIntersect(intersect: THREE.Intersection, event?: PointerEvent) {
   const mesh = intersect.object instanceof THREE.Mesh ? intersect.object : null
   if (!mesh) return false
 
   const labels = meshLabelMap.get(mesh)
+  const logicalVertexGroups = meshLogicalVertexGroups.get(mesh)
   const position = mesh.geometry.getAttribute('position') as THREE.BufferAttribute | undefined
   const nextLabel = getBrushLabel()
   if (!labels || !position || nextLabel == null) return false
 
   const hitLocal = mesh.worldToLocal(intersect.point.clone())
   const radiusSq = brushRadius.value * brushRadius.value
+  const screenBrushSearchRadiusSq = radiusSq * 4
   const faceCount = Math.floor(position.count / 3)
-  const center = new THREE.Vector3()
+  const triangle = new THREE.Triangle()
+  const closestPoint = new THREE.Vector3()
+  const canvasPoint = brushMode.value === 'erase' && event ? getCanvasPoint(event) : null
+  const brushCenter = canvasPoint ? new THREE.Vector2(canvasPoint.x, canvasPoint.y) : null
+  const brushRadiusPx = canvasPoint ? getBrushScreenRadiusPx(intersect.point, canvasPoint) : 0
   let changed = false
 
   for (let faceIndex = 0; faceIndex < faceCount; faceIndex++) {
-    getTriangleCenter(mesh.geometry, faceIndex, center)
-    if (center.distanceToSquared(hitLocal) > radiusSq) continue
-    if (faceLabel(labels, faceIndex) === nextLabel) continue
-    setFaceLabel(labels, faceIndex, nextLabel)
-    changed = true
+    getTriangleFromFace(mesh.geometry, faceIndex, triangle)
+    const worldDistanceSq = distancePointToTriangleSq(hitLocal, triangle, closestPoint)
+    const isInWorldBrush = worldDistanceSq <= radiusSq
+    const isInScreenBrush =
+      !isInWorldBrush && worldDistanceSq <= screenBrushSearchRadiusSq && brushCenter && canvasPoint
+        ? doesFaceOverlapBrushScreen(mesh, faceIndex, brushCenter, brushRadiusPx, canvasPoint)
+        : false
+    if (!isInWorldBrush && !isInScreenBrush) continue
+    const base = faceIndex * 3
+    for (let offset = 0; offset < 3; offset++) {
+      const vertexIndex = base + offset
+      if (labels[vertexIndex] === nextLabel) continue
+      setVertexLabelWithLogicalGroup(labels, logicalVertexGroups, vertexIndex, nextLabel)
+      changed = true
+    }
   }
 
   if (!changed) return false
+  syncFaceLabelsFromVertexMajority(labels)
   refreshMeshLabels(mesh)
   pendingBoundaryRefreshMeshes.add(mesh)
   return true
@@ -2095,7 +2163,7 @@ function paintAtIntersect(intersect: THREE.Intersection) {
 function paintAtPointer(event: PointerEvent) {
   const hit = getMeshIntersect(event)
   updateBrushIndicator(hit)
-  return hit ? paintAtIntersect(hit) : false
+  return hit ? paintAtIntersect(hit, event) : false
 }
 
 function endPaint(event?: PointerEvent) {
@@ -2118,11 +2186,6 @@ function endPaint(event?: PointerEvent) {
 function onPointerDown(event: PointerEvent) {
   if (!camera || !controls || !renderer || !updatePointer(event)) return
 
-  if (event.button === 0 && openFdiEditorFromLabel(event)) {
-    event.preventDefault()
-    return
-  }
-
   if (activeTool.value === 'paint') {
     if (event.button !== 0) return
 
@@ -2140,7 +2203,7 @@ function onPointerDown(event: PointerEvent) {
     controls.enabled = false
     renderer.domElement.setPointerCapture(event.pointerId)
     renderer.domElement.classList.add('painting-labels')
-    paintAtIntersect(hit)
+    paintAtIntersect(hit, event)
     event.preventDefault()
     return
   }
@@ -2471,106 +2534,6 @@ onUnmounted(() => {
 
 .json-input {
   display: none;
-}
-
-.fdi-dialog-mask {
-  position: fixed;
-  inset: 0;
-  z-index: 30;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(15, 23, 42, 0.34);
-}
-
-.fdi-dialog {
-  width: 320px;
-  overflow: hidden;
-  background: #ffffff;
-  border: 1px solid #d8e0ea;
-  border-radius: 8px;
-  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.22);
-}
-
-.fdi-dialog__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 44px;
-  padding: 0 14px;
-  color: #1f2937;
-  font-weight: 600;
-  border-bottom: 1px solid #e3e8ef;
-}
-
-.fdi-dialog__close {
-  width: 28px;
-  height: 28px;
-  color: #64748b;
-  cursor: pointer;
-  background: transparent;
-  border: 0;
-  border-radius: 6px;
-  font-size: 20px;
-  line-height: 26px;
-}
-
-.fdi-dialog__close:hover {
-  color: #1f2937;
-  background: #eef2f6;
-}
-
-.fdi-dialog__body {
-  display: grid;
-  gap: 12px;
-  padding: 14px;
-}
-
-.fdi-field {
-  display: grid;
-  gap: 6px;
-  color: #475569;
-  font-size: 13px;
-}
-
-.fdi-input {
-  width: 100%;
-  height: 36px;
-  padding: 0 10px;
-  color: #1f2937;
-  background: #ffffff;
-  border: 1px solid #cfd8e3;
-  border-radius: 6px;
-  outline: none;
-}
-
-.fdi-input:focus {
-  border-color: #2474e8;
-  box-shadow: 0 0 0 3px rgba(36, 116, 232, 0.12);
-}
-
-.fdi-input:disabled {
-  color: #64748b;
-  background: #f4f6f8;
-}
-
-.fdi-error {
-  margin: 0;
-  padding: 8px 10px;
-  color: #b42318;
-  background: #fff1f0;
-  border: 1px solid #ffccc7;
-  border-radius: 6px;
-  font-size: 13px;
-  line-height: 18px;
-}
-
-.fdi-dialog__footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 12px 14px;
-  border-top: 1px solid #e3e8ef;
 }
 
 .viewer {
