@@ -93,6 +93,12 @@ const router = createRouter({
       component: () => import('@/page/allStl/index.vue'),
       meta: { title: 'STL联合编辑' },
     },
+    {
+      path: '/directionStl',
+      name: 'directionStl',
+      component: () => import('@/page/directionStl/index.vue'),
+      meta: { title: 'STL direction' },
+    },
   ],
 })
 

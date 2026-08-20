@@ -222,6 +222,7 @@ const boundarySampleSize = 1.8
 const meshes: Partial<Record<JawType, THREE.Mesh>> = {}
 const labelGroups: Partial<Record<JawType, THREE.Group>> = {}
 const boundaryGroups: Partial<Record<JawType, THREE.Group>> = {}
+const originalJawJsonTemplates: Partial<Record<JawType, OriginalJawJson>> = {}
 const meshLabelMap = new WeakMap<THREE.Mesh, number[]>()
 const meshLogicalVertexGroups = new WeakMap<THREE.Mesh, number[][]>()
 const raycaster = new THREE.Raycaster()
@@ -303,14 +304,16 @@ type ExportedBoundaryLoop = {
   controlEdgeKeys: string[]
 }
 
-type ExportedJawJson = {
-  version: 1
-  jaw: JawType
-  faceLabels: number[]
-  labels: number[]
-  boundary: {
-    loops: ExportedBoundaryLoop[]
+type OriginalJawJson = LabelPayload & {
+  id_patient?: unknown
+  jaw?: JawType | string
+  instances?: unknown
+  metadata?: unknown
+  version?: unknown
+  boundary?: {
+    loops?: ExportedBoundaryLoop[]
   }
+  [key: string]: unknown
 }
 
 let boundaryDragState: BoundaryDragState | null = null
@@ -371,16 +374,26 @@ function labelsToVertexLabels(
 }
 
 async function loadLabels(config: JawConfig, geometry: THREE.BufferGeometry) {
-  const pointsPayload = await fetchJson<LabelPayload>(config.pointsUrl)
+  const pointsPayload = await fetchJson<OriginalJawJson>(config.pointsUrl)
   const fromPoints = labelsToVertexLabels(geometry, pointsPayload)
   if (fromPoints.sourceMatched) {
-    return { labels: fromPoints.labels, source: config.pointsUrl, usedFallback: false }
+    return {
+      labels: fromPoints.labels,
+      source: config.pointsUrl,
+      usedFallback: false,
+      template: pointsPayload,
+    }
   }
 
-  const fallbackPayload = await fetchJson<LabelPayload>(config.fallbackLabelUrl)
+  const fallbackPayload = await fetchJson<OriginalJawJson>(config.fallbackLabelUrl)
   const fromFallback = labelsToVertexLabels(geometry, fallbackPayload)
   if (fromFallback.sourceMatched) {
-    return { labels: fromFallback.labels, source: config.fallbackLabelUrl, usedFallback: true }
+    return {
+      labels: fromFallback.labels,
+      source: config.fallbackLabelUrl,
+      usedFallback: true,
+      template: fallbackPayload,
+    }
   }
 
   const position = geometry.getAttribute('position') as THREE.BufferAttribute
@@ -1031,6 +1044,7 @@ async function createJawMesh(config: JawConfig) {
 
   const labelResult = await loadLabels(config, geometry)
   paintGeometryByLabels(geometry, labelResult.labels)
+  originalJawJsonTemplates[config.jaw] = labelResult.template
 
   const material = new THREE.MeshPhongMaterial({
     color: 0xffffff,
@@ -1141,22 +1155,24 @@ function triggerImportJson() {
   jsonInputRef.value.click()
 }
 
-function getExportedBoundaryLoops(jaw: JawType) {
-  const group = boundaryGroups[jaw]
-  const loops = (group?.userData.boundaryLoops as BoundaryLoopData[] | undefined) ?? []
-  const points = group?.getObjectByName('tooth-boundary-points') as THREE.Points | undefined
-  const controls = points?.userData.boundaryControlPoints as BoundaryControlPointData[] | undefined
+function buildOriginalFormatJson(jaw: JawType, labels: number[]) {
+  const template = originalJawJsonTemplates[jaw]
+  const rest = { ...(template ?? {}) }
+  delete rest.version
+  delete rest.faceLabels
+  delete rest.boundary
 
-  return loops.map((loop): ExportedBoundaryLoop => {
-    const controlEdgeKeys = loop.controlPointIndices
-      .map((pointIndex) => controls?.[pointIndex]?.edgeKey)
-      .filter((edgeKey): edgeKey is string => !!edgeKey)
-    return {
-      toothId: loop.toothId,
-      edgeKeys: loop.edgeKeys,
-      controlEdgeKeys,
-    }
-  })
+  return Object.assign(
+    {
+      id_patient: '',
+      jaw,
+      labels: [...labels],
+      instances: [],
+      metadata: {},
+    },
+    rest,
+    { jaw, labels: [...labels] },
+  )
 }
 
 function isValidFdi(value: number | null) {
@@ -1232,15 +1248,7 @@ function exportJawJson(jaw: JawType) {
     return
   }
 
-  const payload: ExportedJawJson = {
-    version: 1,
-    jaw,
-    faceLabels: vertexLabelsToFaceLabels(labels),
-    labels: [...labels],
-    boundary: {
-      loops: getExportedBoundaryLoops(jaw),
-    },
-  }
+  const payload = buildOriginalFormatJson(jaw, labels)
 
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
@@ -1266,9 +1274,12 @@ function replaceBoundaryGroup(mesh: THREE.Mesh, jaw: JawType, nextGroup: THREE.G
   syncVisibility()
 }
 
-function applyImportedJawJson(payload: ExportedJawJson) {
-  const mesh = meshes[payload.jaw]
-  if (!mesh) throw new Error(`Mesh ${payload.jaw} is not loaded.`)
+function applyImportedJawJson(payload: OriginalJawJson) {
+  const jaw = payload.jaw
+  if (jaw !== 'upper' && jaw !== 'lower') throw new Error('JSON jaw must be upper or lower.')
+
+  const mesh = meshes[jaw]
+  if (!mesh) throw new Error(`Mesh ${jaw} is not loaded.`)
 
   const position = mesh.geometry.getAttribute('position') as THREE.BufferAttribute
   const faceCount = Math.floor(position.count / 3)
@@ -1282,10 +1293,11 @@ function applyImportedJawJson(payload: ExportedJawJson) {
 
   if (!importedLabels) {
     throw new Error(
-      `JSON labels do not match ${payload.jaw}: expected ${faceCount} face labels or ${vertexCount} vertex labels.`,
+      `JSON labels do not match ${jaw}: expected ${faceCount} face labels or ${vertexCount} vertex labels.`,
     )
   }
 
+  originalJawJsonTemplates[jaw] = payload
   meshLabelMap.set(mesh, importedLabels)
   meshLogicalVertexGroups.set(mesh, buildLogicalVertexGroups(mesh.geometry))
   refreshMeshLabels(mesh)
@@ -1294,8 +1306,8 @@ function applyImportedJawJson(payload: ExportedJawJson) {
   const boundaryGroup = boundaryLoops.length
     ? buildBoundaryGroupFromExportedLoops(mesh.geometry, boundaryLoops)
     : buildBoundaryGroup(mesh.geometry, importedLabels)
-  replaceBoundaryGroup(mesh, payload.jaw, boundaryGroup)
-  statusText.value = `Imported ${payload.jaw} JSON.`
+  replaceBoundaryGroup(mesh, jaw, boundaryGroup)
+  statusText.value = `Imported ${jaw} JSON.`
 }
 
 async function handleImportJson(event: Event) {
@@ -1304,8 +1316,9 @@ async function handleImportJson(event: Event) {
   if (!file) return
 
   try {
-    const payload = JSON.parse(await file.text()) as ExportedJawJson
-    if (payload.version !== 1 || (payload.jaw !== 'upper' && payload.jaw !== 'lower')) {
+    const payload = JSON.parse(await file.text()) as OriginalJawJson
+    console.log(payload, 'payload')
+    if (payload.jaw !== 'upper' && payload.jaw !== 'lower') {
       throw new Error('Unsupported JSON payload.')
     }
     applyImportedJawJson(payload)
