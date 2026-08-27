@@ -29,6 +29,9 @@ coverage
 
 *.tsbuildinfo
 
+# Local git worktrees
+/.worktrees/
+
 # Playwright
 /test-results/
 /playwright-report/
