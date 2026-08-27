@@ -1,220 +1,186 @@
-# Model Repair Page Design
+# 模型修复页面设计
 
-## Goal
+## 目标
 
-Add a dedicated model repair step after `allStl`. The first release supports raising,
-lowering, and smoothing mesh surfaces with adjustable brush range and strength, plus
-undo and redo. Cutting and hole filling are explicitly out of scope for this release.
+在 `allStl` 之后新增一个独立的模型修复步骤。第一版支持使用可调节范围和强度的笔刷对模型表面进行升高、压低和平滑处理，并支持撤销和重做。裁剪和补洞明确不在第一版范围内。
 
-The repair step must receive the current upper and lower jaw geometries, including
-changes made by gum deletion, and preserve geometry and label data for later JSON or
-STL export.
+修复页面必须接收当前的上下颌几何模型，包括已经执行的牙龈删除结果，并保留几何和标签数据，以便后续导出 JSON 或 STL。
 
-## User Flow
+## 用户流程
 
-1. The user finishes segmentation and gum deletion on `/allStl`.
-2. The user clicks `保存并下一步`.
-3. Pending deletion previews, if any, must be confirmed or cancelled before continuing.
-4. The page serializes all loaded jaw meshes into the existing geometry payload format.
-5. The app stores the payload under a generated transfer ID and navigates to
-   `/modelRepair?task=<transfer-id>`.
-6. The repair page displays both jaws. A brush stroke edits only the mesh under the
-   pointer.
-7. The user selects `升高`, `压低`, or `平滑`, adjusts range and strength, and drags on
-   the surface.
-8. The user can undo or redo completed strokes.
-9. `保存` updates the transferred model payload and stays on the repair page. Export
-   actions can create JSON or STL from the repaired geometry.
+1. 用户在 `/allStl` 页面完成牙齿分割和牙龈删除。
+2. 用户点击“保存并下一步”。
+3. 如果仍有尚未确认的删除预览，必须先确认或取消，才能继续。
+4. 页面将所有已加载的颌骨网格转换成现有的几何数据格式。
+5. 应用使用生成的任务 ID 保存模型数据，然后跳转到 `/modelRepair?task=<任务ID>`。
+6. 修复页面显示上下颌模型；一次笔刷操作只编辑鼠标命中的模型。
+7. 用户选择“升高”“压低”或“平滑”，调整范围和强度后，在模型表面拖动鼠标。
+8. 用户可以撤销或重做已经完成的笔刷操作。
+9. 点击“保存”会更新当前任务中的模型数据并停留在修复页面；导出功能可以根据修复后的几何数据生成 JSON 或 STL。
 
-## Architecture
+## 整体架构
 
-### Page and Routing
+### 页面和路由
 
-- Add `src/page/modelRepair/index.vue` for the Three.js viewer and repair controls.
-- Add a `/modelRepair` route in `src/router/index.ts`.
-- Add a `保存并下一步` action to `src/page/allStl/index.vue`.
-- Keep the repair page independent from segmentation UI. It consumes and produces a
-  shared model payload rather than importing implementation state from `allStl`.
+- 新增 `src/page/modelRepair/index.vue`，负责 Three.js 模型显示和修复工具界面。
+- 在 `src/router/index.ts` 中新增 `/modelRepair` 路由。
+- 在 `src/page/allStl/index.vue` 中新增“保存并下一步”操作。
+- 修复页面与牙齿分割界面保持独立。两个页面通过统一的模型数据格式传递数据，修复页面不直接依赖 `allStl` 的内部状态。
 
-### Transfer State
+### 页面间的数据传递
 
-Add `src/stores/modelRepair.ts` with a Pinia store that owns the active transfer:
+新增 `src/stores/modelRepair.ts` Pinia Store，管理当前修复任务：
 
-- transfer ID;
-- upper and lower jaw geometry payloads when present;
-- labels and deletion metadata already contained by each geometry payload;
-- creation and update timestamps.
+- 任务 ID；
+- 上颌和下颌的几何数据，允许其中一个不存在；
+- 几何数据中已有的牙齿标签和删除统计信息；
+- 创建时间和更新时间。
 
-Pinia provides the fast in-memory handoff. A small IndexedDB adapter persists the same
-transfer by ID so refreshing `/modelRepair` can restore the model. The route contains
-only the transfer ID; large geometry arrays are never encoded in the URL or stored in
-`sessionStorage`.
+Pinia 用于页面跳转时的快速内存传递。同时通过一个小型 IndexedDB 工具，按照任务 ID 将相同数据保存到浏览器本地，使 `/modelRepair` 页面刷新后仍能恢复模型。
 
-If the transfer ID is missing or cannot be restored, the repair page shows a clear
-empty state with a button returning to `/allStl`. It does not silently load a different
-model.
+路由地址中只保存任务 ID。体积较大的模型顶点数组不会写进 URL，也不会写入容量有限的 `sessionStorage`。
 
-### Geometry Modules
+如果任务 ID 缺失或无法恢复，修复页面显示明确的空状态和“返回模型分割”按钮，不自动加载其他模型。
 
-Add focused utilities under `src/page/modelRepair/utils/`:
+### 几何处理模块
 
-- `sculptUtils.ts`: brush falloff, raise/lower displacement, smoothing, and normal
-  updates;
-- `meshTopologyUtils.ts`: logical vertex groups and vertex adjacency;
-- `historyUtils.ts`: compact undo and redo commands;
-- `modelTransferUtils.ts`: conversion between transfer payloads and Three.js meshes.
+在 `src/page/modelRepair/utils/` 下新增职责清晰的工具文件：
 
-The existing `geometryPayloadUtils.ts` remains the shared serialization contract. If
-needed, it will move to a neutral shared directory with compatibility imports so the
-segmentation and repair pages use one implementation.
+- `sculptUtils.ts`：笔刷衰减、升高/压低位移、平滑和法线更新；
+- `meshTopologyUtils.ts`：逻辑顶点分组和顶点邻接关系；
+- `historyUtils.ts`：轻量的撤销和重做命令；
+- `modelTransferUtils.ts`：任务数据和 Three.js 网格之间的转换。
 
-## Sculpting Behavior
+现有的 `geometryPayloadUtils.ts` 继续作为统一的几何序列化格式。如果两个页面都需要直接使用它，可以将其移动到公共目录，同时保留兼容导入，确保分割和修复页面使用同一套实现。
 
-### Hit Testing
+## 模型修复行为
 
-Use the existing `three-mesh-bvh` dependency to accelerate raycasting and brush-area
-queries. On pointer down, the nearest visible jaw surface becomes the stroke target.
-The target stays fixed until pointer up so a single stroke cannot jump between jaws.
+### 模型命中检测
 
-Orbit controls are disabled while a repair stroke is active and restored when it ends
-or is cancelled.
+使用项目中已有的 `three-mesh-bvh` 加速光线拾取和笔刷范围查询。
 
-### Brush Range and Falloff
+鼠标按下时，距离鼠标最近的可见颌骨模型成为本次笔刷操作的目标。直到鼠标松开前，目标模型保持不变，避免一次操作从上颌意外跳到下颌。
 
-The range value is a world-space radius in millimeters. A visible circular cursor is
-oriented to the hit surface. Vertices inside the radius receive a smooth radial falloff:
-full influence near the center and zero influence at the edge.
+开始修复操作后临时禁用模型旋转；鼠标松开、操作取消或异常结束时恢复旋转控制。
 
-The same range control applies to all three tools. Strength is measured in millimeters
-for raise and lower. For smoothing it controls interpolation strength and is presented
-with a UI value compatible with the provided design.
+### 笔刷范围和衰减
 
-### Raise and Lower
+范围值使用模型世界坐标中的毫米半径。鼠标位于模型表面时，显示一个贴合命中表面方向的圆形笔刷指示器。
 
-Raise moves affected logical vertices along their averaged local normal. Lower uses the
-same displacement in the opposite direction. Influence is multiplied by brush falloff,
-strength, and pointer movement spacing so results are stable across different mouse
-event rates.
+笔刷范围内的顶点使用平滑的径向衰减：圆心附近影响最大，越靠近边缘影响越小，到达笔刷边缘时影响为零。
 
-STL geometry is commonly non-indexed and contains duplicate positions for adjacent
-triangles. Duplicate positions are grouped as logical vertices and always moved
-together. This prevents cracks from opening between triangles during sculpting.
+三个工具共用同一个范围设置。升高和压低的强度以毫米表示；平滑工具的强度表示每次向邻接顶点平均位置靠近的程度，但界面数值仍按照参考设计的方式显示。
 
-### Smooth
+### 升高和压低
 
-Smooth uses adjacency-aware Laplacian smoothing on affected logical vertices. The
-brush falloff and strength limit each interpolation step. Boundary and isolated
-vertices receive conservative influence to reduce shrinking and edge collapse.
+“升高”将受影响的逻辑顶点沿平均局部法线向外移动；“压低”使用相同计算方式沿反方向移动。
 
-The first release does not remesh, add triangles, or remove triangles. Smoothing changes
-positions only, so labels and face counts remain stable.
+最终位移由笔刷衰减、强度和鼠标移动间距共同决定，避免不同浏览器事件频率导致修复结果明显不同。
 
-### Geometry Refresh
+STL 通常使用非索引几何，同一个实际位置会为相邻三角形保存多个重复顶点。系统会把相同位置的重复顶点组成一个逻辑顶点组，并始终一起移动，从而防止修复后相邻三角形之间出现裂缝。
 
-During a stroke, changed position ranges are marked for GPU update. Bounding volumes
-and vertex normals are recomputed at a throttled rate for responsive feedback, then
-fully refreshed on pointer up. The BVH is refitted or rebuilt after the stroke so later
-raycasts match the edited surface.
+### 平滑
 
-## Undo and Redo
+“平滑”对笔刷范围内的逻辑顶点执行基于邻接关系的拉普拉斯平滑。笔刷衰减和强度共同限制每次插值幅度。
 
-One pointer-down to pointer-up gesture creates one history command. A command contains:
+对于模型边界和孤立顶点，使用更保守的影响比例，减少模型收缩、边缘塌陷或尖角被过度削弱的问题。
 
-- jaw identifier;
-- changed logical vertex indices;
-- positions before the stroke;
-- positions after the stroke.
+第一版不重新划分网格，不新增或删除三角形。平滑只修改顶点位置，因此牙齿标签、面数量和面顺序保持不变。
 
-Undo restores the before positions and redo restores the after positions. Starting a
-new stroke after undo clears the redo stack. History has both an operation limit and an
-approximate memory limit; oldest commands are removed first. The initial limits are 50
-strokes and 128 MB, whichever is reached first.
+### 几何数据刷新
 
-Navigation and export do not create history commands. Switching tools ends any active
-stroke cleanly.
+笔刷拖动过程中，只将发生变化的顶点范围标记为需要更新。包围盒、包围球和顶点法线按照受控频率刷新，以保持操作反馈流畅；鼠标松开后再执行一次完整刷新。
 
-## UI
+一次笔刷操作结束后，重新调整或重建 BVH，确保后续鼠标拾取使用的是修改后的模型表面。
 
-The repair page uses the current full-viewer layout with a compact repair panel:
+## 撤销和重做
 
-- upper/lower visibility controls;
-- mutually exclusive `升高`, `压低`, and `平滑` tool buttons;
-- range and strength sliders with numeric millimeter values;
-- undo and redo icon buttons with disabled states;
-- `上一步` and `保存` actions;
-- a concise status or error area for loading and persistence failures.
+从鼠标按下到鼠标松开算作一条历史记录。每条记录包含：
 
-The default tool is `平滑`. The default range and strength values will be conservative
-and can be tuned against the current sample dental scans. The canvas remains usable on
-desktop widths already supported by `allStl`; mobile-specific sculpting is not part of
-the first release.
+- 上颌或下颌标识；
+- 本次发生变化的逻辑顶点索引；
+- 操作前的顶点位置；
+- 操作后的顶点位置。
 
-`上一步` returns to `/allStl` without inventing a later workflow destination. The first
-release does not add a `保存并下一步` destination on the repair page because no following
-business step has been specified.
+撤销操作恢复修改前的位置，重做操作恢复修改后的位置。撤销后如果开始新的笔刷操作，则清空重做记录。
 
-## Data Integrity
+历史记录同时设置操作次数上限和内存上限，先达到任意一个上限时，从最早的记录开始清理。初始限制为最多 50 次操作或约 128 MB 内存。
 
-- The transferred payload includes the post-deletion position array, labels, normals,
-  and source/removed face counts.
-- Repair operations do not alter vertex count, face order, labels, or jaw identity.
-- Saving recalculates normals and serializes current positions into the same payload
-  contract.
-- JSON restoration must reproduce the repaired geometry without restoring deleted gum.
-- STL export contains only the current triangles and current repaired positions.
+页面跳转和模型导出不生成历史记录。切换修复工具时，会安全结束当前尚未完成的笔刷操作。
 
-## Error Handling
+## 页面界面
 
-- Block navigation when no jaw geometry is ready.
-- Block navigation while a gum deletion preview is awaiting confirmation.
-- Restore from IndexedDB when Pinia state is empty after refresh.
-- Show a recoverable error and return action if persistence or payload validation fails.
-- Ignore a stroke that does not hit a visible jaw.
-- Cancel an active stroke safely if the pointer leaves the canvas or the component
-  unmounts.
+修复页面沿用当前全屏模型查看区域，并提供紧凑的修复控制面板：
 
-## Testing
+- 上颌和下颌显示开关；
+- 互斥的“升高”“压低”“平滑”工具按钮；
+- 范围和强度滑块，以及对应的毫米数值输入；
+- 带禁用状态的撤销和重做图标按钮；
+- “上一步”和“保存”操作；
+- 用于显示加载、保存和数据异常的简洁状态区域。
 
-Unit tests cover:
+默认工具为“平滑”。默认范围和强度使用较保守的数值，并根据当前口扫样例进行调试。
 
-- brush falloff at center, interior, and boundary;
-- equal movement of duplicate logical vertices;
-- raise and lower direction and magnitude;
-- smoothing influence and unchanged out-of-range vertices;
-- compact history undo/redo and redo invalidation;
-- transfer payload round-trip with labels and deletion metadata.
+页面支持当前 `allStl` 已覆盖的桌面宽度。第一版不包含移动端触摸雕刻适配。
 
-Page-level tests cover:
+“上一步”返回 `/allStl`。由于目前没有明确指定修复完成后的下一个业务页面，第一版修复页不添加“保存并下一步”的跳转目标。
 
-- `allStl` creating a transfer and navigating to `/modelRepair`;
-- repair page restoration from the store and IndexedDB fallback;
-- a stroke creating one history command;
-- undo and redo button states;
-- saving repaired positions back into the payload.
+## 数据完整性
 
-Manual browser verification uses representative upper and lower jaw models and checks
-that repeated strokes do not create visible triangle cracks, pointer interaction stays
-responsive, and exported JSON restores the same repaired surface.
+- 传递的数据包含删除牙龈后的顶点位置、标签、法线、原始面数量和已删除面数量。
+- 模型修复不会改变顶点数量、三角面顺序、牙齿标签和上下颌身份。
+- 保存时重新计算法线，并将当前顶点位置写入统一的几何数据格式。
+- 重新导入 JSON 后，必须恢复修复后的模型，并且已经删除的牙龈不能重新出现。
+- STL 导出只包含当前仍然存在的三角面和修复后的顶点位置。
 
-## Performance Targets
+## 异常处理
 
-- Brush feedback should remain interactive on the current representative dental scans.
-- Pointer movement work is throttled to animation frames.
-- BVH queries limit the candidate vertex set before sculpt calculations.
-- History stores changed vertices only and is bounded by count and memory.
-- Full geometry serialization occurs on navigation or explicit save, not during every
-  pointer event.
+- 没有任何颌骨模型准备完成时，禁止进入修复页面。
+- 仍有牙龈删除预览等待确认时，禁止进入修复页面。
+- 页面刷新后 Pinia 中没有数据时，尝试从 IndexedDB 恢复。
+- 数据保存失败、读取失败或格式校验失败时，显示可恢复的错误信息和返回操作。
+- 笔刷没有命中可见颌骨时，不执行修改。
+- 鼠标离开画布或组件卸载时，安全取消尚未完成的笔刷操作。
 
-## Delivery Estimate
+## 测试
 
-The expected implementation time is four to six working days:
+单元测试覆盖：
 
-- transfer state, route, and repair page viewer: one day;
-- topology, BVH brush selection, raise, and lower: one to two days;
-- smoothing and normal/BVH refresh: one day;
-- undo/redo and bounded history: one day;
-- tests, export verification, and performance tuning: one day.
+- 笔刷圆心、内部和边缘位置的衰减值；
+- 同一逻辑顶点组中的重复顶点始终同步移动；
+- 升高和压低的方向与位移量；
+- 平滑影响以及范围外顶点保持不变；
+- 轻量历史记录的撤销、重做和重做失效；
+- 模型传递数据往返转换后，标签和删除信息保持一致。
 
-Large or unusually noisy scans may require an additional one to two days of tuning.
-Cutting, hole filling, remeshing, mobile touch sculpting, and server-side persistence are
-not included in this estimate.
+页面级测试覆盖：
+
+- `allStl` 创建修复任务并跳转到 `/modelRepair`；
+- 修复页面从 Pinia 恢复模型，以及刷新后从 IndexedDB 恢复模型；
+- 一次完整笔刷操作只生成一条历史记录；
+- 撤销和重做按钮的状态变化；
+- 保存后，修复后的顶点位置正确写回模型数据。
+
+浏览器人工验证使用具有代表性的上下颌模型，重点检查多次笔刷操作后是否出现三角形裂缝、拖动反馈是否流畅，以及导出的 JSON 能否恢复完全相同的修复表面。
+
+## 性能目标
+
+- 在当前有代表性的口扫模型上，笔刷反馈保持可交互状态。
+- 鼠标移动计算按照动画帧进行节流。
+- 先通过 BVH 查询缩小候选顶点范围，再进行笔刷计算。
+- 历史记录只保存发生变化的顶点，并限制记录次数和内存占用。
+- 完整模型序列化只在页面跳转或用户主动保存时执行，不在每次鼠标移动时执行。
+
+## 工作量和时间
+
+预计开发时间为 4～6 个工作日：
+
+- 页面间数据传递、路由和修复页面模型显示：1 天；
+- 拓扑关系、BVH 笔刷选择、升高和压低：1～2 天；
+- 平滑、法线刷新和 BVH 更新：1 天；
+- 撤销、重做和历史记录内存限制：1 天；
+- 测试、导出验证和性能调试：1 天。
+
+如果遇到体积特别大或噪点很多的口扫模型，可能还需要额外 1～2 天进行性能和参数调试。
+
+本次时间估算不包含裁剪、补洞、重新划分网格、移动端触摸雕刻和服务端数据持久化。
