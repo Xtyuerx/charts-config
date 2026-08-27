@@ -67,6 +67,31 @@
       >
         擦除
       </button>
+      <button
+        class="tool-button danger"
+        :class="{ active: brushMode === 'deleteGum' }"
+        :disabled="activeTool !== 'paint'"
+        type="button"
+        @click="brushMode = 'deleteGum'"
+      >
+        删除牙龈
+      </button>
+      <button
+        class="tool-button danger"
+        :disabled="!hasDeletePreview"
+        type="button"
+        @click="confirmDeletePreview"
+      >
+        确认删除
+      </button>
+      <button
+        class="tool-button"
+        :disabled="!hasDeletePreview"
+        type="button"
+        @click="cancelDeletePreview"
+      >
+        取消
+      </button>
       <label class="tool-item">
         <span>牙号</span>
         <input
@@ -123,20 +148,30 @@
       accept="application/json,.json"
       @change="handleImportJson"
     />
-    <div ref="containerRef" class="viewer"></div>
+    <div ref="containerRef" class="viewer">
+      <canvas ref="selectionCanvasRef" class="selection-canvas"></canvas>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, markRaw, onMounted, onUnmounted, ref, shallowRef } from 'vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { STLLoader } from 'three-stdlib'
+import {
+  buildGeometryPayloadFromMesh,
+  createGeometryFromPayload,
+  filterMeshGeometryFaces,
+  getFacesInsideScreenPolygon,
+  type ScreenPoint,
+  type MeshGeometryPayload,
+} from './utils/geometryPayloadUtils'
 
 type JawType = 'upper' | 'lower'
 type ToolMode = 'paint' | 'boundary'
 type WorkflowMode = 'paintThenBoundary' | 'boundaryOnly'
-type BrushMode = 'tooth' | 'gingiva' | 'erase'
+type BrushMode = 'tooth' | 'gingiva' | 'erase' | 'deleteGum'
 
 type LabelPayload = {
   labels?: number[]
@@ -152,6 +187,7 @@ type JawConfig = {
 }
 
 const containerRef = ref<HTMLDivElement | null>(null)
+const selectionCanvasRef = ref<HTMLCanvasElement | null>(null)
 const jsonInputRef = ref<HTMLInputElement | null>(null)
 const statusText = ref('正在准备 3D 场景...')
 const showUpper = ref(true)
@@ -263,6 +299,13 @@ type BoundaryHoverState = BoundaryPickResult & {
   originalColor: THREE.Color
 }
 
+type DeletePreviewItem = {
+  mesh: THREE.Mesh
+  faceIndices: Set<number>
+  labels: number[]
+  previewMesh: THREE.Mesh
+}
+
 type FaceEdgeRef = {
   edgeKey: string
   neighbor: number | null
@@ -313,6 +356,7 @@ type OriginalJawJson = LabelPayload & {
   boundary?: {
     loops?: ExportedBoundaryLoop[]
   }
+  geometry?: MeshGeometryPayload
   [key: string]: unknown
 }
 
@@ -324,7 +368,12 @@ let renderer: THREE.WebGLRenderer | null = null
 let controls: OrbitControls | null = null
 let brushIndicator: THREE.Mesh | null = null
 let isPainting = false
-let pendingBoundaryRefreshMeshes = new Set<THREE.Mesh>()
+let isDrawingDeleteSelection = false
+let deleteSelectionPoints: ScreenPoint[] = []
+let deleteSelectionMesh: THREE.Mesh | null = null
+const deletePreviewState = shallowRef<DeletePreviewItem[]>([])
+const hasDeletePreview = computed(() => deletePreviewState.value.length > 0)
+const pendingBoundaryRefreshMeshes = new Set<THREE.Mesh>()
 let rafId = 0
 
 function colorForLabel(label: number): THREE.Color {
@@ -1059,6 +1108,10 @@ async function createJawMesh(config: JawConfig) {
   mesh.userData.labelSource = labelResult.source
   mesh.userData.usedFallback = labelResult.usedFallback
   mesh.userData.jaw = config.jaw
+  mesh.userData.sourceFaceCount = Math.floor(
+    ((geometry.getAttribute('position') as THREE.BufferAttribute | undefined)?.count ?? 0) / 3,
+  )
+  mesh.userData.removedFaceCount = 0
   meshLabelMap.set(mesh, labelResult.labels)
   meshLogicalVertexGroups.set(mesh, buildLogicalVertexGroups(geometry))
 
@@ -1157,21 +1210,39 @@ function triggerImportJson() {
 
 function buildOriginalFormatJson(jaw: JawType, labels: number[]) {
   const template = originalJawJsonTemplates[jaw]
+  const mesh = meshes[jaw]
   const rest = { ...(template ?? {}) }
   delete rest.version
   delete rest.faceLabels
   delete rest.boundary
+  delete rest.geometry
+
+  const sourceFaceCount =
+    Number(mesh?.userData.sourceFaceCount) ||
+    Math.floor(
+      ((mesh?.geometry.getAttribute('position') as THREE.BufferAttribute | undefined)?.count ?? 0) /
+        3,
+    )
+  const removedFaceCount = Number(mesh?.userData.removedFaceCount ?? 0)
+  const geometry =
+    mesh && labels.length
+      ? buildGeometryPayloadFromMesh(mesh.geometry, labels, {
+          sourceFaceCount,
+          removedFaceCount,
+        })
+      : undefined
 
   return Object.assign(
     {
       id_patient: '',
       jaw,
       labels: [...labels],
+      geometry,
       instances: [],
       metadata: {},
     },
     rest,
-    { jaw, labels: [...labels] },
+    { jaw, labels: [...labels], geometry },
   )
 }
 
@@ -1281,15 +1352,26 @@ function applyImportedJawJson(payload: OriginalJawJson) {
   const mesh = meshes[jaw]
   if (!mesh) throw new Error(`Mesh ${jaw} is not loaded.`)
 
+  if (payload.geometry) {
+    const restored = createGeometryFromPayload(payload.geometry)
+    const oldGeometry = mesh.geometry
+    mesh.geometry = restored.geometry
+    oldGeometry.dispose()
+    mesh.userData.sourceFaceCount = payload.geometry.sourceFaceCount
+    mesh.userData.removedFaceCount = payload.geometry.removedFaceCount
+  }
+
   const position = mesh.geometry.getAttribute('position') as THREE.BufferAttribute
   const faceCount = Math.floor(position.count / 3)
   const vertexCount = position.count
   const importedLabels =
-    payload.faceLabels?.length === faceCount
-      ? faceLabelsToVertexLabels(payload.faceLabels.map(Number))
-      : payload.labels?.length === vertexCount
-        ? payload.labels.map(Number)
-        : null
+    payload.geometry?.labels?.length === vertexCount
+      ? payload.geometry.labels.map(Number)
+      : payload.faceLabels?.length === faceCount
+        ? faceLabelsToVertexLabels(payload.faceLabels.map(Number))
+        : payload.labels?.length === vertexCount
+          ? payload.labels.map(Number)
+          : null
 
   if (!importedLabels) {
     throw new Error(
@@ -2058,12 +2140,14 @@ function getVisibleMeshes() {
 }
 
 function getBrushLabel() {
+  if (brushMode.value === 'deleteGum') return null
   if (brushMode.value === 'gingiva' || brushMode.value === 'erase') return 0
   const toothId = Number(selectedToothId.value)
   return Number.isFinite(toothId) && toothId > 0 ? toothId : null
 }
 
 function getBrushColor() {
+  if (brushMode.value === 'deleteGum') return new THREE.Color(0xff4d4f)
   if (brushMode.value === 'erase') return new THREE.Color(0x8a96a3)
   const label = getBrushLabel()
   return label == null ? new THREE.Color(0xff3333) : colorForLabel(label)
@@ -2107,6 +2191,185 @@ function createBrushIndicator() {
   scene.add(brushIndicator)
 }
 
+function resizeSelectionCanvas() {
+  const canvas = selectionCanvasRef.value
+  const container = containerRef.value
+  if (!canvas || !container) return
+  const width = container.clientWidth
+  const height = container.clientHeight || 600
+  const pixelRatio = Math.min(window.devicePixelRatio || 1, 2)
+  canvas.width = Math.max(1, Math.floor(width * pixelRatio))
+  canvas.height = Math.max(1, Math.floor(height * pixelRatio))
+  canvas.style.width = `${width}px`
+  canvas.style.height = `${height}px`
+  const context = canvas.getContext('2d')
+  if (!context) return
+  context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
+  drawDeleteSelectionPath()
+}
+
+function clearSelectionCanvas() {
+  const canvas = selectionCanvasRef.value
+  const context = canvas?.getContext('2d')
+  if (!canvas || !context) return
+  context.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight)
+}
+
+function drawDeleteSelectionPath(closePath = false) {
+  const canvas = selectionCanvasRef.value
+  const context = canvas?.getContext('2d')
+  if (!canvas || !context) return
+
+  context.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight)
+  if (deleteSelectionPoints.length < 2) return
+
+  context.beginPath()
+  context.moveTo(deleteSelectionPoints[0].x, deleteSelectionPoints[0].y)
+  deleteSelectionPoints.slice(1).forEach((point) => context.lineTo(point.x, point.y))
+  if (closePath) context.closePath()
+  context.lineWidth = 2
+  context.strokeStyle = '#164cff'
+  context.fillStyle = 'rgba(22, 76, 255, 0.08)'
+  if (closePath) context.fill()
+  context.stroke()
+}
+
+function disposeDeletePreview() {
+  deletePreviewState.value.forEach((item) => {
+    item.previewMesh.parent?.remove(item.previewMesh)
+    disposeObject(item.previewMesh)
+  })
+  deletePreviewState.value = []
+}
+
+function cancelDeletePreview() {
+  disposeDeletePreview()
+  deleteSelectionPoints = []
+  deleteSelectionMesh = null
+  clearSelectionCanvas()
+  statusText.value = '已取消删除预览。'
+}
+
+function buildFaceSubsetGeometry(geometry: THREE.BufferGeometry, faceIndices: Set<number>) {
+  const position = geometry.getAttribute('position') as THREE.BufferAttribute | undefined
+  if (!position) return null
+
+  const positions: number[] = []
+  faceIndices.forEach((faceIndex) => {
+    const base = faceIndex * 3
+    for (let offset = 0; offset < 3; offset++) {
+      const vertexIndex = base + offset
+      positions.push(
+        position.getX(vertexIndex),
+        position.getY(vertexIndex),
+        position.getZ(vertexIndex),
+      )
+    }
+  })
+
+  if (!positions.length) return null
+  const nextGeometry = new THREE.BufferGeometry()
+  nextGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  nextGeometry.computeVertexNormals()
+  return nextGeometry
+}
+
+function showDeletePreview(mesh: THREE.Mesh, faceIndices: Set<number>) {
+  const labels = meshLabelMap.get(mesh)
+  if (!labels) {
+    statusText.value = '圈选范围已命中模型，但 labels 未准备好，无法生成删除预览。'
+    return
+  }
+  const previousItems = deletePreviewState.value
+  const previousItem = previousItems.find((item) => item.mesh === mesh)
+  const mergedFaceIndices = new Set(previousItem?.faceIndices ?? [])
+  faceIndices.forEach((faceIndex) => mergedFaceIndices.add(faceIndex))
+
+  const geometry = buildFaceSubsetGeometry(mesh.geometry, mergedFaceIndices)
+  if (!geometry) {
+    statusText.value = '圈选范围内没有命中可删除的模型面。'
+    return
+  }
+
+  if (previousItem) {
+    previousItem.previewMesh.parent?.remove(previousItem.previewMesh)
+    disposeObject(previousItem.previewMesh)
+  }
+
+  const previewMesh = new THREE.Mesh(
+    geometry,
+    new THREE.MeshBasicMaterial({
+      color: 0xff2d2d,
+      opacity: 0.48,
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
+  )
+  previewMesh.name = 'delete-gum-preview'
+  previewMesh.renderOrder = 1000
+  mesh.add(previewMesh)
+  const nextItem = {
+    mesh: markRaw(mesh),
+    faceIndices: markRaw(mergedFaceIndices),
+    labels: [...labels],
+    previewMesh: markRaw(previewMesh),
+  }
+  deletePreviewState.value = previousItem
+    ? previousItems.map((item) => (item === previousItem ? nextItem : item))
+    : [...previousItems, nextItem]
+
+  const totalFaceCount = deletePreviewState.value.reduce(
+    (sum, item) => sum + item.faceIndices.size,
+    0,
+  )
+  statusText.value = `已累计圈选 ${totalFaceCount} 个三角面，确认后会从模型和导出 JSON 中删除。`
+}
+
+function confirmDeletePreview() {
+  const items = [...deletePreviewState.value]
+  if (!items.length) return
+
+  items.forEach((item) => {
+    item.previewMesh.parent?.remove(item.previewMesh)
+    disposeObject(item.previewMesh)
+  })
+  deletePreviewState.value = []
+
+  let totalRemovedFaceCount = 0
+  for (const item of items) {
+    const { mesh, faceIndices } = item
+    const labels = meshLabelMap.get(mesh) ?? item.labels
+    if (!labels) {
+      statusText.value = '无法删除：当前模型 labels 未准备好。'
+      return
+    }
+
+    const filtered = filterMeshGeometryFaces(mesh.geometry, labels, faceIndices)
+    if (!filtered.removedFaceCount) continue
+
+    mesh.userData.removedFaceCount =
+      Number(mesh.userData.removedFaceCount ?? 0) + filtered.removedFaceCount
+    mesh.userData.sourceFaceCount =
+      Number(mesh.userData.sourceFaceCount) || filtered.sourceFaceCount
+    replaceMeshGeometry(mesh, filtered.geometry, filtered.labels)
+    totalRemovedFaceCount += filtered.removedFaceCount
+  }
+
+  if (!totalRemovedFaceCount) {
+    deleteSelectionPoints = []
+    deleteSelectionMesh = null
+    clearSelectionCanvas()
+    statusText.value = '没有可删除的三角面。'
+    return
+  }
+
+  deleteSelectionPoints = []
+  deleteSelectionMesh = null
+  clearSelectionCanvas()
+  statusText.value = `已删除 ${totalRemovedFaceCount} 个三角面，导出 JSON 可复原裁剪后的 STL。`
+}
+
 function getMeshIntersect(event: PointerEvent) {
   if (!camera || !updatePointer(event)) return null
   raycaster.setFromCamera(pointer, camera)
@@ -2118,6 +2381,61 @@ function refreshBoundaryGroupFromLabels(mesh: THREE.Mesh) {
   const labels = meshLabelMap.get(mesh)
   if (!jaw || !labels) return
   replaceBoundaryGroup(mesh, jaw, buildBoundaryGroup(mesh.geometry, labels))
+}
+
+function replaceMeshGeometry(
+  mesh: THREE.Mesh,
+  nextGeometry: THREE.BufferGeometry,
+  nextLabels: number[],
+) {
+  const oldGeometry = mesh.geometry
+  mesh.geometry = nextGeometry
+  oldGeometry.dispose()
+  meshLabelMap.set(mesh, nextLabels)
+  meshLogicalVertexGroups.set(mesh, buildLogicalVertexGroups(nextGeometry))
+  refreshMeshLabels(mesh)
+  refreshBoundaryGroupFromLabels(mesh)
+}
+
+function projectMeshVertexToCanvas(mesh: THREE.Mesh, localPoint: THREE.Vector3) {
+  if (!camera || !renderer) return null
+  const canvasPoint = getCanvasPointFromLocalPoint(mesh, localPoint)
+  if (!canvasPoint) return null
+  return { x: canvasPoint.x, y: canvasPoint.y }
+}
+
+function getCanvasPointFromLocalPoint(mesh: THREE.Mesh, localPoint: THREE.Vector3) {
+  if (!camera || !renderer) return null
+  const rect = renderer.domElement.getBoundingClientRect()
+  const projected = mesh.localToWorld(localPoint.clone()).project(camera)
+  if (projected.z < -1 || projected.z > 1) return null
+  return {
+    x: (projected.x * 0.5 + 0.5) * rect.width,
+    y: (-projected.y * 0.5 + 0.5) * rect.height,
+  }
+}
+
+function previewDeleteSelection() {
+  const candidates = getVisibleMeshes()
+    .map((mesh) => ({
+      mesh,
+      faceIndices: getFacesInsideScreenPolygon(mesh.geometry, deleteSelectionPoints, (point) =>
+        projectMeshVertexToCanvas(mesh, point),
+      ),
+    }))
+    .filter((candidate) => candidate.faceIndices.size > 0)
+    .sort((a, b) => b.faceIndices.size - a.faceIndices.size)
+
+  const target = deleteSelectionMesh
+    ? candidates.find((candidate) => candidate.mesh === deleteSelectionMesh)
+    : candidates[0]
+
+  if (!target) {
+    statusText.value = '圈选范围内没有命中可删除的模型面。'
+    return
+  }
+
+  showDeletePreview(target.mesh, target.faceIndices)
 }
 
 // 涂色可能连续触发很多次，先记录受影响模型，鼠标松开后统一重建边界。
@@ -2190,9 +2508,11 @@ function endPaint(event?: PointerEvent) {
   renderer?.domElement.classList.remove('painting-labels')
   if (workflowMode.value === 'paintThenBoundary') {
     statusText.value =
-      brushMode.value === 'erase'
-        ? '擦除已更新边界，可继续修正或切换到移动边界微调。'
-        : '涂色已更新边界，可切换到移动边界继续微调。'
+      brushMode.value === 'deleteGum'
+        ? '删除牙龈已更新模型，导出 JSON 可复原裁剪后的 STL。'
+        : brushMode.value === 'erase'
+          ? '擦除已更新边界，可继续修正或切换到移动边界微调。'
+          : '涂色已更新边界，可切换到移动边界继续微调。'
   }
 }
 
@@ -2201,6 +2521,25 @@ function onPointerDown(event: PointerEvent) {
 
   if (activeTool.value === 'paint') {
     if (event.button !== 0) return
+
+    if (brushMode.value === 'deleteGum') {
+      deleteSelectionPoints = []
+      deleteSelectionMesh = null
+      clearSelectionCanvas()
+      const canvasPoint = getCanvasPoint(event)
+      if (!canvasPoint) return
+      clearBoundaryHover()
+      hideBrushIndicator()
+      isDrawingDeleteSelection = true
+      deleteSelectionMesh = null
+      deleteSelectionPoints = [{ x: canvasPoint.x, y: canvasPoint.y }]
+      controls.enabled = false
+      renderer.domElement.setPointerCapture(event.pointerId)
+      renderer.domElement.classList.add('painting-labels')
+      drawDeleteSelectionPath()
+      event.preventDefault()
+      return
+    }
 
     const nextLabel = getBrushLabel()
     if (nextLabel == null) {
@@ -2268,6 +2607,18 @@ function onPointerDown(event: PointerEvent) {
 function onPointerMove(event: PointerEvent) {
   if (!camera || !renderer || !updatePointer(event)) return
 
+  if (isDrawingDeleteSelection) {
+    const canvasPoint = getCanvasPoint(event)
+    if (!canvasPoint) return
+    const lastPoint = deleteSelectionPoints[deleteSelectionPoints.length - 1]
+    if (!lastPoint || Math.hypot(canvasPoint.x - lastPoint.x, canvasPoint.y - lastPoint.y) >= 2) {
+      deleteSelectionPoints.push({ x: canvasPoint.x, y: canvasPoint.y })
+      drawDeleteSelectionPath(true)
+    }
+    event.preventDefault()
+    return
+  }
+
   if (activeTool.value === 'paint') {
     if (isPainting) {
       paintAtPointer(event)
@@ -2311,6 +2662,27 @@ function onPointerMove(event: PointerEvent) {
 }
 
 function onPointerUp(event: PointerEvent) {
+  if (isDrawingDeleteSelection) {
+    isDrawingDeleteSelection = false
+    if (controls) controls.enabled = true
+    if (renderer) {
+      renderer.domElement.classList.remove('painting-labels')
+      if (renderer.domElement.hasPointerCapture(event.pointerId)) {
+        renderer.domElement.releasePointerCapture(event.pointerId)
+      }
+    }
+    if (deleteSelectionPoints.length >= 3) {
+      previewDeleteSelection()
+      clearSelectionCanvas()
+    } else {
+      clearSelectionCanvas()
+      statusText.value = '圈选范围太小，请重新圈选。'
+    }
+    deleteSelectionMesh = null
+    event.preventDefault()
+    return
+  }
+
   if (isPainting) {
     endPaint(event)
     return
@@ -2337,6 +2709,7 @@ function endBoundaryDrag(event?: PointerEvent) {
 function onPointerLeave() {
   hideBrushIndicator()
   if (isPainting) endPaint()
+  if (isDrawingDeleteSelection) drawDeleteSelectionPath()
   if (!boundaryDragState) clearBoundaryHover()
 }
 
@@ -2347,6 +2720,7 @@ function onResize() {
   camera.aspect = width / height
   camera.updateProjectionMatrix()
   renderer.setSize(width, height)
+  resizeSelectionCanvas()
 }
 
 function animate() {
@@ -2372,6 +2746,7 @@ async function init() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   renderer.setSize(width, height)
   container.appendChild(renderer.domElement)
+  resizeSelectionCanvas()
   renderer.domElement.addEventListener('pointerdown', onPointerDown)
   renderer.domElement.addEventListener('pointermove', onPointerMove)
   renderer.domElement.addEventListener('pointerup', onPointerUp)
@@ -2509,6 +2884,11 @@ onUnmounted(() => {
   border-color: #2474e8;
 }
 
+.tool-button.danger.active {
+  background: #d92d20;
+  border-color: #d92d20;
+}
+
 .tool-item {
   display: flex;
   align-items: center;
@@ -2550,8 +2930,16 @@ onUnmounted(() => {
 }
 
 .viewer {
+  position: relative;
   flex: 1;
   min-height: 0;
+}
+
+.selection-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
 }
 
 .viewer :deep(canvas) {
