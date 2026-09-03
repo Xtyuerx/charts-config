@@ -70,8 +70,9 @@ export function keepLargestFaceComponent(
     const queue = [start]
     const component: number[] = []
     unvisited.delete(start)
-    while (queue.length > 0) {
-      const face = queue.shift()!
+    let cursor = 0
+    while (cursor < queue.length) {
+      const face = queue[cursor++]!
       component.push(face)
       for (const neighbor of faceNeighbors[face] ?? []) {
         if (selected.has(neighbor) && unvisited.delete(neighbor)) queue.push(neighbor)
@@ -87,14 +88,15 @@ export function collectSeedFaces(
   samples: ScreenPoint[],
   raycast: (point: ScreenPoint) => SeedRayHit | null,
   faceNeighbors: readonly (readonly number[])[],
-): { jaw: JawType; faceIndices: number[] } {
-  let jaw: JawType = 'upper'
+): { jaw: JawType; faceIndices: number[] } | null {
+  let jaw: JawType | null = null
   const faces: number[] = []
   for (const point of samples) {
     const hit = raycast(point)
     if (!hit) continue
-    if (faces.length === 0) jaw = hit.jaw
+    jaw ??= hit.jaw
     if (hit.jaw === jaw) faces.push(hit.faceIndex)
   }
+  if (jaw === null) return null
   return { jaw, faceIndices: keepLargestFaceComponent(faces, faceNeighbors) }
 }

@@ -64,3 +64,11 @@ test('uses the jaw from the first valid hit and ignores hits from the other jaw'
 
   expect(result).toEqual({ jaw: 'lower', faceIndices: [7] })
 })
+
+test('returns null when no sampled point hits either jaw', () => {
+  expect(collectSeedFaces(
+    [{ x: 0, y: 0 }],
+    () => null,
+    [],
+  )).toBeNull()
+})
