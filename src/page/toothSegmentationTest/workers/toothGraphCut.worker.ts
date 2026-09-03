@@ -153,9 +153,10 @@ function workerErrorMessage(error: unknown) {
 const workerScope = globalThis as unknown as {
   onmessage: ((event: MessageEvent<GraphCutWorkerRequest>) => void) | null
   postMessage: (message: GraphCutWorkerResponse | GraphCutWorkerErrorResponse, transfer?: Transferable[]) => void
+  importScripts?: unknown
 }
 
-if (typeof window === 'undefined' && typeof workerScope.postMessage === 'function') {
+if (typeof workerScope.postMessage === 'function' && typeof workerScope.importScripts === 'function') {
   workerScope.onmessage = (event) => {
     const { jobId, ...problem } = event.data
     try {

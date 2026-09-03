@@ -84,6 +84,14 @@ test('breaks equal-capacity cuts by cutting the lower local face index first', (
 
   expect(Array.from(solveBinaryMinCut(graph))).toEqual([1, 0, 0])
   expect(Array.from(solveBinaryMinCut(graph))).toEqual([1, 0, 0])
+
+  const permuted = problem({
+    ...graph,
+    edgeFrom: Uint32Array.from([0, 1]),
+    edgeTo: Uint32Array.from([1, 2]),
+    edgeCapacity: Float32Array.from([1, 1]),
+  })
+  expect(Array.from(solveBinaryMinCut(permuted))).toEqual([1, 0, 0])
 })
 
 class FakeWorker implements WorkerLike {
@@ -91,8 +99,10 @@ class FakeWorker implements WorkerLike {
   onmessage: ((event: MessageEvent<unknown>) => void) | null = null
   onerror: ((event: ErrorEvent) => void) | null = null
   terminated = false
+  postFailure: Error | null = null
 
   postMessage(request: GraphCutWorkerRequest, transfer: Transferable[]) {
+    if (this.postFailure) throw this.postFailure
     this.posts.push({ request, transfer })
   }
 
@@ -102,6 +112,10 @@ class FakeWorker implements WorkerLike {
 
   respond(jobId: number, foregroundMask: Uint8Array) {
     this.onmessage?.({ data: { jobId, foregroundMask } } as MessageEvent)
+  }
+
+  respondError(jobId: number, error: string) {
+    this.onmessage?.({ data: { jobId, error } } as MessageEvent)
   }
 
   fail(message: string) {
@@ -174,4 +188,37 @@ test('turns worker failures into a displayable Chinese error', async () => {
   worker.fail('boom')
 
   await expect(pending).rejects.toThrow('Graph Cut Worker 执行失败：boom')
+})
+
+test('rejects an unresolved job when the client is destroyed', async () => {
+  const client = new ToothGraphCutWorkerClient(() => new FakeWorker())
+  const pending = client.run(problem({ faceCount: 1 }))
+
+  client.destroy()
+
+  await expect(pending).rejects.toThrow('Graph Cut Worker 已销毁')
+})
+
+test('turns a job-specific worker error response into a displayable Chinese error', async () => {
+  const worker = new FakeWorker()
+  const client = new ToothGraphCutWorkerClient(() => worker)
+  const pending = client.run(problem({ faceCount: 1 }))
+
+  worker.respondError(1, '请求无效')
+
+  await expect(pending).rejects.toThrow('Graph Cut Worker 执行失败：请求无效')
+})
+
+test('turns synchronous postMessage failures into a displayable Chinese error', async () => {
+  const worker = new FakeWorker()
+  worker.postFailure = new Error('传输失败')
+  const client = new ToothGraphCutWorkerClient(() => worker)
+
+  await expect(client.run(problem({ faceCount: 1 }))).rejects.toThrow('Graph Cut Worker 执行失败：传输失败')
+})
+
+test('turns synchronous Worker construction failures into a displayable Chinese error', () => {
+  expect(() => new ToothGraphCutWorkerClient(() => {
+    throw new Error('安全策略拒绝')
+  })).toThrow('Graph Cut Worker 执行失败：安全策略拒绝')
 })

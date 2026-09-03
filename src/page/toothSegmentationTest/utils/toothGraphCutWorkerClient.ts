@@ -73,7 +73,11 @@ export class ToothGraphCutWorkerClient {
   private destroyed = false
 
   constructor(workerFactory: ToothGraphCutWorkerFactory = createBrowserWorker) {
-    this.worker = workerFactory()
+    try {
+      this.worker = workerFactory()
+    } catch (error) {
+      throw displayableWorkerError(error instanceof Error ? error.message : '未知错误')
+    }
     this.worker.onmessage = (event) => this.handleMessage(event.data)
     this.worker.onerror = (event) => this.handleError(event.message)
   }
