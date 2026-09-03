@@ -178,6 +178,13 @@ test('keeps ROI membership geodesic-limited, while only in-ROI supplied backgrou
   expect(Array.from(disconnected.backgroundMask)).toEqual([0, 0, 0])
 })
 
+test('rejects a finite seed diameter and finite radius scale whose product overflows', () => {
+  const topology = createLinearTopology(8, true)
+  expect(() =>
+    buildToothGraphCutRoi(topology, [0, 1, 2], [5, 6, 7], { radiusScale: Number.MAX_VALUE }),
+  ).toThrow('Graph Cut ROI 半径必须为有限数')
+})
+
 test('allows a large source topology when its selected ROI fits the cap, but validates and enforces the selected ROI cap', () => {
   expect(() =>
     buildToothGraphCutRoi(createLinearTopology(40_001), [0, 1, 2], [5, 6, 7], { radiusScale: 0 }),

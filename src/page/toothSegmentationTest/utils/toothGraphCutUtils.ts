@@ -341,10 +341,11 @@ export function buildToothGraphCutRoi(
     }
   }
   const radius = seedDiameter * radiusScale
+  if (!Number.isFinite(radius)) throw new Error('Graph Cut ROI 半径必须为有限数')
   const distances = dijkstra(topology, foreground)
   const selected = new Set<number>()
   distances.forEach((distance, face) => {
-    if (distance <= radius + Number.EPSILON) selected.add(face)
+    if (Number.isFinite(distance) && distance <= radius + Number.EPSILON) selected.add(face)
   })
   if (selected.size > maxFaces) throw new Error(`Graph Cut 面数超过 ${maxFaces}，ROI 无法构建`)
   const faceIndices = Uint32Array.from(Array.from(selected).sort((first, second) => first - second))
