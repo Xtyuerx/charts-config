@@ -1,92 +1,92 @@
-# Seeded Tooth Graph Cut Design
+# 基于种子区域的牙齿 Graph Cut 分割设计
 
-## Goal
+## 目标
 
-Upgrade the standalone tooth segmentation test page from “the drawn stroke is the final boundary” to the following workflow:
+将独立的牙齿分割测试页面从“手绘轨迹直接作为最终边界”升级为以下流程：
 
-1. The user draws a closed seed region on a tooth crown.
-2. The page previews the selected STL faces.
-3. A local geometry-only Graph Cut expands the seed to the full tooth and finds the tooth–gingiva margin.
-4. The generated surface boundary remains editable by dragging control points.
-5. Only confirmation writes final triangle labels and creates an independent tooth mesh.
+1. 用户在牙冠上绘制一个闭合种子区域。
+2. 页面预览被选中的 STL 三角面。
+3. 局部、仅依赖几何特征的 Graph Cut 从种子向外扩张，找到牙齿与牙龈交界处。
+4. 自动生成的表面边界可以继续拖动控制点编辑。
+5. 只有点击确认后，才写入最终三角形标签并生成独立牙齿 Mesh。
 
-The original `allStl` labels may identify `toothId`, but they must not influence Graph Cut geometry, boundary placement, or foreground/background classification.
+允许使用 `allStl` 原始标签识别 `toothId`，但原始标签不得参与 Graph Cut 的几何特征计算、前景/背景分类或边界定位。
 
-## Scope
+## 范围
 
-This design changes only the tooth segmentation test page and focused utilities used by it. It does not replace the existing STL viewer, BVH raycasting, boundary editor, or confirmed-region export machinery.
+本设计只修改牙齿分割测试页面及其专用工具，不替换已有 STL 查看器、BVH 射线检测、边界编辑器和确认区域导出逻辑。
 
-In scope:
+包含内容：
 
-- Seed-region selection and preview.
-- Local ROI construction.
-- Geometry feature extraction.
-- Worker-based binary Graph Cut.
-- Closed surface-boundary extraction and simplification.
-- Active/inactive boundary presentation.
-- Confirmation-time independent mesh creation and label assignment.
-- Editing-session persistence and original-format result export.
+- 种子区域选择与预览；
+- 局部 ROI 构建；
+- 几何特征提取；
+- 基于 Web Worker 的二元 Graph Cut；
+- 闭合表面边界提取、简化与重采样；
+- 当前/非当前边界的视觉状态；
+- 确认时生成独立牙齿 Mesh 并写入标签；
+- 编辑工程数据保存，以及原始格式分牙结果导出。
 
-Out of scope:
+不包含内容：
 
-- Neural-network inference or remote segmentation services.
-- Editing the source STL `BufferGeometry` during drawing or dragging.
-- Automatically rerunning Graph Cut during control-point dragging.
-- Changing the existing `allStl` page.
+- 神经网络推理或远程分割服务；
+- 圈选或拖拽期间修改原始 STL `BufferGeometry`；
+- 拖拽控制点时自动重新执行 Graph Cut；
+- 修改现有 `allStl` 页面。
 
-## User Experience
+## 用户操作流程
 
-The page exposes the following ordered operations:
+页面提供以下顺序操作：
 
 ```text
-Enter segmentation mode
-  -> draw a purple closed crown region
-  -> preview pink Seed Faces
-  -> Generate Boundary
-  -> preview geometry-derived tooth margin
-  -> edit Boundary Points on the STL surface
-  -> Confirm Segmentation
-  -> save final result
+进入分牙模式
+  -> 在牙冠上绘制紫色闭合区域
+  -> 显示粉色 Seed Faces 预览
+  -> 点击“生成边界”
+  -> 显示几何算法生成的牙颈边界
+  -> 在 STL 表面拖动 Boundary Points 编辑
+  -> 点击“确认分牙”
+  -> 保存最终分牙结果
 ```
 
-### Seed selection
+### 种子选择
 
-- The purple screen-space stroke is transient input, not a final `ToothBoundary`.
-- After pointer release, the polygon interior is sampled on a 6 CSS-pixel grid. Stroke samples are included so narrow regions remain selectable.
-- Rays use the camera and the existing BVH-accelerated raycaster and target only the first visible STL mesh hit.
-- Hits on a different jaw from the first valid hit are discarded.
-- Seed faces are reduced to the largest face-adjacent connected component.
-- The selected faces are rendered as a pink overlay.
-- The dominant original label over seed faces supplies `toothId`. Original labels have no further role in segmentation.
+- 紫色屏幕轨迹是临时输入，不是最终 `ToothBoundary`。
+- 松开鼠标后，以 6 CSS 像素为间隔对多边形内部采样；同时保留轨迹采样点，确保较窄区域仍可选中。
+- 所有射线都使用相机和现有的 BVH 加速 Raycaster，并且只采用第一个可见 STL Mesh 的最近交点。
+- 与第一个有效交点不属于同一颌的命中全部丢弃。
+- Seed Faces 只保留面邻接意义下最大的连通分量。
+- 被选中的三角面使用粉色覆盖层显示。
+- 使用 Seed Faces 上原始标签的众数填写 `toothId`，之后原始标签不再参与分割。
 
-### Boundary generation
+### 生成边界
 
-- “生成边界” is enabled when a valid seed exists and no generation job is running.
-- The pink seed preview remains visible while the worker runs.
-- On success, the generated boundary becomes the active boundary: white line and green circular controls.
-- Boundaries belonging to other teeth are displayed as green lines and blue circular controls.
-- On failure, no existing boundary or confirmed result is overwritten; the pink seed remains available for retry or redraw.
+- 存在有效种子且当前没有生成任务时，启用“生成边界”。
+- Worker 计算期间保留粉色种子预览。
+- 计算成功后，新边界成为当前活动边界：白色边界线、绿色圆形控制点。
+- 其他牙齿的边界显示为绿色边界线、蓝色圆形控制点。
+- 计算失败时不覆盖已有 Boundary 或确认结果，保留粉色种子供用户重试或重新圈选。
 
-### Boundary editing
+### 边界编辑
 
-- Pointer selection may intersect control-point objects, but drag positioning raycasts only against the source STL mesh.
-- The selected control stores the exact local-space STL intersection.
-- Only the previous and next surface segments are recomputed.
-- Surface segments use cached STL topology paths and remain attached after camera rotation.
-- Dragging never edits source STL geometry, rebuilds BVH, runs Graph Cut, or performs triangle classification.
-- Dragging a confirmed boundary invalidates only that tooth’s confirmed result.
+- 选中控制点时允许射线检测控制点对象，但计算拖拽位置时只能射线检测原始 STL Mesh。
+- 控制点保存 STL 真实交点转换后的局部三维坐标。
+- 每次移动只重新计算当前点前后相邻的两段表面路径。
+- 表面路径使用缓存的 STL 拓扑，旋转相机后仍保持附着在模型表面。
+- 拖拽期间不得修改原始 STL Geometry、重建 BVH、执行 Graph Cut 或进行三角形分类。
+- 拖动已确认的边界后，只使当前牙齿的确认结果失效。
 
-### Confirmation
+### 确认分牙
 
-- “确认分牙” uses the edited boundary to classify the final face region.
-- Conflict with another confirmed tooth is rejected atomically.
-- On success, the page creates an independent, non-indexed `BufferGeometry` containing copies of the selected source triangles. It does not remove those triangles from the source jaw.
-- The independent mesh is stored by jaw and `toothId` and replaces the previous mesh for the same tooth.
-- Confirmation writes the per-face result labels; unconfirmed faces remain `0`.
+- “确认分牙”根据编辑后的 Boundary 对最终三角面区域进行分类。
+- 如果与其他已确认牙齿发生重叠，必须原子性拒绝本次确认。
+- 确认成功后，新建一个独立的、非索引 `BufferGeometry`，复制所选原始三角面；不得从原始颌面删除三角形。
+- 独立 Mesh 按 `jaw:toothId` 保存，再次确认同一牙齿时替换旧 Mesh。
+- 确认后写入按面的结果标签；未确认的面保持为 `0`。
 
-## State Model
+## 状态模型
 
-Each tooth has an explicit workflow state:
+每颗牙齿拥有明确的工作流状态：
 
 ```ts
 type ToothSegmentationStatus = 'seeded' | 'boundary-ready' | 'confirmed'
@@ -101,56 +101,56 @@ type ToothSegmentationState = {
 }
 ```
 
-The page owns one in-memory `Map<number, ToothSegmentationState>`. Three.js preview objects and independent tooth meshes are derived views keyed by `jaw:toothId`; they are not authoritative state.
+页面只维护一个 `Map<number, ToothSegmentationState>` 作为权威状态。Three.js 预览对象和独立牙齿 Mesh 都是按 `jaw:toothId` 生成的派生视图，不作为数据源。
 
-State transitions are:
+状态转换如下：
 
 ```text
-new drawing -> seeded
-seeded + successful Graph Cut -> boundary-ready
-boundary-ready + successful confirmation -> confirmed
-confirmed + boundary drag -> boundary-ready
-new seed for the same tooth -> seeded
+完成新圈选 -> seeded
+seeded + Graph Cut 成功 -> boundary-ready
+boundary-ready + 确认成功 -> confirmed
+confirmed + 拖动边界 -> boundary-ready
+同一牙齿重新圈选 -> seeded
 ```
 
-Every transition that replaces a state first validates and computes the new state. Existing state is disposed only after the replacement is ready.
+任何替换状态的操作都必须先完成新状态的计算和校验，只有新状态可用后才能释放旧状态。
 
-## Local ROI
+## 局部 ROI
 
-Graph Cut operates on a local face graph:
+Graph Cut 只处理局部三角面图：
 
-- Compute the three-dimensional seed diameter from the seed-face bounds.
-- Expand from seed faces by surface geodesic distance up to `3.0 * seedDiameter`.
-- Stop expansion at 40,000 faces. Reaching this limit is an error rather than silently truncating the ROI.
-- The background seed set consists of valid hits in a screen-space ring between `1.25x` and `1.65x` scaled copies of the original polygon, plus ROI boundary faces.
-- Foreground and background seeds must each contain at least three distinct faces.
-- Any face present in both sets is removed from the background set. If fewer than three background faces remain, generation fails.
+- 根据 Seed Faces 的三维包围盒计算种子直径；
+- 从 Seed Faces 沿表面测地距离扩张，最大距离为 `3.0 * seedDiameter`；
+- ROI 最大允许 40,000 个三角面；达到上限时直接报错，不允许静默截断；
+- 背景种子由原屏幕多边形的 `1.25x` 到 `1.65x` 外扩环带命中面，以及 ROI 外边界面共同组成；
+- 前景和背景种子各自至少需要 3 个不同三角面；
+- 同时出现在前景和背景中的面从背景集合移除；移除后背景少于 3 个面则生成失败。
 
-These values live in one exported configuration object so tests can use smaller deterministic limits without changing algorithm code.
+以上参数集中放在一个可导出的配置对象中。测试可以传入更小的确定性限制，无需修改算法代码。
 
-## Geometry Features
+## 几何特征
 
-Graph nodes are ROI triangles. Graph edges connect triangles sharing one quantized STL edge.
+ROI 三角面是图节点，共享一条量化 STL 边的三角面相互连接。
 
-For each adjacency, calculate:
+每条相邻关系计算：
 
-- Normal angle between faces.
-- Signed dihedral angle, with concave tooth-neck transitions favored as cut locations.
-- Absolute difference in normalized mean curvature.
-- Shared-edge length.
+- 两个面的法向夹角；
+- 带符号二面角，优先把牙颈凹陷位置作为候选切割处；
+- 归一化平均曲率的绝对差；
+- 共享边长度。
 
-For each face, calculate:
+每个三角面计算：
 
-- Geodesic distance to foreground seeds.
-- Geodesic distance to background seeds.
-- Difference from the robust median foreground normal.
-- Relative height along the robust foreground normal.
+- 到前景种子的测地距离；
+- 到背景种子的测地距离；
+- 与前景稳健中位法向的差异；
+- 沿前景稳健法向计算的相对高度。
 
-Continuous features are normalized within the ROI using median and median absolute deviation. Degenerate deviations use `1` to avoid division by zero.
+连续特征在 ROI 内使用中位数和中位绝对偏差归一化。偏差退化为零时使用 `1`，避免除零。
 
-Pairwise capacity is high across smooth, continuous surface regions and low across sharp or concave transitions. Unary source/sink capacities combine foreground/background geodesic distance, normal difference, and relative height. Foreground seeds receive an effectively infinite source capacity; background seeds receive an effectively infinite sink capacity.
+平滑连续表面之间的 Pairwise 容量较高，明显折角或凹陷位置的容量较低。Source/Sink 的 Unary 容量由前景/背景测地距离、法向差异和相对高度共同决定。前景种子具有近似无限的 Source 容量，背景种子具有近似无限的 Sink 容量。
 
-Default normalized weights are centralized and testable:
+默认归一化权重集中定义并可测试：
 
 ```ts
 const graphCutWeights = {
@@ -163,58 +163,58 @@ const graphCutWeights = {
 }
 ```
 
-The implementation uses a deterministic binary max-flow/min-cut algorithm. Equal-capacity decisions are resolved by ascending local face index so repeated generation produces identical results.
+实现采用确定性的二元最大流/最小割算法。当容量相同时，以局部三角面索引升序处理，确保重复生成得到相同结果。
 
-## Worker Boundary
+## Worker 边界
 
-Graph Cut runs in a dedicated module Web Worker.
+Graph Cut 在独立的模块化 Web Worker 中执行。
 
-The main thread performs BVH selection, retrieves or builds cached jaw topology/features, constructs the ROI, and sends only transferable typed arrays:
+主线程负责 BVH 选择、读取或建立颌面拓扑与特征缓存、构建 ROI，然后只向 Worker 发送可转移的 TypedArray：
 
-- ROI source face indices.
-- Pairwise adjacency endpoints and capacities.
-- Unary source and sink capacities.
-- Foreground and background seed masks.
+- ROI 对应的原始三角面索引；
+- Pairwise 邻接端点和容量；
+- Unary Source/Sink 容量；
+- 前景、背景种子掩码。
 
-The worker returns the foreground local-face mask and job identifier. Results from a superseded job identifier are discarded. Three.js objects, meshes, and geometries never cross the worker boundary.
+Worker 返回前景局部面掩码和任务 ID。已经被新任务替代的旧任务结果必须丢弃。Three.js Object、Mesh 和 Geometry 不允许跨 Worker 传递。
 
-The UI remains interactive while the job runs, but drawing another seed cancels the logical ownership of the previous result. The worker may finish, but its stale output cannot update page state.
+Worker 运行期间页面仍可旋转查看模型。重新圈选会使旧任务失去结果所有权；即使旧 Worker 最终返回，其过期结果也不得更新页面状态。
 
-## Boundary Extraction
+## 边界提取
 
-After Graph Cut:
+Graph Cut 完成后执行：
 
-1. Keep only the foreground component containing the largest number of foreground seed faces.
-2. Reject results smaller than the seed set or larger than 90% of the ROI.
-3. Collect shared edges between foreground and background faces.
-4. Build edge loops from quantized STL vertices.
-5. Reject open chains.
-6. Remove loops shorter than `0.15 * seedDiameter`.
-7. Choose the loop whose foreground side contains the seed component and whose enclosed foreground component has the largest area.
-8. Simplify the loop with a surface-aware tolerance of `max(0.15, seedDiameter * 0.01)` in STL units.
-9. Resample by surface arc length to between 24 and 64 controls. The count is clamped after targeting one control per `seedDiameter / 12` of boundary length.
+1. 只保留包含最多前景种子的前景连通分量；
+2. 结果小于 Seed Faces 数量，或大于 ROI 的 90% 时判定失败；
+3. 收集前景与背景面之间的共享边；
+4. 根据量化 STL 顶点连接边界环；
+5. 拒绝任何开放链；
+6. 删除长度小于 `0.15 * seedDiameter` 的短环；
+7. 选择前景侧包含种子区域且前景面积最大的主环；
+8. 使用 `max(0.15, seedDiameter * 0.01)` 的 STL 单位容差进行表面约束简化；
+9. 按表面弧长重采样为 24 到 64 个控制点，目标间距为 `seedDiameter / 12`，最终数量限制在该区间内。
 
-The resulting controls are stored as exact three-dimensional surface positions. Display segments are generated from cached surface topology paths. The loop is closed explicitly.
+生成的控制点保存真实三维表面坐标。显示曲线由缓存的表面拓扑路径生成，并显式闭合。
 
-## Rendering
+## 显示规则
 
-Render-order and colors match the supplied reference sequence:
+显示层级和颜色遵循用户提供的参考截图：
 
-- Drawing stroke: purple.
-- Seed-face overlay: pink.
-- Active generated boundary: white line, green circular controls.
-- Inactive generated boundary: green line, blue circular controls.
-- Confirmed independent tooth mesh: translucent green `0x35d07f`, matching the current confirmation highlight.
+- 手绘轨迹：紫色；
+- Seed Faces 覆盖层：粉色；
+- 当前自动边界：白色线、绿色圆形控制点；
+- 非当前自动边界：绿色线、蓝色圆形控制点；
+- 已确认独立牙齿 Mesh：半透明绿色 `0x35d07f`，与当前确认高亮一致。
 
-All overlays use local jaw coordinates and are attached to their source jaw transform, so camera rotation cannot detach them from the STL.
+所有覆盖层使用对应颌面的局部坐标，并挂载到源颌面的变换节点下，因此旋转相机时不会与 STL 脱离。
 
-## Persistence and Export
+## 保存与导出
 
-Two different artifacts serve different purposes.
+编辑工程和最终分牙结果使用两个不同文件，避免混淆用途。
 
-### Editing-session JSON
+### 编辑工程 JSON
 
-The existing segmentation-session export evolves to version 2:
+现有分牙编辑数据升级为版本 2：
 
 ```ts
 type SegmentationSessionV2 = {
@@ -234,11 +234,11 @@ type SegmentationSessionV2 = {
 }
 ```
 
-Loading reconstructs seed previews, boundaries, confirmed labels, and independent meshes. The loader remains backward-compatible with the current boundary-only and combined segmentation formats.
+重新加载后恢复种子预览、Boundary、确认标签和独立 Mesh。加载器继续兼容当前的纯 Boundary 格式和组合分割格式。
 
-### Final result JSON
+### 最终结果 JSON
 
-“保存分牙结果” downloads one JSON file per jaw using the original `allStl` JSON shape:
+“保存分牙结果”按颌分别下载 JSON，格式与原始 `allStl` 文件一致：
 
 ```json
 {
@@ -249,74 +249,74 @@ Loading reconstructs seed previews, boundaries, confirmed labels, and independen
 }
 ```
 
-- Preserve `id_patient`, `jaw`, `metadata`, and other source fields.
-- Remove stale `faceLabels` if present and write `labels` in the original vertex-label length.
-- Each confirmed face writes its `toothId` to all three vertex-label entries.
-- Every unconfirmed face writes `0`.
-- Export fails if the source vertex count does not match the expected label length.
+- 保留源文件的 `id_patient`、`jaw`、`metadata` 和其他附加字段；
+- 如果存在旧 `faceLabels`，导出时删除，并写入与原始顶点标签长度一致的 `labels`；
+- 每个已确认三角面的三个顶点标签都写入对应 `toothId`；
+- 所有未确认三角面写入 `0`；
+- 源顶点数量与预期标签长度不一致时禁止导出。
 
-## Error Handling
+## 异常处理
 
-- No STL hit: reject the drawing and keep prior state.
-- Cross-jaw drawing: keep only the first-hit jaw.
-- Disconnected seed: preview only the largest component.
-- Missing `toothId`: request a valid manual tooth ID before generation.
-- Insufficient seeds, missing background ring, ROI limit, invalid cut size, or no closed loop: retain the pink seed and report a specific error.
-- Duplicate generation click: ignored while the current job is running.
-- Stale worker response: discarded by job identifier.
-- Confirmed-region overlap: reject without changing labels or meshes.
-- Invalid imported state or label length: reject the entire import before disposing current state.
+- 圈选未命中 STL：拒绝本次圈选并保留旧状态；
+- 圈选跨上下颌：只采用首次命中的颌面；
+- Seed Faces 不连通：只预览最大连通分量；
+- 无法识别 `toothId`：生成前要求用户输入有效牙号；
+- 前景/背景种子不足、背景环缺失、ROI 超限、切割面积异常或没有闭合主环：保留粉色种子并显示明确错误；
+- 当前任务运行时重复点击“生成边界”：忽略重复操作；
+- 过期 Worker 结果：按任务 ID 丢弃；
+- 确认区域重叠：不修改任何标签或 Mesh；
+- 导入状态无效或标签长度不匹配：释放当前状态前整体拒绝导入。
 
-## Module Boundaries
+## 模块边界
 
-Keep the change focused by separating pure computation from Three.js orchestration:
+纯计算与 Three.js 页面编排分开，控制改动范围：
 
-- `seedSelectionUtils.ts`: polygon sampling results, connected seed component, background ring hits.
-- `toothGraphCutUtils.ts`: ROI construction, normalized geometry features, typed-array graph payload, deterministic cut result interpretation.
-- `toothGraphCut.worker.ts`: max-flow/min-cut execution only.
-- `toothBoundaryExtractionUtils.ts`: cut boundary edges, loops, simplification, resampling.
-- Existing `surfaceBoundaryUtils.ts`: surface path display and local drag updates.
-- Existing persistence utility: versioned session parsing and original-format result payloads.
-- Page component: pointer events, worker job lifecycle, state transitions, and Three.js views.
+- `seedSelectionUtils.ts`：多边形采样结果、最大连通种子、背景环命中；
+- `toothGraphCutUtils.ts`：ROI、归一化几何特征、TypedArray 图数据和切割结果解释；
+- `toothGraphCut.worker.ts`：只执行最大流/最小割；
+- `toothBoundaryExtractionUtils.ts`：边界边、闭环、简化和重采样；
+- 现有 `surfaceBoundaryUtils.ts`：表面路径显示和局部拖拽更新；
+- 现有持久化工具：版本化编辑工程解析和原始格式结果构建；
+- 页面组件：指针事件、Worker 任务生命周期、状态转换和 Three.js 视图。
 
-No utility may mutate the source STL `BufferGeometry`.
+任何工具函数都不得修改原始 STL `BufferGeometry`。
 
-## Testing Strategy
+## 测试策略
 
-Pure deterministic tests cover:
+纯函数确定性测试覆盖：
 
-- Screen polygon seed hit reduction and largest connected component.
-- Cross-jaw hit filtering.
-- ROI geodesic limit and 40,000-face guard.
-- Foreground/background seed constraints.
-- Feature normalization for flat and degenerate geometry.
-- Graph Cut on hand-constructed smooth/concave face graphs.
-- Deterministic tie breaking.
-- Foreground component selection and leakage rejection.
-- Closed-loop tracing, open-chain rejection, and main-loop selection.
-- Surface simplification and 24–64 control bounds.
-- Exact surface intersection preservation during dragging.
-- Only adjacent display segments changing during a drag.
-- No label mutation before confirmation.
-- Confirmation-time independent geometry extraction.
-- Vertex-label expansion and original-format JSON preservation.
-- Version 2 session round trip and legacy import compatibility.
+- 屏幕多边形命中结果转换为 Seed Faces，并只保留最大连通分量；
+- 跨颌命中过滤；
+- ROI 测地扩张和 40,000 面保护；
+- 前景/背景种子约束；
+- 平面和退化几何的特征归一化；
+- 手工构造的平滑/凹陷三角面图上的 Graph Cut；
+- 容量相同时的确定性处理；
+- 前景连通分量选择和泄漏拒绝；
+- 闭环追踪、开放链拒绝和主环选择；
+- 表面简化及 24 到 64 个控制点限制；
+- 拖拽时保留真实 STL 交点；
+- 拖拽时只有相邻两段显示路径发生变化；
+- 确认前不得修改 `triangleLabels`；
+- 确认时生成独立牙齿 Geometry；
+- 顶点标签展开和原始 JSON 字段保留；
+- 版本 2 编辑工程往返，以及旧格式兼容。
 
-Integration tests cover:
+集成测试覆盖：
 
-- Draw -> seed preview -> generate -> edit -> confirm state transitions.
-- Worker stale-result rejection.
-- Error messages leave prior state intact.
-- Reload restores the correct visual/editing stage.
+- 圈选、种子预览、生成、编辑、确认的完整状态转换；
+- 过期 Worker 结果不会更新状态；
+- 异常信息不会破坏旧状态；
+- 重新加载后恢复正确的视觉和编辑阶段。
 
-## Acceptance Criteria
+## 验收标准
 
-- A crown-centered closed drawing produces a pink connected seed preview rather than immediately becoming the final boundary.
-- Generated Boundary surrounds the tooth at a geometry-derived tooth–gingiva transition without consulting original label boundaries.
-- Active and inactive boundary styling matches the supplied screenshots.
-- Dragged controls and both adjacent segments remain on the STL surface under camera rotation.
-- Pointer movement does not mutate source STL geometry, rebuild BVH/topology, run Graph Cut, or classify triangles.
-- Confirmation creates an independent tooth mesh and updates only confirmed output labels.
-- Editing-session JSON restores workflow state.
-- Final per-jaw JSON matches the original `allStl` schema and label length, with unconfirmed faces set to `0`.
-- All new pure utilities have red-green regression tests, and the focused Vue/TypeScript and lint checks pass.
+- 在牙冠中央绘制闭合区域后显示粉色连通 Seed Faces，而不是立刻生成最终 Boundary；
+- 自动边界位于由几何特征判断的牙齿—牙龈过渡位置，且不读取原始标签边界；
+- 当前和非当前边界的样式符合参考截图；
+- 拖动控制点后，其前后两段路径保持在 STL 表面，旋转相机时不漂移；
+- `pointermove` 不修改原始 STL Geometry，不重建 BVH 或拓扑，不执行 Graph Cut，不进行三角形分类；
+- 确认后生成独立牙齿 Mesh，并且只更新已确认结果标签；
+- 编辑工程 JSON 能恢复完整工作状态；
+- 每颌最终 JSON 与原始 `allStl` 结构和标签长度一致，未确认面为 `0`；
+- 所有新增纯函数先经过红—绿回归测试，相关 Vue/TypeScript 和 ESLint 检查通过。
