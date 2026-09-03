@@ -26,13 +26,13 @@ export type ClassifiedToothRegion = {
   blockedEdgeCount: number
 }
 
-function pointKey(position: THREE.BufferAttribute, index: number, precision: number) {
+export function quantizedPositionKey(position: THREE.BufferAttribute, index: number, precision: number) {
   return `${Math.round(position.getX(index) * precision)}:${Math.round(
     position.getY(index) * precision,
   )}:${Math.round(position.getZ(index) * precision)}`
 }
 
-function edgeKey(from: string, to: string) {
+export function canonicalQuantizedEdgeKey(from: string, to: string) {
   return from < to ? `${from}|${to}` : `${to}|${from}`
 }
 
@@ -62,14 +62,14 @@ export function buildToothRegionTopology(geometry: THREE.BufferGeometry) {
   for (let faceIndex = 0; faceIndex < faceCount; faceIndex += 1) {
     const offset = faceIndex * 3
     const keys = [
-      pointKey(position, offset, graph.precision),
-      pointKey(position, offset + 1, graph.precision),
-      pointKey(position, offset + 2, graph.precision),
+      quantizedPositionKey(position, offset, graph.precision),
+      quantizedPositionKey(position, offset + 1, graph.precision),
+      quantizedPositionKey(position, offset + 2, graph.precision),
     ]
     const edges = [
-      edgeKey(keys[0]!, keys[1]!),
-      edgeKey(keys[1]!, keys[2]!),
-      edgeKey(keys[2]!, keys[0]!),
+      canonicalQuantizedEdgeKey(keys[0]!, keys[1]!),
+      canonicalQuantizedEdgeKey(keys[1]!, keys[2]!),
+      canonicalQuantizedEdgeKey(keys[2]!, keys[0]!),
     ]
     faceEdgeKeys.push(edges)
     edges.forEach((key) => {
@@ -111,7 +111,7 @@ function boundaryBlockedEdges(topology: ToothRegionTopology, boundary: ToothBoun
       anchorKeys[(index + 1) % anchorKeys.length]!,
     )
     for (let pathIndex = 0; pathIndex + 1 < path.length; pathIndex += 1) {
-      blockedEdges.add(edgeKey(path[pathIndex]!, path[pathIndex + 1]!))
+      blockedEdges.add(canonicalQuantizedEdgeKey(path[pathIndex]!, path[pathIndex + 1]!))
     }
   }
   return blockedEdges
