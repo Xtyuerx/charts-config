@@ -34,3 +34,21 @@ test('editing a confirmed boundary invalidates only its confirmed triangles', ()
   })
   expect(segmentationKey('upper', 11)).toBe('upper:11')
 })
+
+test('rejects confirmation without a boundary or triangles', () => {
+  const seeded = createSeededState(11, 'upper', [7, 3, 7])
+  expect(() => markConfirmed(seeded, [1])).toThrow()
+  const ready = markBoundaryReady(seeded, boundary)
+  expect(() => markConfirmed(ready, [])).toThrow()
+})
+
+test('state transitions do not mutate their input', () => {
+  const seeded = createSeededState(11, 'upper', [7, 3, 7])
+  const snapshot = JSON.stringify(seeded)
+  const ready = markBoundaryReady(seeded, boundary)
+  expect(seeded).toEqual(JSON.parse(snapshot))
+  expect(ready).not.toBe(seeded)
+  const confirmed = markConfirmed(ready, [2, 1])
+  expect(ready.triangleIndices).toEqual([])
+  expect(confirmed).not.toBe(ready)
+})

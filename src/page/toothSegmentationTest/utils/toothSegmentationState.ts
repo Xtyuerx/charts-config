@@ -3,14 +3,15 @@ import type { ToothBoundary } from './toothBoundaryEditorUtils'
 export type JawType = 'upper' | 'lower'
 export type ToothSegmentationStatus = 'seeded' | 'boundary-ready' | 'confirmed'
 
-export type ToothSegmentationState = {
+type StateBase = {
   toothId: number
   jaw: JawType
   seedFaceIndices: number[]
-  boundary: ToothBoundary | null
-  triangleIndices: number[]
-  status: ToothSegmentationStatus
 }
+export type SeededState = StateBase & { status: 'seeded'; boundary: null; triangleIndices: [] }
+export type BoundaryReadyState = StateBase & { status: 'boundary-ready'; boundary: ToothBoundary; triangleIndices: [] }
+export type ConfirmedState = StateBase & { status: 'confirmed'; boundary: ToothBoundary; triangleIndices: [number, ...number[]] }
+export type ToothSegmentationState = SeededState | BoundaryReadyState | ConfirmedState
 
 const sortedUnique = (indices: number[]) => [...new Set(indices)].sort((a, b) => a - b)
 
@@ -37,7 +38,7 @@ export function markConfirmed(
   if (!state.boundary) throw new Error('确认状态必须有边界')
   const triangles = sortedUnique(triangleIndices)
   if (triangles.length === 0) throw new Error('确认状态必须有三角面')
-  return { ...state, triangleIndices: triangles, status: 'confirmed' }
+  return { ...state, triangleIndices: triangles as [number, ...number[]], status: 'confirmed' }
 }
 
 export function markBoundaryEdited(
