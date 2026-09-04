@@ -102,6 +102,18 @@
         :data-line-color="visual.lineColor"
         :data-point-color="visual.pointColor"
       >非当前牙齿边界</span>
+      <span
+        v-for="visual in confirmedRegionVisuals"
+        :key="visual.renderKey"
+        class="visual-state-hook"
+        data-testid="confirmed-region"
+        :data-key="visual.key"
+        :data-uuid="visual.uuid"
+        :data-material="visual.material"
+        :data-color="visual.color"
+        :data-opacity="visual.opacity"
+        :data-depth-write="visual.depthWrite"
+      >已确认牙齿区域</span>
       <canvas
         ref="drawingCanvasRef"
         class="drawing-canvas"
@@ -150,6 +162,7 @@ import {
   buildSegmentationExportPayload,
   buildToothRegionTopology,
   classifyToothRegion,
+  commitConfirmedToothTransaction,
   groupConfirmedTriangles,
   prepareConfirmedToothRegion,
   type ToothRegionTopology,
@@ -307,6 +320,7 @@ const seedFaceNeighbors = new WeakMap<THREE.Mesh, number[][]>()
 const regionTopologies = new WeakMap<THREE.Mesh, ToothRegionTopology>()
 const confirmedTriangleLabels: Record<JawType, number[]> = { upper: [], lower: [] }
 const confirmedRegionMeshes = new Map<string, THREE.Mesh>()
+const confirmedRegionMeshRevision = ref(0)
 const raycaster = enableNearestHit(new THREE.Raycaster())
 const pointer = new THREE.Vector2()
 let pointHighlight: THREE.Points | null = null
@@ -366,6 +380,23 @@ const inactiveBoundaryVisuals = computed(() => {
     .filter((state) => state.boundary && state.toothId !== activeToothId)
     .map((state) => boundaryVisual(state.toothId))
     .filter((visual): visual is NonNullable<typeof visual> => visual !== null)
+})
+const confirmedRegionVisuals = computed(() => {
+  const revision = confirmedRegionMeshRevision.value
+  return Array.from(confirmedRegionMeshes.entries()).map(([key, mesh]) => {
+    const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material
+    return {
+      key,
+      renderKey: `${key}:${revision}`,
+      uuid: mesh.uuid,
+      material: material?.type ?? '',
+      color: material instanceof THREE.MeshStandardMaterial
+        ? `#${material.color.getHexString()}`
+        : '',
+      opacity: String(material?.opacity ?? ''),
+      depthWrite: String(material?.depthWrite ?? ''),
+    }
+  })
 })
 
 function getColor(label: number) {
@@ -924,7 +955,7 @@ function commitDrawnBoundaryEdit(state: BoundaryDragState) {
   const nextStates = new Map(toothSegmentations.value)
   nextStates.set(toothId, markBoundaryEdited(segmentation, state.pendingBoundary))
   toothSegmentations.value = nextStates
-  return invalidateConfirmedTooth(toothId)
+  return false
 }
 
 function finishBoundaryPointDrag(event?: PointerEvent) {
@@ -1036,7 +1067,6 @@ function createSeedSelection() {
   const state = createSeededState(toothId, jaw, selected.faceIndices)
   const nextStates = new Map(toothSegmentations.value)
   nextStates.set(toothId, state)
-  invalidateConfirmedTooth(toothId)
   disposeToothBoundaryGroup(toothId)
   disposeSeedPreview(toothId)
   latestBoundaryJobs.set(toothId, ++boundaryJobSequence)
@@ -1070,6 +1100,7 @@ function removeConfirmedRegionMesh(jaw: JawType, toothId: number) {
   regionMesh.parent?.remove(regionMesh)
   disposeObject(regionMesh)
   confirmedRegionMeshes.delete(key)
+  confirmedRegionMeshRevision.value += 1
 }
 
 function clearConfirmedRegionMeshes() {
@@ -1078,6 +1109,7 @@ function clearConfirmedRegionMeshes() {
     disposeObject(regionMesh)
   })
   confirmedRegionMeshes.clear()
+  confirmedRegionMeshRevision.value += 1
 }
 
 function invalidateConfirmedTooth(toothId: number) {
@@ -1317,6 +1349,7 @@ function commitConfirmedRegionMesh(mesh: THREE.Mesh, toothId: number, regionMesh
   const previousRegionMesh = confirmedRegionMeshes.get(key)
   mesh.add(regionMesh)
   confirmedRegionMeshes.set(key, regionMesh)
+  confirmedRegionMeshRevision.value += 1
   if (!previousRegionMesh) return
   previousRegionMesh.parent?.remove(previousRegionMesh)
   disposeObject(previousRegionMesh)
@@ -1359,12 +1392,39 @@ function confirmToothSegmentation() {
     preparedRegionMesh = createConfirmedRegionMesh(preparedGeometry, toothId)
     const nextStates = new Map(toothSegmentations.value)
     nextStates.set(toothId, confirmedState)
+    const key = confirmedRegionKey(jaw, toothId)
+    const previousLabels = confirmedTriangleLabels[jaw]
+    const previousStates = toothSegmentations.value
+    const previousRegionMesh = confirmedRegionMeshes.get(key)
+    let preparedMeshAttached = false
 
-    commitConfirmedRegionMesh(rendered.mesh, toothId, preparedRegionMesh)
+    commitConfirmedToothTransaction(
+      () => {
+        preparedMeshAttached = true
+        rendered.mesh.add(preparedRegionMesh!)
+        confirmedTriangleLabels[jaw] = nextLabels
+        toothSegmentations.value = nextStates
+        confirmedRegionMeshes.set(key, preparedRegionMesh!)
+        confirmedRegionMeshRevision.value += 1
+      },
+      () => {
+        if (preparedMeshAttached) {
+          preparedRegionMesh?.parent?.remove(preparedRegionMesh)
+        }
+        confirmedTriangleLabels[jaw] = previousLabels
+        toothSegmentations.value = previousStates
+        if (previousRegionMesh) confirmedRegionMeshes.set(key, previousRegionMesh)
+        else confirmedRegionMeshes.delete(key)
+        confirmedRegionMeshRevision.value += 1
+      },
+      () => {
+        if (!previousRegionMesh) return
+        previousRegionMesh.parent?.remove(previousRegionMesh)
+        disposeObject(previousRegionMesh)
+      },
+    )
     preparedRegionMesh = null
     preparedGeometry = null
-    confirmedTriangleLabels[jaw] = nextLabels
-    toothSegmentations.value = nextStates
     statusText.value = `牙号 ${toothId} 已确认分牙，共分类 ${triangleIndices.length} 个三角形。`
   } catch (error) {
     preparedRegionMesh?.parent?.remove(preparedRegionMesh)

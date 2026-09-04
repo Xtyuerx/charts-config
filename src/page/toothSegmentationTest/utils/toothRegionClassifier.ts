@@ -16,7 +16,6 @@ type FaceNeighbor = {
 
 export type ToothRegionTopology = {
   graph: SurfaceGraph
-  faceCenters: THREE.Vector3[]
   faceNeighbors: FaceNeighbor[][]
 }
 
@@ -41,7 +40,6 @@ export function buildToothRegionTopology(geometry: THREE.BufferGeometry) {
   if (!position) throw new Error('STL geometry 缺少 position 属性')
   const graph = buildSurfaceGraph(geometry)
   const faceCount = Math.floor(position.count / 3)
-  const faceCenters: THREE.Vector3[] = []
   const faceEdgeKeys: string[][] = []
   const edgeFaces = new Map<string, number[]>()
 
@@ -63,13 +61,6 @@ export function buildToothRegionTopology(geometry: THREE.BufferGeometry) {
       faces.push(faceIndex)
       edgeFaces.set(key, faces)
     })
-    faceCenters.push(
-      new THREE.Vector3(
-        (position.getX(offset) + position.getX(offset + 1) + position.getX(offset + 2)) / 3,
-        (position.getY(offset) + position.getY(offset + 1) + position.getY(offset + 2)) / 3,
-        (position.getZ(offset) + position.getZ(offset + 1) + position.getZ(offset + 2)) / 3,
-      ),
-    )
   }
 
   const faceNeighbors = faceEdgeKeys.map((edges, faceIndex) =>
@@ -79,7 +70,7 @@ export function buildToothRegionTopology(geometry: THREE.BufferGeometry) {
         .map((neighbor) => ({ edgeKey: key, neighbor })),
     ),
   )
-  return { graph, faceCenters, faceNeighbors } satisfies ToothRegionTopology
+  return { graph, faceNeighbors } satisfies ToothRegionTopology
 }
 
 function boundaryBlockedEdges(topology: ToothRegionTopology, boundary: ToothBoundary) {
@@ -103,34 +94,82 @@ function boundaryBlockedEdges(topology: ToothRegionTopology, boundary: ToothBoun
   return blockedEdges
 }
 
-export function classifyToothRegion(
+type FaceComponents = {
+  faceComponentIndices: number[]
+  components: number[][]
+}
+
+function buildFaceComponents(
   topology: ToothRegionTopology,
-  boundary: ToothBoundary,
-): ClassifiedToothRegion {
-  const blockedEdges = boundaryBlockedEdges(topology, boundary)
-  const visited = new Set<number>()
+  blockedEdges: ReadonlySet<string> = new Set(),
+): FaceComponents {
+  const faceComponentIndices = new Array<number>(topology.faceNeighbors.length).fill(-1)
   const components: number[][] = []
 
   for (let firstFace = 0; firstFace < topology.faceNeighbors.length; firstFace += 1) {
-    if (visited.has(firstFace)) continue
+    if (faceComponentIndices[firstFace] !== -1) continue
+    const componentIndex = components.length
     const component = [firstFace]
-    visited.add(firstFace)
+    faceComponentIndices[firstFace] = componentIndex
     for (let cursor = 0; cursor < component.length; cursor += 1) {
       const faceIndex = component[cursor]!
       for (const edge of topology.faceNeighbors[faceIndex] ?? []) {
-        if (blockedEdges.has(edge.edgeKey) || visited.has(edge.neighbor)) continue
-        visited.add(edge.neighbor)
+        if (blockedEdges.has(edge.edgeKey) || faceComponentIndices[edge.neighbor] !== -1) continue
+        faceComponentIndices[edge.neighbor] = componentIndex
         component.push(edge.neighbor)
       }
     }
     components.push(component.sort((first, second) => first - second))
   }
-  if (components.length < 2) {
-    throw new Error('Boundary 未形成有效闭合区域，分类结果会覆盖整个 STL')
+  return { faceComponentIndices, components }
+}
+
+export function classifyToothRegion(
+  topology: ToothRegionTopology,
+  boundary: ToothBoundary,
+): ClassifiedToothRegion {
+  const blockedEdges = boundaryBlockedEdges(topology, boundary)
+  const boundaryAdjacentFaces = new Set<number>()
+  topology.faceNeighbors.forEach((neighbors, faceIndex) => {
+    neighbors.forEach((edge) => {
+      if (!blockedEdges.has(edge.edgeKey)) return
+      boundaryAdjacentFaces.add(faceIndex)
+      boundaryAdjacentFaces.add(edge.neighbor)
+    })
+  })
+  if (!boundaryAdjacentFaces.size) {
+    throw new Error('Boundary 未分割任何 STL 表面连通分量')
   }
-  const triangleIndices = components.sort(
+
+  const originalComponents = buildFaceComponents(topology)
+  const sourceComponentIndices = new Set(
+    Array.from(boundaryAdjacentFaces, (faceIndex) =>
+      originalComponents.faceComponentIndices[faceIndex]!,
+    ),
+  )
+  if (sourceComponentIndices.size !== 1) {
+    throw new Error('Boundary 未分割同一原始 STL 表面连通分量')
+  }
+
+  const splitComponents = buildFaceComponents(topology, blockedEdges)
+  const boundaryAdjacentComponentIndices = new Set(
+    Array.from(boundaryAdjacentFaces, (faceIndex) =>
+      splitComponents.faceComponentIndices[faceIndex]!,
+    ),
+  )
+  if (boundaryAdjacentComponentIndices.size < 2) {
+    throw new Error('Boundary 未分割其原始 STL 表面连通分量')
+  }
+
+  const sourceComponentIndex = Array.from(sourceComponentIndices)[0]!
+  const triangleIndices = Array.from(boundaryAdjacentComponentIndices, (componentIndex) =>
+    splitComponents.components[componentIndex]!,
+  ).sort(
     (first, second) => first.length - second.length || first[0]! - second[0]!,
   )[0]!
+  if (originalComponents.faceComponentIndices[triangleIndices[0]!] !== sourceComponentIndex) {
+    throw new Error('Boundary 未分割其原始 STL 表面连通分量')
+  }
   return {
     toothId: boundary.toothId,
     triangleIndices,
@@ -201,6 +240,26 @@ export function buildConfirmedToothGeometry(
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
   geometry.computeVertexNormals()
   return geometry
+}
+
+export function commitConfirmedToothTransaction<T>(
+  apply: () => T,
+  rollback: () => void,
+  cleanupPrevious: () => void,
+) {
+  let result: T
+  try {
+    result = apply()
+  } catch (error) {
+    rollback()
+    throw error
+  }
+  try {
+    cleanupPrevious()
+  } catch {
+    // Derived-Mesh cleanup must not roll back an already committed region.
+  }
+  return result
 }
 
 export function groupConfirmedTriangles(triangleLabels: number[]) {

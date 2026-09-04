@@ -28,7 +28,7 @@ function createGridStl(z: number, cells: number, spacing: number) {
 
 async function installSmallJawFixtures(
   page: import('@playwright/test').Page,
-  options: { cells?: number; spacing?: number } = {},
+  options: { cells?: number; spacing?: number; includeLowerTooth32?: boolean } = {},
 ) {
   const cells = options.cells ?? 60
   const spacing = options.spacing ?? 0.25
@@ -43,7 +43,15 @@ async function installSmallJawFixtures(
     route.fulfill({ json: { labels: new Array(faceCount * 3).fill(11) } }),
   )
   await page.route('**/points/lower.json', (route) =>
-    route.fulfill({ json: { labels: new Array(faceCount * 3).fill(31) } }),
+    route.fulfill({
+      json: {
+        labels: (() => {
+          const labels = new Array(faceCount * 3).fill(31)
+          if (options.includeLowerTooth32) labels.fill(32, 0, 3)
+          return labels
+        })(),
+      },
+    }),
   )
 }
 
@@ -59,6 +67,32 @@ async function drawCircle(page: import('@playwright/test').Page, radius: number)
     await page.mouse.move(center.x + Math.cos(angle) * radius, center.y + Math.sin(angle) * radius)
   }
   await page.mouse.up()
+}
+
+async function generateAndConfirmLowerJaw(
+  page: import('@playwright/test').Page,
+  radius = 34,
+  segmentationAlreadyEnabled = false,
+) {
+  if (!segmentationAlreadyEnabled) await page.getByRole('button', { name: '分牙' }).click()
+  await page.getByRole('button', { name: '上颌' }).click()
+  await page.getByRole('button', { name: '重置视角' }).click()
+  await drawCircle(page, radius)
+  await page.getByRole('button', { name: '生成边界' }).click()
+  await expect(page.getByTestId('active-boundary')).toBeVisible({ timeout: 30_000 })
+  await page.getByRole('button', { name: '确认分牙' }).click()
+  await expect(page.getByRole('status')).toContainText('已确认分牙')
+}
+
+function boundaryPayload(toothId: number, points: Array<[number, number, number]>) {
+  return JSON.stringify({
+    boundaries: [
+      {
+        toothId,
+        boundary: points.map((position) => ({ position, type: 'control' })),
+      },
+    ],
+  })
 }
 
 test('displays the allStl upper and lower jaw data in a standalone workspace', async ({ page }) => {
@@ -149,4 +183,67 @@ test('keeps the seed preview when a generated boundary cannot be prepared', asyn
   await expect(page.getByTestId('seed-preview')).toHaveAttribute('data-color', '#ef6f91')
   await expect(page.getByTestId('active-boundary')).toHaveCount(0)
   await expect(generateButton).toBeEnabled()
+})
+
+test('confirms a lower-jaw region with its jaw key and required independent Mesh material', async ({ page }) => {
+  await installSmallJawFixtures(page)
+  await page.goto(`${baseUrl}/toothSegmentationTest`)
+  await expect(page.getByRole('status')).toContainText('已加载上颌和下颌', { timeout: 30_000 })
+
+  await generateAndConfirmLowerJaw(page)
+
+  const region = page.locator('[data-testid="confirmed-region"][data-key="lower:31"]')
+  await expect(region).toHaveCount(1)
+  await expect(region).toHaveAttribute('data-key', 'lower:31')
+  await expect(region).toHaveAttribute('data-material', 'MeshStandardMaterial')
+  await expect(region).toHaveAttribute('data-color', '#35d07f')
+  await expect(region).toHaveAttribute('data-opacity', '0.55')
+  await expect(region).toHaveAttribute('data-depth-write', 'false')
+})
+
+test('keeps an existing confirmed Mesh when another tooth boundary overlaps it', async ({ page }) => {
+  await installSmallJawFixtures(page, { includeLowerTooth32: true })
+  await page.goto(`${baseUrl}/toothSegmentationTest`)
+  await expect(page.getByRole('status')).toContainText('已加载上颌和下颌', { timeout: 30_000 })
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'overlap-boundary.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(
+      boundaryPayload(32, [
+        [-2, -2, -18],
+        [2, -2, -18],
+        [2, 2, -18],
+        [-2, 2, -18],
+      ]),
+    ),
+  })
+  await expect(page.getByRole('status')).toContainText('恢复')
+
+  await generateAndConfirmLowerJaw(page, 34, true)
+  const confirmed = page.locator('[data-testid="confirmed-region"][data-key="lower:31"]')
+  const originalUuid = await confirmed.getAttribute('data-uuid')
+  await page.getByLabel('已保存').selectOption('32')
+  await page.getByRole('button', { name: '确认分牙' }).click()
+
+  await expect(page.getByRole('status')).toContainText('确认失败：当前区域与已确认区域重叠')
+  await expect(confirmed).toHaveAttribute('data-uuid', originalUuid ?? '')
+  await expect(page.getByTestId('confirmed-region')).toHaveCount(1)
+})
+
+test('reconfirms the same tooth by replacing its Mesh at the same jaw key', async ({ page }) => {
+  await installSmallJawFixtures(page)
+  await page.goto(`${baseUrl}/toothSegmentationTest`)
+  await expect(page.getByRole('status')).toContainText('已加载上颌和下颌', { timeout: 30_000 })
+
+  await generateAndConfirmLowerJaw(page, 34)
+  const confirmed = page.locator('[data-testid="confirmed-region"][data-key="lower:31"]')
+  const originalUuid = await confirmed.getAttribute('data-uuid')
+  await drawCircle(page, 24)
+  await page.getByRole('button', { name: '生成边界' }).click()
+  await expect(page.getByTestId('active-boundary')).toBeVisible({ timeout: 30_000 })
+  await page.getByRole('button', { name: '确认分牙' }).click()
+
+  await expect(page.getByTestId('confirmed-region')).toHaveCount(1)
+  await expect(confirmed).toHaveAttribute('data-key', 'lower:31')
+  await expect(confirmed).not.toHaveAttribute('data-uuid', originalUuid ?? '')
 })
