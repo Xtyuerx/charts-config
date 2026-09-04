@@ -3,6 +3,7 @@ import * as THREE from 'three'
 
 import {
   buildSurfaceGraph,
+  createClosedSurfaceSegments,
   createClosedSurfacePath,
   createSurfaceSegmentPoints,
   extractLabelBoundary,
@@ -10,21 +11,33 @@ import {
   moveLabelBoundaryControl,
 } from '../src/page/toothSegmentationTest/utils/surfaceBoundaryUtils'
 
+test('builds and preserves one shortest-surface segment for every closed control edge', () => {
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute(
+    'position',
+    new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0], 3),
+  )
+  const graph = buildSurfaceGraph(geometry)
+  const controls = [
+    new THREE.Vector3(0, 0, 0),
+    new THREE.Vector3(1, 0, 0),
+    new THREE.Vector3(0, 1, 0),
+  ]
+
+  const segments = createClosedSurfaceSegments(graph, controls)
+
+  expect(segments).toHaveLength(3)
+  expect(segments[0]?.[0]?.toArray()).toEqual([0, 0, 0])
+  expect(segments[0]?.at(-1)?.toArray()).toEqual([1, 0, 0])
+  expect(segments[2]?.[0]?.toArray()).toEqual([0, 1, 0])
+  expect(segments[2]?.at(-1)?.toArray()).toEqual([0, 0, 0])
+})
+
 test('routes a changed boundary segment through STL surface edges', () => {
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute(
     'position',
-    new THREE.Float32BufferAttribute(
-      [
-        0, 0, 0,
-        1, 0, 0,
-        1, 1, 0,
-        0, 0, 0,
-        1, 1, 0,
-        0, 1, 0,
-      ],
-      3,
-    ),
+    new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0], 3),
   )
   const graph = buildSurfaceGraph(geometry)
 
@@ -43,17 +56,7 @@ test('connects boundary anchors along mesh edges and closes the path', () => {
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute(
     'position',
-    new THREE.Float32BufferAttribute(
-      [
-        0, 0, 0,
-        1, 0, 0,
-        1, 1, 0,
-        0, 0, 0,
-        1, 1, 0,
-        0, 1, 0,
-      ],
-      3,
-    ),
+    new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0], 3),
   )
 
   const graph = buildSurfaceGraph(geometry)
@@ -97,17 +100,7 @@ test('extracts the shared mesh edge between two tooth labels as an automatic bou
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute(
     'position',
-    new THREE.Float32BufferAttribute(
-      [
-        0, 0, 0,
-        1, 0, 0,
-        1, 1, 0,
-        0, 0, 0,
-        1, 1, 0,
-        0, 1, 0,
-      ],
-      3,
-    ),
+    new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0], 3),
   )
 
   const boundary = extractLabelBoundary(geometry, [11, 11, 11, 12, 12, 12], 0.1)
@@ -125,14 +118,7 @@ test('keeps nearby STL boundary vertices as separate white controls', () => {
   geometry.setAttribute(
     'position',
     new THREE.Float32BufferAttribute(
-      [
-        0, 0, 0,
-        0.5, 0, 0,
-        0, 0.5, 0,
-        0.5, 0, 0,
-        0, 0, 0,
-        0.5, -0.5, 0,
-      ],
+      [0, 0, 0, 0.5, 0, 0, 0, 0.5, 0, 0.5, 0, 0, 0, 0, 0, 0.5, -0.5, 0],
       3,
     ),
   )
@@ -150,17 +136,7 @@ test('moves one boundary anchor and rebuilds a closed surface path', () => {
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute(
     'position',
-    new THREE.Float32BufferAttribute(
-      [
-        0, 0, 0,
-        1, 0, 0,
-        1, 1, 0,
-        0, 0, 0,
-        1, 1, 0,
-        0, 1, 0,
-      ],
-      3,
-    ),
+    new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0], 3),
   )
   const graph = buildSurfaceGraph(geometry)
   const original = createClosedSurfacePath(graph, [
@@ -177,9 +153,7 @@ test('moves one boundary anchor and rebuilds a closed surface path', () => {
   )
 
   expect(moved.anchorPoints[1]?.toArray()).toEqual([0, 1, 0])
-  expect(
-    moved.curvePoints.some((point) => point.equals(moved.anchorPoints[1]!)),
-  ).toBe(true)
+  expect(moved.curvePoints.some((point) => point.equals(moved.anchorPoints[1]!))).toBe(true)
   expect(moved.curvePoints.at(-1)?.equals(moved.curvePoints[0]!)).toBe(true)
 })
 
@@ -187,17 +161,7 @@ test('keeps the exact STL intersection and only rebuilds adjacent surface segmen
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute(
     'position',
-    new THREE.Float32BufferAttribute(
-      [
-        0, 0, 0,
-        1, 0, 0,
-        1, 1, 0,
-        0, 0, 0,
-        1, 1, 0,
-        0, 1, 0,
-      ],
-      3,
-    ),
+    new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0], 3),
   )
   const graph = buildSurfaceGraph(geometry)
   const original = createClosedSurfacePath(graph, [
@@ -208,12 +172,7 @@ test('keeps the exact STL intersection and only rebuilds adjacent surface segmen
   ])
   const oppositeSegment = original.segmentPoints[2]!.map((point) => point.toArray())
 
-  const moved = moveClosedSurfacePathAnchor(
-    graph,
-    original,
-    1,
-    new THREE.Vector3(0.75, 0.25, 0),
-  )
+  const moved = moveClosedSurfacePathAnchor(graph, original, 1, new THREE.Vector3(0.75, 0.25, 0))
 
   expect(moved.anchorPoints[1]?.toArray()).toEqual([0.75, 0.25, 0])
   expect(moved.segmentPoints[2]?.map((point) => point.toArray())).toEqual(oppositeSegment)

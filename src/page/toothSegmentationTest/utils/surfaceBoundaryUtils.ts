@@ -142,13 +142,14 @@ export function extractLabelBoundary(
     const lineOffset = linePoints.length
     linePoints.push(edge.from, edge.to)
     ;[edge.from, edge.to].forEach((point, endpointIndex) => {
-      const sampleKey = pointSampleSize > 0
-        ? `${Math.round(point.x / pointSampleSize)}:${Math.round(
-            point.y / pointSampleSize,
-          )}:${Math.round(point.z / pointSampleSize)}`
-        : `${Math.round(point.x * precision)}:${Math.round(
-            point.y * precision,
-          )}:${Math.round(point.z * precision)}`
+      const sampleKey =
+        pointSampleSize > 0
+          ? `${Math.round(point.x / pointSampleSize)}:${Math.round(
+              point.y / pointSampleSize,
+            )}:${Math.round(point.z / pointSampleSize)}`
+          : `${Math.round(point.x * precision)}:${Math.round(
+              point.y * precision,
+            )}:${Math.round(point.z * precision)}`
       const sample = sampledPoints.get(sampleKey)
       if (sample) sample.lineIndices.push(lineOffset + endpointIndex)
       else sampledPoints.set(sampleKey, { point, lineIndices: [lineOffset + endpointIndex] })
@@ -269,6 +270,13 @@ export function createSurfaceSegmentPoints(
   return points
 }
 
+export function createClosedSurfaceSegments(graph: SurfaceGraph, anchorPoints: THREE.Vector3[]) {
+  if (anchorPoints.length < 3) throw new Error('至少需要 3 个不同的 Boundary Points')
+  return anchorPoints.map((point, index) =>
+    createSurfaceSegmentPoints(graph, point, anchorPoints[(index + 1) % anchorPoints.length]!),
+  )
+}
+
 export function createClosedSurfacePath(
   graph: SurfaceGraph,
   sampledPoints: THREE.Vector3[],
@@ -286,22 +294,11 @@ export function createClosedSurfacePath(
 
   if (anchorKeys.length < 3) throw new Error('至少需要 3 个不同的 Boundary Points')
 
-  const segmentPoints: THREE.Vector3[][] = []
-  for (let index = 0; index < anchorKeys.length; index += 1) {
-    segmentPoints.push(
-      createSurfaceSegmentPoints(
-        graph,
-        anchorPoints[index]!,
-        anchorPoints[(index + 1) % anchorPoints.length]!,
-      ),
-    )
-  }
+  const segmentPoints = createClosedSurfaceSegments(graph, anchorPoints)
 
   return {
     anchorPoints,
-    curvePoints: segmentPoints.flatMap((segment, index) =>
-      index ? segment.slice(1) : segment,
-    ),
+    curvePoints: segmentPoints.flatMap((segment, index) => (index ? segment.slice(1) : segment)),
     segmentPoints,
   }
 }
@@ -342,9 +339,7 @@ export function moveClosedSurfacePathAnchor(
 
   return {
     anchorPoints,
-    curvePoints: segmentPoints.flatMap((segment, index) =>
-      index ? segment.slice(1) : segment,
-    ),
+    curvePoints: segmentPoints.flatMap((segment, index) => (index ? segment.slice(1) : segment)),
     segmentPoints,
   }
 }
