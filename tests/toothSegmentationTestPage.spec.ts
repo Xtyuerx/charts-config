@@ -2,10 +2,7 @@ import { expect, test } from '@playwright/test'
 
 const baseUrl = process.env.TOOTH_SEGMENTATION_TEST_BASE_URL ?? 'http://127.0.0.1:4176'
 
-const fixtureCells = 60
-const fixtureSpacing = 0.25
-
-function createGridStl(z: number) {
+function createGridStl(z: number, cells: number, spacing: number) {
   const facets: string[] = []
   const addTriangle = (points: Array<[number, number, number]>) => {
     facets.push(
@@ -16,12 +13,12 @@ function createGridStl(z: number) {
       'endfacet',
     )
   }
-  for (let row = 0; row < fixtureCells; row += 1) {
-    for (let column = 0; column < fixtureCells; column += 1) {
-      const x = (column - fixtureCells / 2) * fixtureSpacing
-      const y = (row - fixtureCells / 2) * fixtureSpacing
-      const nextX = x + fixtureSpacing
-      const nextY = y + fixtureSpacing
+  for (let row = 0; row < cells; row += 1) {
+    for (let column = 0; column < cells; column += 1) {
+      const x = (column - cells / 2) * spacing
+      const y = (row - cells / 2) * spacing
+      const nextX = x + spacing
+      const nextY = y + spacing
       addTriangle([[x, y, z], [nextX, y, z], [nextX, nextY, z]])
       addTriangle([[x, y, z], [nextX, nextY, z], [x, nextY, z]])
     }
@@ -29,13 +26,18 @@ function createGridStl(z: number) {
   return `solid jaw\n${facets.join('\n')}\nendsolid jaw`
 }
 
-async function installSmallJawFixtures(page: import('@playwright/test').Page) {
-  const faceCount = fixtureCells * fixtureCells * 2
+async function installSmallJawFixtures(
+  page: import('@playwright/test').Page,
+  options: { cells?: number; spacing?: number } = {},
+) {
+  const cells = options.cells ?? 60
+  const spacing = options.spacing ?? 0.25
+  const faceCount = cells * cells * 2
   await page.route('**/models/upper.stl', (route) =>
-    route.fulfill({ body: createGridStl(0), contentType: 'model/stl' }),
+    route.fulfill({ body: createGridStl(0, cells, spacing), contentType: 'model/stl' }),
   )
   await page.route('**/models/lower.stl', (route) =>
-    route.fulfill({ body: createGridStl(-18), contentType: 'model/stl' }),
+    route.fulfill({ body: createGridStl(-18, cells, spacing), contentType: 'model/stl' }),
   )
   await page.route('**/points/upper.json', (route) =>
     route.fulfill({ json: { labels: new Array(faceCount * 3).fill(11) } }),
@@ -43,6 +45,20 @@ async function installSmallJawFixtures(page: import('@playwright/test').Page) {
   await page.route('**/points/lower.json', (route) =>
     route.fulfill({ json: { labels: new Array(faceCount * 3).fill(31) } }),
   )
+}
+
+async function drawCircle(page: import('@playwright/test').Page, radius: number) {
+  const canvas = page.locator('.drawing-canvas')
+  const bounds = await canvas.boundingBox()
+  expect(bounds).not.toBeNull()
+  const center = { x: bounds!.x + bounds!.width / 2, y: bounds!.y + bounds!.height / 2 }
+  await page.mouse.move(center.x + radius, center.y)
+  await page.mouse.down()
+  for (let step = 1; step <= 24; step += 1) {
+    const angle = (Math.PI * 2 * step) / 24
+    await page.mouse.move(center.x + Math.cos(angle) * radius, center.y + Math.sin(angle) * radius)
+  }
+  await page.mouse.up()
 }
 
 test('displays the allStl upper and lower jaw data in a standalone workspace', async ({ page }) => {
@@ -65,18 +81,7 @@ test('displays the allStl upper and lower jaw data in a standalone workspace', a
 
   await page.getByRole('button', { name: '下颌' }).click()
   await page.getByRole('button', { name: '重置视角' }).click()
-  const canvas = page.locator('.drawing-canvas')
-  const bounds = await canvas.boundingBox()
-  expect(bounds).not.toBeNull()
-  const center = { x: bounds!.x + bounds!.width / 2, y: bounds!.y + bounds!.height / 2 }
-  const radius = 34
-  await page.mouse.move(center.x + radius, center.y)
-  await page.mouse.down()
-  for (let step = 1; step <= 24; step += 1) {
-    const angle = (Math.PI * 2 * step) / 24
-    await page.mouse.move(center.x + Math.cos(angle) * radius, center.y + Math.sin(angle) * radius)
-  }
-  await page.mouse.up()
+  await drawCircle(page, 34)
 
   await expect(page.getByRole('status')).toContainText('种子面')
   await expect(generateButton).toBeEnabled()
@@ -104,4 +109,44 @@ test('displays the allStl upper and lower jaw data in a standalone workspace', a
   )
   await expect(page.getByTestId('active-boundary')).toHaveAttribute('data-point-color', '#00e676')
   await expect(page.getByTestId('seed-preview')).toHaveCount(0)
+
+  await page.getByLabel('当前牙号').fill('12')
+  await page.getByRole('button', { name: '应用牙号' }).click()
+  await drawCircle(page, 18)
+  await expect(page.getByTestId('inactive-boundary')).toHaveAttribute(
+    'data-line-color',
+    '#35d07f',
+  )
+  await expect(page.getByTestId('inactive-boundary')).toHaveAttribute(
+    'data-point-color',
+    '#2474e8',
+  )
+})
+
+test('keeps the seed preview when a generated boundary cannot be prepared', async ({ page }) => {
+  await installSmallJawFixtures(page, { cells: 20, spacing: 1 })
+  await page.route('**/toothGraphCut.worker.ts*', (route) =>
+    route.fulfill({
+      contentType: 'application/javascript',
+      body: `self.onmessage = ({ data }) => {
+        const foregroundMask = data.foregroundMask
+        self.postMessage({ jobId: data.jobId, foregroundMask }, [foregroundMask.buffer])
+      }`,
+    }),
+  )
+  await page.goto(`${baseUrl}/toothSegmentationTest`)
+  await expect(page.getByRole('status')).toContainText('已加载上颌和下颌', {
+    timeout: 30_000,
+  })
+  await page.getByRole('button', { name: '分牙' }).click()
+  await page.getByRole('button', { name: '下颌' }).click()
+  await page.getByRole('button', { name: '重置视角' }).click()
+  await drawCircle(page, 34)
+
+  const generateButton = page.getByRole('button', { name: '生成边界' })
+  await generateButton.click()
+  await expect(page.getByRole('status')).toContainText('重复 Boundary Points')
+  await expect(page.getByTestId('seed-preview')).toHaveAttribute('data-color', '#ef6f91')
+  await expect(page.getByTestId('active-boundary')).toHaveCount(0)
+  await expect(generateButton).toBeEnabled()
 })

@@ -82,18 +82,26 @@
 
     <div ref="viewerRef" class="viewer" data-testid="tooth-segmentation-viewer">
       <span
-        v-if="activeSegmentation?.status === 'seeded'"
+        v-if="activeSeedPreviewVisual"
         class="visual-state-hook"
         data-testid="seed-preview"
-        data-color="#ef6f91"
+        :data-color="activeSeedPreviewVisual.color"
       >种子面预览</span>
       <span
-        v-if="activeSegmentation?.boundary"
+        v-if="activeBoundaryVisual"
         class="visual-state-hook"
         data-testid="active-boundary"
-        data-line-color="#ffffff"
-        data-point-color="#00e676"
+        :data-line-color="activeBoundaryVisual.lineColor"
+        :data-point-color="activeBoundaryVisual.pointColor"
       >当前牙齿边界</span>
+      <span
+        v-for="visual in inactiveBoundaryVisuals"
+        :key="visual.toothId"
+        class="visual-state-hook"
+        data-testid="inactive-boundary"
+        :data-line-color="visual.lineColor"
+        :data-point-color="visual.pointColor"
+      >非当前牙齿边界</span>
       <canvas
         ref="drawingCanvasRef"
         class="drawing-canvas"
@@ -138,7 +146,10 @@ import {
 import {
   applyConfirmedToothRegion,
   buildSegmentationExportPayload,
+  buildToothRegionTopology,
+  classifyToothRegion,
   groupConfirmedTriangles,
+  type ToothRegionTopology,
 } from './utils/toothRegionClassifier'
 import {
   findJawForToothId,
@@ -278,22 +289,17 @@ const canGenerateBoundary = computed(() => {
 })
 const canConfirmBoundary = computed(() => {
   const state = activeSegmentation.value
-  return Boolean(
-    segmentationMode.value &&
-      state?.status === 'boundary-ready' &&
-      generatedTriangleIndices.has(state.toothId),
-  )
+  return Boolean(segmentationMode.value && state?.status === 'boundary-ready' && state.boundary)
 })
 
 const jawMeshes: Partial<Record<JawType, THREE.Mesh>> = {}
 const automaticBoundaryGroups: Partial<Record<JawType, THREE.Group>> = {}
 const toothBoundaryGroups = new Map<number, { group: THREE.Group; mesh: THREE.Mesh }>()
 const seedPreviewGroups = new Map<number, { group: THREE.Group; mesh: THREE.Mesh }>()
-const seedScreenPolygons = new Map<number, ScreenPoint[]>()
-const generatedTriangleIndices = new Map<number, number[]>()
 const surfaceGraphs = new WeakMap<THREE.Mesh, SurfaceGraph>()
 const graphTopologies = new WeakMap<THREE.Mesh, ToothGraphTopology>()
 const seedFaceNeighbors = new WeakMap<THREE.Mesh, number[][]>()
+const regionTopologies = new WeakMap<THREE.Mesh, ToothRegionTopology>()
 const confirmedTriangleLabels: Record<JawType, number[]> = { upper: [], lower: [] }
 const confirmedRegionMeshes = new Map<string, THREE.Mesh>()
 const raycaster = enableNearestHit(new THREE.Raycaster())
@@ -313,6 +319,49 @@ let animationFrameId = 0
 let graphCutWorkerClient: ToothGraphCutWorkerClient | null = null
 let boundaryJobSequence = 0
 const latestBoundaryJobs = new Map<number, number>()
+
+function materialColor(material: THREE.Material | THREE.Material[] | undefined) {
+  const candidate = Array.isArray(material) ? material[0] : material
+  if (
+    !(candidate instanceof THREE.LineBasicMaterial) &&
+    !(candidate instanceof THREE.PointsMaterial)
+  ) return null
+  return `#${candidate.color.getHexString()}`
+}
+
+function boundaryVisual(toothId: number) {
+  const rendered = toothBoundaryGroups.get(toothId)
+  const curve = rendered?.group.getObjectByName('boundary-curve') as THREE.LineSegments | undefined
+  const points = rendered?.group.getObjectByName('boundary-points') as THREE.Points | undefined
+  const lineColor = materialColor(curve?.material)
+  const pointColor = materialColor(points?.material)
+  return rendered && lineColor && pointColor ? { toothId, lineColor, pointColor } : null
+}
+
+function seedPreviewVisual(toothId: number) {
+  const rendered = seedPreviewGroups.get(toothId)
+  const preview = rendered?.group.getObjectByName('seed-faces') as THREE.Mesh | undefined
+  const material = Array.isArray(preview?.material) ? preview.material[0] : preview?.material
+  return rendered && material instanceof THREE.MeshBasicMaterial
+    ? { toothId, color: `#${material.color.getHexString()}` }
+    : null
+}
+
+const activeSeedPreviewVisual = computed(() => {
+  const state = activeSegmentation.value
+  return state?.status === 'seeded' ? seedPreviewVisual(state.toothId) : null
+})
+const activeBoundaryVisual = computed(() => {
+  const state = activeSegmentation.value
+  return state?.boundary ? boundaryVisual(state.toothId) : null
+})
+const inactiveBoundaryVisuals = computed(() => {
+  const activeToothId = editingToothId.value
+  return Array.from(toothSegmentations.value.values())
+    .filter((state) => state.boundary && state.toothId !== activeToothId)
+    .map((state) => boundaryVisual(state.toothId))
+    .filter((visual): visual is NonNullable<typeof visual> => visual !== null)
+})
 
 function getColor(label: number) {
   if (!label) return new THREE.Color(0xd9b1a8)
@@ -989,13 +1038,11 @@ function createSeedSelection() {
   invalidateConfirmedTooth(toothId)
   disposeToothBoundaryGroup(toothId)
   disposeSeedPreview(toothId)
-  generatedTriangleIndices.delete(toothId)
   latestBoundaryJobs.set(toothId, ++boundaryJobSequence)
   const nextGenerating = new Set(generatingToothIds.value)
   nextGenerating.delete(toothId)
   generatingToothIds.value = nextGenerating
   toothSegmentations.value = nextStates
-  seedScreenPolygons.set(toothId, drawingPoints.map((point) => ({ ...point })))
   renderSeedPreview(firstHit.mesh, toothId, state.seedFaceIndices)
   editingToothId.value = toothId
   selectedToothId.value = toothId
@@ -1131,6 +1178,31 @@ function sampleBackgroundRing(polygon: ScreenPoint[], spacing = 6) {
   return samples
 }
 
+function projectSeedFootprint(
+  state: ToothSegmentationState,
+  mesh: THREE.Mesh,
+  topology: ToothGraphTopology,
+) {
+  if (!camera || !drawingCanvasRef.value) return []
+  mesh.updateWorldMatrix(true, false)
+  camera.updateMatrixWorld()
+  const width = drawingCanvasRef.value.clientWidth
+  const height = drawingCanvasRef.value.clientHeight
+  return state.seedFaceIndices
+    .map((face) => {
+      const offset = face * 3
+      const projected = mesh.localToWorld(
+        new THREE.Vector3(
+          topology.faceCenters[offset] ?? Number.NaN,
+          topology.faceCenters[offset + 1] ?? Number.NaN,
+          topology.faceCenters[offset + 2] ?? Number.NaN,
+        ),
+      ).project(camera!)
+      return { x: (projected.x + 1) * width / 2, y: (1 - projected.y) * height / 2 }
+    })
+    .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
+}
+
 function roiOuterBoundaryFaces(topology: ToothGraphTopology, roi: ToothGraphCutRoi) {
   const roiFaces = new Set<number>(roi.faceIndices)
   return Array.from(roi.faceIndices).filter((face) => {
@@ -1148,9 +1220,13 @@ async function generateGraphCutBoundary() {
   if (!state || state.status !== 'seeded' || generatingToothIds.value.has(state.toothId)) return
   const mesh = jawMeshes[state.jaw]
   const topology = mesh ? graphTopologies.get(mesh) : undefined
-  const polygon = seedScreenPolygons.get(state.toothId)
-  if (!mesh || !topology || !polygon) {
-    statusText.value = '生成失败：种子的模型或屏幕区域已丢失。'
+  if (!mesh || !topology) {
+    statusText.value = '生成失败：种子的模型拓扑已丢失。'
+    return
+  }
+  const seedFootprint = projectSeedFootprint(state, mesh, topology)
+  if (seedFootprint.length < 3) {
+    statusText.value = '生成失败：种子面无法投影到当前屏幕。'
     return
   }
 
@@ -1158,11 +1234,12 @@ async function generateGraphCutBoundary() {
   latestBoundaryJobs.set(state.toothId, jobId)
   generatingToothIds.value = new Set(generatingToothIds.value).add(state.toothId)
   statusText.value = `牙号 ${state.toothId} 生成边界中…`
+  let preparedBoundaryGroup: THREE.Group | null = null
 
   try {
     const foreground = new Set(state.seedFaceIndices)
     const ringFaces = new Set<number>()
-    sampleBackgroundRing(polygon).forEach((point) => {
+    sampleBackgroundRing(seedFootprint).forEach((point) => {
       const hit = raycastBoundaryPoint(point, mesh)
       if (hit && !foreground.has(hit.faceIndex)) ringFaces.add(hit.faceIndex)
     })
@@ -1194,15 +1271,18 @@ async function generateGraphCutBoundary() {
       result.foregroundMask,
       state.toothId,
     )
+    const boundaryReady = markBoundaryReady(state, extracted.boundary)
+    preparedBoundaryGroup = createToothBoundaryGroup(mesh, extracted.boundary)
     const nextStates = new Map(toothSegmentations.value)
-    nextStates.set(state.toothId, markBoundaryReady(state, extracted.boundary))
+    nextStates.set(state.toothId, boundaryReady)
+    replaceToothBoundaryGroup(mesh, extracted.boundary, preparedBoundaryGroup)
+    preparedBoundaryGroup = null
     toothSegmentations.value = nextStates
-    generatedTriangleIndices.set(state.toothId, extracted.triangleIndices)
     disposeSeedPreview(state.toothId)
-    renderToothBoundary(mesh, extracted.boundary)
     updateBoundaryStyles()
     statusText.value = `牙号 ${state.toothId} 边界已生成，共 ${extracted.boundary.boundary.length} 个控制点。`
   } catch (error) {
+    disposeObject(preparedBoundaryGroup ?? undefined)
     if (latestBoundaryJobs.get(state.toothId) === jobId) {
       statusText.value = `生成失败：${error instanceof Error ? error.message : String(error)}`
     }
@@ -1243,10 +1323,20 @@ function confirmToothSegmentation() {
   if (toothId == null) return
   const state = toothSegmentations.value.get(toothId)
   const rendered = toothBoundaryGroups.get(toothId)
-  const triangleIndices = generatedTriangleIndices.get(toothId)
-  if (!state?.boundary || !rendered || !triangleIndices?.length) return
+  if (!state?.boundary || state.status !== 'boundary-ready' || !rendered) {
+    statusText.value = '当前牙齿尚无可确认的边界。'
+    return
+  }
 
   try {
+    let topology = regionTopologies.get(rendered.mesh)
+    if (!topology) {
+      topology = buildToothRegionTopology(rendered.mesh.geometry)
+      regionTopologies.set(rendered.mesh, topology)
+    }
+    const originalLabels = rendered.mesh.userData.labels as number[]
+    const region = classifyToothRegion(topology, originalLabels, state.boundary)
+    const triangleIndices = region.triangleIndices
     const jaw = rendered.mesh.userData.jaw as JawType
     const nextLabels = applyConfirmedToothRegion(
       confirmedTriangleLabels[jaw],
@@ -1271,8 +1361,6 @@ function clearBoundary() {
   invalidateConfirmedTooth(toothId)
   disposeToothBoundaryGroup(toothId)
   disposeSeedPreview(toothId)
-  seedScreenPolygons.delete(toothId)
-  generatedTriangleIndices.delete(toothId)
   latestBoundaryJobs.set(toothId, ++boundaryJobSequence)
   const nextStates = new Map(toothSegmentations.value)
   nextStates.delete(toothId)
@@ -1284,8 +1372,7 @@ function clearBoundary() {
   statusText.value = `牙号 ${toothId} 的边界已清除。`
 }
 
-function renderToothBoundary(mesh: THREE.Mesh, boundary: ToothBoundary) {
-  disposeToothBoundaryGroup(boundary.toothId)
+function createToothBoundaryGroup(mesh: THREE.Mesh, boundary: ToothBoundary) {
   const controlPoints = boundaryControlVectors(boundary)
   const graph = surfaceGraphs.get(mesh)
   if (!graph) throw new Error(`${mesh.name} 的 STL 表面拓扑尚未建立`)
@@ -1330,9 +1417,23 @@ function renderToothBoundary(mesh: THREE.Mesh, boundary: ToothBoundary) {
   group.add(curve)
   points.userData.boundaryCurve = curve
 
+  return group
+}
+
+function replaceToothBoundaryGroup(
+  mesh: THREE.Mesh,
+  boundary: ToothBoundary,
+  group: THREE.Group,
+) {
+  disposeToothBoundaryGroup(boundary.toothId)
   mesh.add(group)
   toothBoundaryGroups.set(boundary.toothId, { group, mesh })
   updateBoundaryStyles()
+}
+
+function renderToothBoundary(mesh: THREE.Mesh, boundary: ToothBoundary) {
+  const group = createToothBoundaryGroup(mesh, boundary)
+  replaceToothBoundaryGroup(mesh, boundary, group)
 }
 
 function updateBoundaryStyles() {
@@ -1392,12 +1493,6 @@ function applyToothId() {
   nextStates.delete(sourceToothId)
   nextStates.set(targetToothId, movedState)
   toothSegmentations.value = nextStates
-  const sourcePolygon = seedScreenPolygons.get(sourceToothId)
-  seedScreenPolygons.delete(sourceToothId)
-  if (sourcePolygon) seedScreenPolygons.set(targetToothId, sourcePolygon)
-  const sourceTriangles = generatedTriangleIndices.get(sourceToothId)
-  generatedTriangleIndices.delete(sourceToothId)
-  if (sourceTriangles && movedBoundary) generatedTriangleIndices.set(targetToothId, sourceTriangles)
   if (movedBoundary) renderToothBoundary(mesh, movedBoundary)
   else renderSeedPreview(mesh, targetToothId, movedState.seedFaceIndices)
   editingToothId.value = targetToothId
@@ -1462,8 +1557,6 @@ async function loadBoundaryJson(event: Event) {
     clearConfirmedRegionMeshes()
     confirmedTriangleLabels.upper = imported.jaws.upper
     confirmedTriangleLabels.lower = imported.jaws.lower
-    seedScreenPolygons.clear()
-    generatedTriangleIndices.clear()
     const importedStates = new Map<number, ToothSegmentationState>()
     imported.boundaries.forEach((boundary) => {
       const mesh = renderTargets.get(boundary.toothId)!
@@ -1472,7 +1565,6 @@ async function loadBoundaryJson(event: Event) {
       let state = markBoundaryReady(createSeededState(boundary.toothId, jaw, []), boundary)
       if (confirmed.length) state = markConfirmed(state, confirmed)
       importedStates.set(boundary.toothId, state)
-      if (confirmed.length) generatedTriangleIndices.set(boundary.toothId, confirmed)
     })
     toothSegmentations.value = importedStates
     segmentationMode.value = true
