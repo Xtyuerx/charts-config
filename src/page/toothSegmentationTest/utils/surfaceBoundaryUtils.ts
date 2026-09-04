@@ -12,6 +12,16 @@ export type ClosedSurfacePath = {
   segmentPoints: THREE.Vector3[][]
 }
 
+export type SurfaceBoundaryDragFrame = {
+  sourceMesh: THREE.Mesh
+  graph: SurfaceGraph
+  currentPath: ClosedSurfacePath
+  controlIndex: number
+  raycastSurface: (mesh: THREE.Mesh) => Pick<THREE.Intersection, 'point'> | null
+  updateControlPoint: (point: THREE.Vector3) => void
+  updateOverlay: (segmentPoints: THREE.Vector3[][]) => void
+}
+
 export type LabelBoundary = {
   linePoints: THREE.Vector3[]
   pointPositions: THREE.Vector3[]
@@ -54,17 +64,40 @@ export function updateSurfaceLineGeometry(
   geometry: THREE.BufferGeometry,
   segmentPoints: THREE.Vector3[][],
 ) {
-  const position = geometry.getAttribute('position') as THREE.BufferAttribute | undefined
+  let position = geometry.getAttribute('position') as THREE.BufferAttribute | undefined
   if (!position) throw new Error('边界线缺少 position 属性')
   const linePoints = surfaceSegmentsToLinePoints(segmentPoints)
   if (position.count < linePoints.length) {
-    position.array = new Float32Array(linePoints.length * 3)
-    ;(position as unknown as { count: number }).count = linePoints.length
+    position = new THREE.BufferAttribute(new Float32Array(linePoints.length * 3), 3)
+    position.setUsage(THREE.DynamicDrawUsage)
+    geometry.setAttribute('position', position)
   }
   linePoints.forEach((point, index) => position.setXYZ(index, point.x, point.y, point.z))
   geometry.setDrawRange(0, linePoints.length)
   position.needsUpdate = true
   geometry.computeBoundingSphere()
+}
+
+/**
+ * Performs exactly one drawn-boundary drag frame. All geometry writes are delegated to the
+ * boundary overlay callbacks; the original STL mesh is used only as the raycast target.
+ */
+export function applySurfaceBoundaryDragFrame({
+  sourceMesh,
+  graph,
+  currentPath,
+  controlIndex,
+  raycastSurface,
+  updateControlPoint,
+  updateOverlay,
+}: SurfaceBoundaryDragFrame) {
+  const intersection = raycastSurface(sourceMesh)
+  if (!intersection) return null
+  const point = intersection.point.clone()
+  const path = moveClosedSurfacePathAnchor(graph, currentPath, controlIndex, point)
+  updateControlPoint(point)
+  updateOverlay(path.segmentPoints)
+  return { point, path }
 }
 
 type QueueItem = {

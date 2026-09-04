@@ -3,10 +3,12 @@ import * as THREE from 'three'
 
 import {
   buildSurfaceGraph,
+  createSurfaceLineGeometry,
   createClosedSurfaceSegments,
   createClosedSurfacePath,
   createSurfaceSegmentPoints,
   extractLabelBoundary,
+  applySurfaceBoundaryDragFrame,
   moveClosedSurfacePathAnchor,
   moveLabelBoundaryControl,
   updateSurfaceLineGeometry,
@@ -247,6 +249,83 @@ test('updates a cached boundary line position attribute in place after a local a
   expect(Array.from(position.array)).toEqual([0, 0, 0, 0.75, 0.25, 0, 0.75, 0.25, 0, 1, 1, 0])
   expect(position.version).toBeGreaterThan(initialVersion)
   expect(setAttributeCalls).toBe(0)
+})
+
+test('replaces only a boundary overlay position attribute when its cached capacity grows', () => {
+  const geometry = createSurfaceLineGeometry([[new THREE.Vector3(0, 0, 0), new THREE.Vector3(1, 0, 0)]])
+  const originalPosition = geometry.getAttribute('position') as THREE.BufferAttribute
+  const originalSetAttribute = geometry.setAttribute.bind(geometry)
+  let setAttributeCalls = 0
+  geometry.setAttribute = ((...args) => {
+    setAttributeCalls += 1
+    return originalSetAttribute(...args)
+  }) as typeof geometry.setAttribute
+
+  updateSurfaceLineGeometry(geometry, [
+    [new THREE.Vector3(0, 0, 0), new THREE.Vector3(0.5, 0.5, 0)],
+    [new THREE.Vector3(0.5, 0.5, 0), new THREE.Vector3(1, 1, 0)],
+  ])
+
+  const nextPosition = geometry.getAttribute('position') as THREE.BufferAttribute
+  expect(nextPosition).not.toBe(originalPosition)
+  expect(nextPosition.count).toBe(4)
+  expect(Array.from(nextPosition.array)).toEqual([0, 0, 0, 0.5, 0.5, 0, 0.5, 0.5, 0, 1, 1, 0])
+  expect(setAttributeCalls).toBe(1)
+})
+
+test('runs a drawn drag frame against only its original jaw mesh without mutating source geometry', () => {
+  const sourceGeometry = new THREE.BufferGeometry()
+  sourceGeometry.setAttribute(
+    'position',
+    new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0], 3),
+  )
+  const sourceMesh = new THREE.Mesh(sourceGeometry)
+  const graph = buildSurfaceGraph(sourceGeometry)
+  const path = createClosedSurfacePath(graph, [
+    new THREE.Vector3(0, 0, 0),
+    new THREE.Vector3(1, 0, 0),
+    new THREE.Vector3(1, 1, 0),
+    new THREE.Vector3(0, 1, 0),
+  ])
+  const originalSegments = [...path.segmentPoints]
+  const sourcePosition = sourceGeometry.getAttribute('position') as THREE.BufferAttribute
+  const originalSourceSetAttribute = sourceGeometry.setAttribute.bind(sourceGeometry)
+  let sourceSetAttributeCalls = 0
+  sourceGeometry.setAttribute = ((...args) => {
+    sourceSetAttributeCalls += 1
+    return originalSourceSetAttribute(...args)
+  }) as typeof sourceGeometry.setAttribute
+  const overlayGeometry = createSurfaceLineGeometry(path.segmentPoints)
+  const overlayPosition = overlayGeometry.getAttribute('position')
+  const raycastTargets: THREE.Mesh[] = []
+  const hitPoint = new THREE.Vector3(0.75, 0.25, 0)
+  const control = new THREE.Vector3()
+
+  const result = applySurfaceBoundaryDragFrame({
+    sourceMesh,
+    graph,
+    currentPath: path,
+    controlIndex: 1,
+    raycastSurface: (mesh) => {
+      raycastTargets.push(mesh)
+      return { point: hitPoint } as THREE.Intersection
+    },
+    updateControlPoint: (point) => control.copy(point),
+    updateOverlay: (segmentPoints) => updateSurfaceLineGeometry(overlayGeometry, segmentPoints),
+  })
+
+  expect(raycastTargets).toEqual([sourceMesh])
+  expect(result?.point).not.toBe(hitPoint)
+  expect(result?.point.toArray()).toEqual(hitPoint.toArray())
+  expect(control.toArray()).toEqual(hitPoint.toArray())
+  expect(result?.path.segmentPoints[0]).not.toBe(originalSegments[0])
+  expect(result?.path.segmentPoints[1]).not.toBe(originalSegments[1])
+  expect(result?.path.segmentPoints[2]).toBe(originalSegments[2])
+  expect(result?.path.segmentPoints[3]).toBe(originalSegments[3])
+  expect(overlayGeometry.getAttribute('position')).toBe(overlayPosition)
+  expect(sourceGeometry).toBe(sourceMesh.geometry)
+  expect(sourceGeometry.getAttribute('position')).toBe(sourcePosition)
+  expect(sourceSetAttributeCalls).toBe(0)
 })
 
 test('sets linked white endpoints to the STL hit instead of applying a delta translation', () => {

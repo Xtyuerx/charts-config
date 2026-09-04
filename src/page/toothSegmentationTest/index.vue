@@ -122,12 +122,12 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { STLLoader } from 'three-stdlib'
 import {
+  applySurfaceBoundaryDragFrame,
   buildSurfaceGraph,
   createClosedSurfacePath,
   createSurfaceLineGeometry,
   createSurfaceSegmentPoints,
   extractLabelBoundary,
-  moveClosedSurfacePathAnchor,
   moveLabelBoundaryControl,
   updateSurfaceLineGeometry,
   type ClosedSurfacePath,
@@ -310,7 +310,7 @@ const raycaster = enableNearestHit(new THREE.Raycaster())
 const pointer = new THREE.Vector2()
 let pointHighlight: THREE.Points | null = null
 let boundaryDragState: BoundaryDragState | null = null
-let pendingDragPoint: THREE.Vector3 | null = null
+let pendingDragRaycast: ((mesh: THREE.Mesh) => Pick<THREE.Intersection, 'point'> | null) | null = null
 let dragUpdateFrameId = 0
 let drawing = false
 let drawingPoints: Array<{ x: number; y: number }> = []
@@ -784,7 +784,7 @@ function startBoundaryPointDrag(pick: BoundaryPointPick, event: PointerEvent) {
       updateBoundaryStyles()
     }
   }
-  pendingDragPoint = null
+  pendingDragRaycast = null
   if (controls) controls.enabled = false
   drawingCanvasRef.value?.setPointerCapture(event.pointerId)
   if (drawingCanvasRef.value) drawingCanvasRef.value.style.cursor = 'grabbing'
@@ -793,13 +793,11 @@ function startBoundaryPointDrag(pick: BoundaryPointPick, event: PointerEvent) {
   event.preventDefault()
 }
 
-function raycastMeshSurface(event: PointerEvent, jaw: JawType) {
+function raycastMeshSurface(event: PointerEvent, mesh: THREE.Mesh) {
   if (!updateRaycasterFromEvent(event)) return null
-  const mesh = jawMeshes[jaw]
-  if (!mesh) return null
   const hit = raycaster.intersectObject(mesh, false)[0]
   if (!hit) return null
-  return hit.point.clone()
+  return hit
 }
 
 function updateAutomaticBoundaryPoint(state: BoundaryDragState, nextPoint: THREE.Vector3) {
@@ -840,7 +838,10 @@ function updateAutomaticBoundaryPoint(state: BoundaryDragState, nextPoint: THREE
   updateSurfaceLineGeometry(boundaryLines.geometry, segmentPoints)
 }
 
-function updateDrawnBoundaryPoint(state: BoundaryDragState, nextPoint: THREE.Vector3) {
+function updateDrawnBoundaryPoint(
+  state: BoundaryDragState,
+  raycastSurface: (mesh: THREE.Mesh) => Pick<THREE.Intersection, 'point'> | null,
+) {
   const toothId = Number(state.points.userData.toothId)
   const segmentation = toothSegmentations.value.get(toothId)
   if (!segmentation?.boundary) throw new Error(`未找到牙号 ${toothId} 的边界`)
@@ -857,28 +858,32 @@ function updateDrawnBoundaryPoint(state: BoundaryDragState, nextPoint: THREE.Vec
   const currentSurfacePath = state.points.userData.surfacePath as
     | ClosedSurfacePath
     | undefined
-  if (!graph || !currentSurfacePath) {
+  if (!mesh || !graph || !currentSurfacePath) {
     throw new Error(`${state.mesh.name} 的边界表面路径尚未建立`)
   }
-  const nextSurfacePath = moveClosedSurfacePathAnchor(
+  const curve = state.points.userData.boundaryCurve as THREE.LineSegments
+  const pointPosition = state.points.geometry.getAttribute('position') as THREE.BufferAttribute
+  const result = applySurfaceBoundaryDragFrame({
+    sourceMesh: mesh,
     graph,
-    currentSurfacePath,
-    state.pointIndex,
-    nextPoint,
-  )
+    currentPath: currentSurfacePath,
+    controlIndex: state.pointIndex,
+    raycastSurface,
+    updateControlPoint: (point) => {
+      pointPosition.setXYZ(state.pointIndex, point.x, point.y, point.z)
+      pointPosition.needsUpdate = true
+      state.points.geometry.computeBoundingSphere()
+    },
+    updateOverlay: (segmentPoints) => updateSurfaceLineGeometry(curve.geometry, segmentPoints),
+  })
+  if (!result) return
   const boundary = updateBoundaryControlPoint(
     nextBoundaries,
     toothId,
     state.pointIndex,
-    nextPoint,
+    result.point,
   )
-  const curve = state.points.userData.boundaryCurve as THREE.LineSegments
-  const pointPosition = state.points.geometry.getAttribute('position') as THREE.BufferAttribute
-  pointPosition.setXYZ(state.pointIndex, nextPoint.x, nextPoint.y, nextPoint.z)
-  pointPosition.needsUpdate = true
-  state.points.geometry.computeBoundingSphere()
-  updateSurfaceLineGeometry(curve.geometry, nextSurfacePath.segmentPoints)
-  state.points.userData.surfacePath = nextSurfacePath
+  state.points.userData.surfacePath = result.path
   state.pendingBoundary = boundary
   state.hasMoved = true
 }
@@ -886,12 +891,16 @@ function updateDrawnBoundaryPoint(state: BoundaryDragState, nextPoint: THREE.Vec
 function flushBoundaryPointDrag() {
   dragUpdateFrameId = 0
   const state = boundaryDragState
-  const nextPoint = pendingDragPoint
-  pendingDragPoint = null
-  if (!state || !nextPoint) return
+  const raycastSurface = pendingDragRaycast
+  pendingDragRaycast = null
+  if (!state || !raycastSurface) return
   try {
-    if (state.kind === 'automatic') updateAutomaticBoundaryPoint(state, nextPoint)
-    else updateDrawnBoundaryPoint(state, nextPoint)
+    if (state.kind === 'automatic') {
+      const mesh = jawMeshes[state.jaw]
+      const hit = mesh ? raycastSurface(mesh) : null
+      if (!hit) return
+      updateAutomaticBoundaryPoint(state, hit.point.clone())
+    } else updateDrawnBoundaryPoint(state, raycastSurface)
     setPointHighlight(state, 0xff7a00)
   } catch (error) {
     statusText.value = error instanceof Error ? error.message : String(error)
@@ -899,10 +908,9 @@ function flushBoundaryPointDrag() {
 }
 
 function updateBoundaryPointDrag(event: PointerEvent) {
-  if (!boundaryDragState) return
-  const surfacePoint = raycastMeshSurface(event, boundaryDragState.jaw)
-  if (!surfacePoint) return
-  pendingDragPoint = surfacePoint
+  const state = boundaryDragState
+  if (!state || !jawMeshes[state.jaw]) return
+  pendingDragRaycast = (mesh) => raycastMeshSurface(event, mesh)
   if (!dragUpdateFrameId) dragUpdateFrameId = requestAnimationFrame(flushBoundaryPointDrag)
   event.preventDefault()
 }
@@ -932,7 +940,7 @@ function finishBoundaryPointDrag(event?: PointerEvent) {
   const kind = finishedState.kind
   const invalidated = kind === 'drawn' ? commitDrawnBoundaryEdit(finishedState) : false
   boundaryDragState = null
-  pendingDragPoint = null
+  pendingDragRaycast = null
   setPointHighlight(null)
   if (drawingCanvasRef.value) drawingCanvasRef.value.style.cursor = 'crosshair'
   statusText.value =
