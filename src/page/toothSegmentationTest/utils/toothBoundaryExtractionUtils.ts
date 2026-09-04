@@ -6,6 +6,7 @@ import type { ToothGraphCutRoi, ToothGraphTopology } from './toothGraphCutUtils'
 const EDGE_PRECISION = 100_000
 const MIN_CONTROL_COUNT = 24
 const MAX_CONTROL_COUNT = 64
+const DISTANCE_TIE_EPSILON = 1e-6
 
 type BoundaryEdge = {
   from: string
@@ -333,7 +334,7 @@ function seedCountInsideLoop(
 function simplifyOpen(points: THREE.Vector3[], tolerance: number): THREE.Vector3[] {
   if (points.length < 3) return points.map((point) => point.clone())
   const first = points[0]!
-  const last = points.at(-1)!
+  const last = points[points.length - 1]!
   const line = last.clone().sub(first)
   const lineLengthSquared = line.lengthSq()
   let furthestDistance = -1
@@ -344,7 +345,7 @@ function simplifyOpen(points: THREE.Vector3[], tolerance: number): THREE.Vector3
       ? THREE.MathUtils.clamp(point.clone().sub(first).dot(line) / lineLengthSquared, 0, 1)
       : 0
     const distance = point.distanceTo(first.clone().addScaledVector(line, ratio))
-    if (distance > furthestDistance) {
+    if (distance > furthestDistance + DISTANCE_TIE_EPSILON) {
       furthestDistance = distance
       furthestIndex = index
     }
@@ -356,21 +357,33 @@ function simplifyOpen(points: THREE.Vector3[], tolerance: number): THREE.Vector3
   ]
 }
 
-function removeNearCollinearClosedPoints(points: THREE.Vector3[], tolerance: number) {
-  const result = points.map((point) => point.clone())
+function pointToClosedPolylineDistance(point: THREE.Vector3, loop: THREE.Vector3[]) {
+  return Math.min(
+    ...loop.map((from, index) => {
+      const to = loop[(index + 1) % loop.length]!
+      const segment = to.clone().sub(from)
+      const denominator = segment.lengthSq()
+      const ratio = denominator
+        ? THREE.MathUtils.clamp(point.clone().sub(from).dot(segment) / denominator, 0, 1)
+        : 0
+      return point.distanceTo(from.clone().addScaledVector(segment, ratio))
+    }),
+  )
+}
+
+function removeGloballyRedundantClosedPoints(
+  simplified: THREE.Vector3[],
+  original: THREE.Vector3[],
+  tolerance: number,
+) {
+  const result = simplified.map((point) => point.clone())
   let changed = true
   while (changed && result.length > 3) {
     changed = false
     for (let index = 0; index < result.length && result.length > 3; index += 1) {
-      const previous = result[(index - 1 + result.length) % result.length]!
-      const point = result[index]!
-      const next = result[(index + 1) % result.length]!
-      const segment = next.clone().sub(previous)
-      const denominator = segment.lengthSq()
-      const ratio = denominator
-        ? THREE.MathUtils.clamp(point.clone().sub(previous).dot(segment) / denominator, 0, 1)
-        : 0
-      if (point.distanceTo(previous.clone().addScaledVector(segment, ratio)) > tolerance) continue
+      const candidate = result.filter((_, candidateIndex) => candidateIndex !== index)
+      if (original.some((point) => pointToClosedPolylineDistance(point, candidate) > tolerance))
+        continue
       result.splice(index, 1)
       changed = true
       index -= 1
@@ -380,33 +393,46 @@ function removeNearCollinearClosedPoints(points: THREE.Vector3[], tolerance: num
 }
 
 function simplifyClosedLoop(points: THREE.Vector3[], tolerance: number) {
-  points = removeNearCollinearClosedPoints(points, tolerance)
-  let firstIndex = 0
-  let secondIndex = 1
-  let maximumDistance = -1
-  for (let first = 0; first < points.length; first += 1) {
-    for (let second = first + 1; second < points.length; second += 1) {
-      const distance = points[first]!.distanceToSquared(points[second]!)
-      if (distance > maximumDistance) {
-        maximumDistance = distance
-        firstIndex = first
-        secondIndex = second
-      }
+  if (points.length < 4) return points.map((point) => point.clone())
+  const firstIndex = points.reduce((best, point, index) => {
+    const current = points[best]!
+    if (point.x !== current.x) return point.x < current.x ? index : best
+    if (point.y !== current.y) return point.y < current.y ? index : best
+    return point.z < current.z ? index : best
+  }, 0)
+  const secondIndex = points.reduce(
+    (best, point, index) => {
+      return point.distanceToSquared(points[firstIndex]!) >
+        points[best]!.distanceToSquared(points[firstIndex]!)
+        ? index
+        : best
+    },
+    firstIndex === 0 ? 1 : 0,
+  )
+  const orderedChain = (from: number, to: number) => {
+    const chain = [points[from]!]
+    for (
+      let index = (from + 1) % points.length;
+      index !== to;
+      index = (index + 1) % points.length
+    ) {
+      chain.push(points[index]!)
     }
+    chain.push(points[to]!)
+    return chain
   }
-  const forward = Array.from(
-    { length: secondIndex - firstIndex + 1 },
-    (_, offset) => points[firstIndex + offset]!,
-  )
-  const backward = Array.from(
-    { length: points.length - forward.length + 2 },
-    (_, offset) => points[(secondIndex + offset) % points.length]!,
-  )
+  const forward = orderedChain(firstIndex, secondIndex)
+  const backward = orderedChain(secondIndex, firstIndex)
   const simplified = [
     ...simplifyOpen(forward, tolerance).slice(0, -1),
     ...simplifyOpen(backward, tolerance).slice(0, -1),
   ]
-  return simplified.length >= 3 ? simplified : points.map((point) => point.clone())
+  if (simplified.length < 3) return points.map((point) => point.clone())
+  return removeGloballyRedundantClosedPoints(simplified, points, tolerance)
+}
+
+export function simplifyToothBoundaryLoop(points: THREE.Vector3[], seedDiameter: number) {
+  return simplifyClosedLoop(points, Math.max(0.15, seedDiameter * 0.01))
 }
 
 function resampleClosedLoop(points: THREE.Vector3[], seedDiameter: number) {
@@ -467,7 +493,9 @@ export function extractToothBoundary(
       second.length - first.length ||
       first.stableKey.localeCompare(second.stableKey),
   )
-  const tolerance = Math.max(0.15, roi.seedDiameter * 0.01)
-  const loop = resampleClosedLoop(simplifyClosedLoop(loops[0]!.points, tolerance), roi.seedDiameter)
+  const loop = resampleClosedLoop(
+    simplifyToothBoundaryLoop(loops[0]!.points, roi.seedDiameter),
+    roi.seedDiameter,
+  )
   return { triangleIndices, loop, boundary: createToothBoundary(toothId, loop) }
 }

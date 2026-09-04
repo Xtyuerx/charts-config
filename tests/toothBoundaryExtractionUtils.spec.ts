@@ -1,7 +1,10 @@
 import { expect, test } from '@playwright/test'
 import * as THREE from 'three'
 
-import { extractToothBoundary } from '../src/page/toothSegmentationTest/utils/toothBoundaryExtractionUtils'
+import {
+  extractToothBoundary,
+  simplifyToothBoundaryLoop,
+} from '../src/page/toothSegmentationTest/utils/toothBoundaryExtractionUtils'
 import {
   buildToothGraphTopology,
   type ToothGraphCutRoi,
@@ -72,6 +75,31 @@ function roiFor(faceCount: number, seeds: number[], seedDiameter = 4): ToothGrap
     ),
     seedDiameter,
   }
+}
+
+function notchedSquare(notch: number) {
+  return [
+    new THREE.Vector3(0, 0, 0),
+    new THREE.Vector3(4, 0, 0),
+    new THREE.Vector3(4 + notch, 0.5, 0),
+    new THREE.Vector3(4, 1, 0),
+    new THREE.Vector3(4, 4, 0),
+    new THREE.Vector3(0, 4, 0),
+  ]
+}
+
+function pointToClosedPolylineDistance(point: THREE.Vector3, loop: THREE.Vector3[]) {
+  return Math.min(
+    ...loop.map((from, index) => {
+      const to = loop[(index + 1) % loop.length]!
+      const segment = to.clone().sub(from)
+      const denominator = segment.lengthSq()
+      const ratio = denominator
+        ? THREE.MathUtils.clamp(point.clone().sub(from).dot(segment) / denominator, 0, 1)
+        : 0
+      return point.distanceTo(from.clone().addScaledVector(segment, ratio))
+    }),
+  )
 }
 
 test('keeps the foreground component containing the most seed faces', () => {
@@ -201,6 +229,35 @@ test('uses the maximum simplification tolerance to remove a sub-tolerance bounda
   )
 
   expect(Math.max(...extracted.loop.map((point) => point.x))).toBeLessThanOrEqual(4.001)
+})
+
+test('uses the 0.15 tolerance branch at its threshold boundary', () => {
+  const below = simplifyToothBoundaryLoop(notchedSquare(0.149), 10)
+  const above = simplifyToothBoundaryLoop(notchedSquare(0.151), 10)
+
+  expect(Math.max(...below.map((point) => point.x))).toBeLessThanOrEqual(4.001)
+  expect(Math.max(...above.map((point) => point.x))).toBeGreaterThan(4.14)
+})
+
+test('uses the seed-diameter tolerance branch at its threshold boundary', () => {
+  const below = simplifyToothBoundaryLoop(notchedSquare(0.299), 30)
+  const above = simplifyToothBoundaryLoop(notchedSquare(0.301), 30)
+
+  expect(Math.max(...below.map((point) => point.x))).toBeLessThanOrEqual(4.001)
+  expect(Math.max(...above.map((point) => point.x))).toBeGreaterThan(4.29)
+})
+
+test('keeps every dense-circle source point within the closed simplification tolerance', () => {
+  const source = Array.from({ length: 256 }, (_, index) => {
+    const angle = (Math.PI * 2 * index) / 256
+    return new THREE.Vector3(10 * Math.cos(angle), 10 * Math.sin(angle), 0)
+  })
+
+  const simplified = simplifyToothBoundaryLoop(source, 10)
+
+  expect(
+    Math.max(...source.map((point) => pointToClosedPolylineDistance(point, simplified))),
+  ).toBeLessThanOrEqual(0.150001)
 })
 
 test('selects the seed-containing outer loop even when its directly adjacent triangles are smaller', () => {
