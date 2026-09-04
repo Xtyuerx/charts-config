@@ -36,20 +36,6 @@ export function canonicalQuantizedEdgeKey(from: string, to: string) {
   return from < to ? `${from}|${to}` : `${to}|${from}`
 }
 
-function faceLabel(labels: number[], faceIndex: number) {
-  const offset = faceIndex * 3
-  const values = [
-    Number(labels[offset] ?? 0),
-    Number(labels[offset + 1] ?? 0),
-    Number(labels[offset + 2] ?? 0),
-  ]
-  const counts = new Map<number, number>()
-  values.forEach((label) => counts.set(label, (counts.get(label) ?? 0) + 1))
-  return values.reduce((best, label) =>
-    (counts.get(label) ?? 0) > (counts.get(best) ?? 0) ? label : best,
-  )
-}
-
 export function buildToothRegionTopology(geometry: THREE.BufferGeometry) {
   const position = geometry.getAttribute('position') as THREE.BufferAttribute | undefined
   if (!position) throw new Error('STL geometry 缺少 position 属性')
@@ -117,62 +103,47 @@ function boundaryBlockedEdges(topology: ToothRegionTopology, boundary: ToothBoun
   return blockedEdges
 }
 
-function findSeedFace(
-  topology: ToothRegionTopology,
-  originalLabels: number[],
-  boundary: ToothBoundary,
-) {
-  const controls = boundaryControlVectors(boundary)
-  const center = controls
-    .reduce((sum, point) => sum.add(point), new THREE.Vector3())
-    .multiplyScalar(1 / Math.max(controls.length, 1))
-  let seed = -1
-  let bestDistance = Number.POSITIVE_INFINITY
-  topology.faceCenters.forEach((faceCenter, faceIndex) => {
-    if (faceLabel(originalLabels, faceIndex) !== boundary.toothId) return
-    const distance = faceCenter.distanceToSquared(center)
-    if (distance >= bestDistance) return
-    seed = faceIndex
-    bestDistance = distance
-  })
-  if (seed < 0) throw new Error(`原始 STL 标签中找不到牙号 ${boundary.toothId} 的种子三角形`)
-  return seed
-}
-
 export function classifyToothRegion(
   topology: ToothRegionTopology,
-  originalLabels: number[],
   boundary: ToothBoundary,
 ): ClassifiedToothRegion {
   const blockedEdges = boundaryBlockedEdges(topology, boundary)
-  const seed = findSeedFace(topology, originalLabels, boundary)
-  const visited = new Set<number>([seed])
-  const queue = [seed]
+  const visited = new Set<number>()
+  const components: number[][] = []
 
-  for (let cursor = 0; cursor < queue.length; cursor += 1) {
-    const faceIndex = queue[cursor]!
-    for (const edge of topology.faceNeighbors[faceIndex] ?? []) {
-      if (blockedEdges.has(edge.edgeKey) || visited.has(edge.neighbor)) continue
-      visited.add(edge.neighbor)
-      queue.push(edge.neighbor)
+  for (let firstFace = 0; firstFace < topology.faceNeighbors.length; firstFace += 1) {
+    if (visited.has(firstFace)) continue
+    const component = [firstFace]
+    visited.add(firstFace)
+    for (let cursor = 0; cursor < component.length; cursor += 1) {
+      const faceIndex = component[cursor]!
+      for (const edge of topology.faceNeighbors[faceIndex] ?? []) {
+        if (blockedEdges.has(edge.edgeKey) || visited.has(edge.neighbor)) continue
+        visited.add(edge.neighbor)
+        component.push(edge.neighbor)
+      }
     }
+    components.push(component.sort((first, second) => first - second))
   }
-  if (visited.size === topology.faceNeighbors.length) {
+  if (components.length < 2) {
     throw new Error('Boundary 未形成有效闭合区域，分类结果会覆盖整个 STL')
   }
+  const triangleIndices = components.sort(
+    (first, second) => first.length - second.length || first[0]! - second[0]!,
+  )[0]!
   return {
     toothId: boundary.toothId,
-    triangleIndices: Array.from(visited).sort((a, b) => a - b),
+    triangleIndices,
     blockedEdgeCount: blockedEdges.size,
   }
 }
 
-export function applyConfirmedToothRegion(
-  triangleLabels: number[],
+export function prepareConfirmedToothRegion(
+  currentLabels: readonly number[],
   toothId: number,
-  triangleIndices: number[],
+  triangleIndices: readonly number[],
 ) {
-  const nextLabels = triangleLabels.map((label) => (label === toothId ? 0 : label))
+  const nextLabels = currentLabels.map((label) => (label === toothId ? 0 : label))
   const conflicts = new Map<number, number>()
   triangleIndices.forEach((triangleIndex) => {
     const label = Number(nextLabels[triangleIndex] ?? 0)
@@ -191,6 +162,45 @@ export function applyConfirmedToothRegion(
     }
   })
   return nextLabels
+}
+
+export function applyConfirmedToothRegion(
+  triangleLabels: number[],
+  toothId: number,
+  triangleIndices: number[],
+) {
+  return prepareConfirmedToothRegion(triangleLabels, toothId, triangleIndices)
+}
+
+export function buildConfirmedToothGeometry(
+  source: THREE.BufferGeometry,
+  triangleIndices: readonly number[],
+): THREE.BufferGeometry {
+  const position = source.getAttribute('position') as THREE.BufferAttribute | undefined
+  if (!position) throw new Error('STL geometry 缺少 position 属性')
+  const sourceIndex = source.getIndex()
+  const triangleCount = Math.floor((sourceIndex?.count ?? position.count) / 3)
+  const positions = new Float32Array(triangleIndices.length * 9)
+
+  triangleIndices.forEach((triangleIndex, outputTriangleIndex) => {
+    if (!Number.isInteger(triangleIndex) || triangleIndex < 0 || triangleIndex >= triangleCount) {
+      throw new Error(`三角面索引 ${triangleIndex} 超出 STL 范围`)
+    }
+    for (let vertex = 0; vertex < 3; vertex += 1) {
+      const sourceVertexIndex = sourceIndex
+        ? sourceIndex.getX(triangleIndex * 3 + vertex)
+        : triangleIndex * 3 + vertex
+      const outputOffset = outputTriangleIndex * 9 + vertex * 3
+      positions[outputOffset] = position.getX(sourceVertexIndex)
+      positions[outputOffset + 1] = position.getY(sourceVertexIndex)
+      positions[outputOffset + 2] = position.getZ(sourceVertexIndex)
+    }
+  })
+
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  geometry.computeVertexNormals()
+  return geometry
 }
 
 export function groupConfirmedTriangles(triangleLabels: number[]) {

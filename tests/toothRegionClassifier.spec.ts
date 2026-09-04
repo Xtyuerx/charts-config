@@ -3,10 +3,11 @@ import * as THREE from 'three'
 
 import { createToothBoundary } from '../src/page/toothSegmentationTest/utils/toothBoundaryEditorUtils'
 import {
-  applyConfirmedToothRegion,
+  buildConfirmedToothGeometry,
   buildSegmentationExportPayload,
   buildToothRegionTopology,
   classifyToothRegion,
+  prepareConfirmedToothRegion,
 } from '../src/page/toothSegmentationTest/utils/toothRegionClassifier'
 
 function createTwoFaceGeometry() {
@@ -28,7 +29,7 @@ function createTwoFaceGeometry() {
   return geometry
 }
 
-test('classifies triangles reachable from the tooth seed without crossing Boundary edges', () => {
+test('classifies the closed surface-boundary interior without original tooth labels', () => {
   const geometry = createTwoFaceGeometry()
   const topology = buildToothRegionTopology(geometry)
   const boundary = createToothBoundary(11, [
@@ -37,7 +38,7 @@ test('classifies triangles reachable from the tooth seed without crossing Bounda
     new THREE.Vector3(1, 1, 0),
   ])
 
-  const region = classifyToothRegion(topology, [11, 11, 11, 0, 0, 0], boundary)
+  const region = classifyToothRegion(topology, boundary)
 
   expect(region.toothId).toBe(11)
   expect(region.triangleIndices).toEqual([0])
@@ -45,13 +46,53 @@ test('classifies triangles reachable from the tooth seed without crossing Bounda
 })
 
 test('replaces the previous region for the same tooth', () => {
-  expect(applyConfirmedToothRegion([11, 11, 0], 11, [2])).toEqual([0, 0, 11])
+  expect(prepareConfirmedToothRegion([11, 11, 0], 11, [2])).toEqual([0, 0, 11])
 })
 
 test('rejects a region that overlaps another confirmed tooth', () => {
-  expect(() => applyConfirmedToothRegion([0, 12], 11, [0, 1])).toThrow(
+  const labels = [0, 12]
+
+  expect(() => prepareConfirmedToothRegion(labels, 11, [0, 1])).toThrow(
     '牙号 12（1 个三角形）',
   )
+  expect(labels).toEqual([0, 12])
+})
+
+test('builds an independent non-indexed confirmed geometry without mutating the STL geometry', () => {
+  const source = new THREE.BufferGeometry()
+  const positions = new THREE.Float32BufferAttribute(
+    [
+      0, 0, 0,
+      1, 0, 0,
+      1, 1, 0,
+      0, 1, 0,
+    ],
+    3,
+  )
+  const index = new THREE.Uint16BufferAttribute([0, 1, 2, 0, 2, 3], 1)
+  source.setAttribute('position', positions)
+  source.setIndex(index)
+  const sourcePositionArray = positions.array
+  const sourceIndexArray = index.array
+  const sourcePositionVersion = positions.version
+  const sourceIndexVersion = index.version
+
+  const geometry = buildConfirmedToothGeometry(source, [1])
+
+  expect(geometry.index).toBeNull()
+  expect(geometry.getAttribute('position').count).toBe(3)
+  expect(Array.from(geometry.getAttribute('position').array)).toEqual([
+    0, 0, 0,
+    1, 1, 0,
+    0, 1, 0,
+  ])
+  expect(geometry.getAttribute('normal').count).toBe(3)
+  expect(source.getAttribute('position')).toBe(positions)
+  expect(source.index).toBe(index)
+  expect(positions.array).toBe(sourcePositionArray)
+  expect(index.array).toBe(sourceIndexArray)
+  expect(positions.version).toBe(sourcePositionVersion)
+  expect(index.version).toBe(sourceIndexVersion)
 })
 
 test('exports boundaries together with per-jaw triangle labels and tooth indices', () => {

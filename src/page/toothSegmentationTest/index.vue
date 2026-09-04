@@ -146,11 +146,12 @@ import {
   type ToothBoundary,
 } from './utils/toothBoundaryEditorUtils'
 import {
-  applyConfirmedToothRegion,
+  buildConfirmedToothGeometry,
   buildSegmentationExportPayload,
   buildToothRegionTopology,
   classifyToothRegion,
   groupConfirmedTriangles,
+  prepareConfirmedToothRegion,
   type ToothRegionTopology,
 } from './utils/toothRegionClassifier'
 import {
@@ -1295,27 +1296,36 @@ async function generateGraphCutBoundary() {
   }
 }
 
-function renderConfirmedRegion(mesh: THREE.Mesh, toothId: number, triangleIndices: number[]) {
-  const jaw = mesh.userData.jaw as JawType
-  removeConfirmedRegionMesh(jaw, toothId)
+function createConfirmedRegionMesh(geometry: THREE.BufferGeometry, toothId: number) {
   const regionMesh = new THREE.Mesh(
-    buildTriangleSubsetGeometry(mesh.geometry, triangleIndices),
-    new THREE.MeshPhongMaterial({
+    geometry,
+    new THREE.MeshStandardMaterial({
       color: 0x35d07f,
-      emissive: 0x0c4729,
-      opacity: 0.72,
       transparent: true,
+      opacity: 0.55,
       depthWrite: false,
-      polygonOffset: true,
-      polygonOffsetFactor: -2,
-      polygonOffsetUnits: -2,
-      side: THREE.DoubleSide,
     }),
   )
   regionMesh.name = `confirmed-tooth-region-${toothId}`
   regionMesh.renderOrder = 15
+  return regionMesh
+}
+
+function commitConfirmedRegionMesh(mesh: THREE.Mesh, toothId: number, regionMesh: THREE.Mesh) {
+  const jaw = mesh.userData.jaw as JawType
+  const key = confirmedRegionKey(jaw, toothId)
+  const previousRegionMesh = confirmedRegionMeshes.get(key)
   mesh.add(regionMesh)
-  confirmedRegionMeshes.set(confirmedRegionKey(jaw, toothId), regionMesh)
+  confirmedRegionMeshes.set(key, regionMesh)
+  if (!previousRegionMesh) return
+  previousRegionMesh.parent?.remove(previousRegionMesh)
+  disposeObject(previousRegionMesh)
+}
+
+function renderConfirmedRegion(mesh: THREE.Mesh, toothId: number, triangleIndices: number[]) {
+  const geometry = buildConfirmedToothGeometry(mesh.geometry, triangleIndices)
+  const regionMesh = createConfirmedRegionMesh(geometry, toothId)
+  commitConfirmedRegionMesh(mesh, toothId, regionMesh)
 }
 
 function confirmToothSegmentation() {
@@ -1328,29 +1338,38 @@ function confirmToothSegmentation() {
     return
   }
 
+  let preparedGeometry: THREE.BufferGeometry | null = null
+  let preparedRegionMesh: THREE.Mesh | null = null
   try {
     let topology = regionTopologies.get(rendered.mesh)
     if (!topology) {
       topology = buildToothRegionTopology(rendered.mesh.geometry)
       regionTopologies.set(rendered.mesh, topology)
     }
-    const originalLabels = rendered.mesh.userData.labels as number[]
-    const region = classifyToothRegion(topology, originalLabels, state.boundary)
+    const region = classifyToothRegion(topology, state.boundary)
     const triangleIndices = region.triangleIndices
     const jaw = rendered.mesh.userData.jaw as JawType
-    const nextLabels = applyConfirmedToothRegion(
+    const nextLabels = prepareConfirmedToothRegion(
       confirmedTriangleLabels[jaw],
       toothId,
       triangleIndices,
     )
     const confirmedState = markConfirmed(state, triangleIndices)
-    confirmedTriangleLabels[jaw] = nextLabels
+    preparedGeometry = buildConfirmedToothGeometry(rendered.mesh.geometry, triangleIndices)
+    preparedRegionMesh = createConfirmedRegionMesh(preparedGeometry, toothId)
     const nextStates = new Map(toothSegmentations.value)
     nextStates.set(toothId, confirmedState)
+
+    commitConfirmedRegionMesh(rendered.mesh, toothId, preparedRegionMesh)
+    preparedRegionMesh = null
+    preparedGeometry = null
+    confirmedTriangleLabels[jaw] = nextLabels
     toothSegmentations.value = nextStates
-    renderConfirmedRegion(rendered.mesh, toothId, triangleIndices)
     statusText.value = `牙号 ${toothId} 已确认分牙，共分类 ${triangleIndices.length} 个三角形。`
   } catch (error) {
+    preparedRegionMesh?.parent?.remove(preparedRegionMesh)
+    disposeObject(preparedRegionMesh ?? undefined)
+    if (!preparedRegionMesh) preparedGeometry?.dispose()
     statusText.value = `确认失败：${error instanceof Error ? error.message : String(error)}`
   }
 }
