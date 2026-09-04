@@ -271,7 +271,8 @@ export function createSurfaceSegmentPoints(
 }
 
 export function createClosedSurfaceSegments(graph: SurfaceGraph, anchorPoints: THREE.Vector3[]) {
-  if (anchorPoints.length < 3) throw new Error('至少需要 3 个不同的 Boundary Points')
+  const anchorKeys = anchorPoints.map((point) => findNearestSurfaceVertexKey(graph, point))
+  if (new Set(anchorKeys).size < 3) throw new Error('至少需要 3 个不同的 Boundary Points')
   return anchorPoints.map((point, index) =>
     createSurfaceSegmentPoints(graph, point, anchorPoints[(index + 1) % anchorPoints.length]!),
   )
@@ -305,13 +306,10 @@ export function createClosedSurfacePath(
 
 export function moveClosedSurfacePathAnchor(
   graph: SurfaceGraph,
-  pathOrAnchorPoints: ClosedSurfacePath | THREE.Vector3[],
+  currentPath: ClosedSurfacePath,
   anchorIndex: number,
   nextPoint: THREE.Vector3,
 ) {
-  const currentPath = Array.isArray(pathOrAnchorPoints)
-    ? createClosedSurfacePath(graph, pathOrAnchorPoints)
-    : pathOrAnchorPoints
   const anchorPoints = currentPath.anchorPoints.map((point) => point.clone())
   if (!anchorPoints[anchorIndex]) throw new Error('Boundary Point 索引无效')
   const anchorKeys = anchorPoints.map((point) => findNearestSurfaceVertexKey(graph, point))
@@ -323,9 +321,7 @@ export function moveClosedSurfacePathAnchor(
   anchorKeys[anchorIndex] = nextKey
   anchorPoints[anchorIndex] = nextPoint.clone()
   const previousIndex = (anchorIndex - 1 + anchorKeys.length) % anchorKeys.length
-  const segmentPoints = currentPath.segmentPoints.map((segment) =>
-    segment.map((point) => point.clone()),
-  )
+  const segmentPoints = currentPath.segmentPoints.slice()
   segmentPoints[previousIndex] = createSurfaceSegmentPoints(
     graph,
     anchorPoints[previousIndex]!,

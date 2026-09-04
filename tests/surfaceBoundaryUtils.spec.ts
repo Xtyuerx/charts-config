@@ -33,6 +33,23 @@ test('builds and preserves one shortest-surface segment for every closed control
   expect(segments[2]?.at(-1)?.toArray()).toEqual([0, 0, 0])
 })
 
+test('rejects closed surface segments with duplicate snapped anchors', () => {
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute(
+    'position',
+    new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3),
+  )
+  const graph = buildSurfaceGraph(geometry)
+
+  expect(() =>
+    createClosedSurfaceSegments(graph, [
+      new THREE.Vector3(0.01, 0, 0),
+      new THREE.Vector3(0.02, 0, 0),
+      new THREE.Vector3(1, 0, 0),
+    ]),
+  ).toThrow('至少需要 3 个不同的 Boundary Points')
+})
+
 test('routes a changed boundary segment through STL surface edges', () => {
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute(
@@ -145,12 +162,7 @@ test('moves one boundary anchor and rebuilds a closed surface path', () => {
     new THREE.Vector3(1, 1, 0),
   ])
 
-  const moved = moveClosedSurfacePathAnchor(
-    graph,
-    original.anchorPoints,
-    1,
-    new THREE.Vector3(0, 1, 0),
-  )
+  const moved = moveClosedSurfacePathAnchor(graph, original, 1, new THREE.Vector3(0, 1, 0))
 
   expect(moved.anchorPoints[1]?.toArray()).toEqual([0, 1, 0])
   expect(moved.curvePoints.some((point) => point.equals(moved.anchorPoints[1]!))).toBe(true)
@@ -170,12 +182,12 @@ test('keeps the exact STL intersection and only rebuilds adjacent surface segmen
     new THREE.Vector3(1, 1, 0),
     new THREE.Vector3(0, 1, 0),
   ])
-  const oppositeSegment = original.segmentPoints[2]!.map((point) => point.toArray())
+  const oppositeSegment = original.segmentPoints[2]!
 
   const moved = moveClosedSurfacePathAnchor(graph, original, 1, new THREE.Vector3(0.75, 0.25, 0))
 
   expect(moved.anchorPoints[1]?.toArray()).toEqual([0.75, 0.25, 0])
-  expect(moved.segmentPoints[2]?.map((point) => point.toArray())).toEqual(oppositeSegment)
+  expect(moved.segmentPoints[2]).toBe(oppositeSegment)
   expect(moved.curvePoints.some((point) => point.equals(moved.anchorPoints[1]!))).toBe(true)
 })
 

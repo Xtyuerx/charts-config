@@ -17,6 +17,8 @@ type BoundaryLoop = {
   points: THREE.Vector3[]
   length: number
   foregroundArea: number
+  foregroundFaces: number[]
+  seedCount: number
   stableKey: string
 }
 
@@ -188,6 +190,7 @@ function extractLoops(
   edges: BoundaryEdge[],
   points: Map<string, THREE.Vector3>,
   topology: ToothGraphTopology,
+  seedFaces: Set<number>,
 ): BoundaryLoop[] {
   const edgeIndicesByVertex = new Map<string, number[]>()
   edges.forEach((edge, index) => {
@@ -229,9 +232,102 @@ function extractLoops(
       (total, face) => total + (topology.faceAreas[face] ?? 0),
       0,
     )
-    loops.push({ points: loopPoints, length, foregroundArea, stableKey: [...keys].sort()[0]! })
+    loops.push({
+      points: loopPoints,
+      length,
+      foregroundArea,
+      foregroundFaces: Array.from(foreground),
+      seedCount: 0,
+      stableKey: [...keys].sort()[0]!,
+    })
+  })
+  loops.forEach((loop) => {
+    loop.seedCount = seedCountInsideLoop(loop, topology, seedFaces)
   })
   return loops
+}
+
+function newellNormal(points: readonly THREE.Vector3[]) {
+  const normal = new THREE.Vector3()
+  points.forEach((point, index) => {
+    const next = points[(index + 1) % points.length]!
+    normal.x += (point.y - next.y) * (point.z + next.z)
+    normal.y += (point.z - next.z) * (point.x + next.x)
+    normal.z += (point.x - next.x) * (point.y + next.y)
+  })
+  return normal
+}
+
+function loopProjection(loop: BoundaryLoop, topology: ToothGraphTopology) {
+  const normal = newellNormal(loop.points)
+  if (normal.lengthSq() <= 1e-12) {
+    loop.foregroundFaces.forEach((face) => {
+      normal.add(
+        new THREE.Vector3(
+          topology.faceNormals[face * 3] ?? 0,
+          topology.faceNormals[face * 3 + 1] ?? 0,
+          topology.faceNormals[face * 3 + 2] ?? 0,
+        ),
+      )
+    })
+  }
+  if (normal.lengthSq() <= 1e-12) return null
+  normal.normalize()
+  let longest = new THREE.Vector3()
+  for (let index = 0; index < loop.points.length; index += 1) {
+    const segment = loop.points[(index + 1) % loop.points.length]!.clone().sub(loop.points[index]!)
+    segment.addScaledVector(normal, -segment.dot(normal))
+    if (segment.lengthSq() > longest.lengthSq()) longest = segment
+  }
+  if (longest.lengthSq() <= 1e-12) return null
+  longest.normalize()
+  const vertical = normal.clone().cross(longest)
+  const origin = loop.points[0]!
+  const project = (point: THREE.Vector3): [number, number] => {
+    const offset = point.clone().sub(origin)
+    return [offset.dot(longest), offset.dot(vertical)]
+  }
+  const polygon = loop.points.map(project)
+  const doubledArea = polygon.reduce((sum, point, index) => {
+    const next = polygon[(index + 1) % polygon.length]!
+    return sum + point[0] * next[1] - next[0] * point[1]
+  }, 0)
+  return Math.abs(doubledArea) > 1e-10 ? { polygon, project } : null
+}
+
+function pointInPolygon(point: [number, number], polygon: Array<[number, number]>) {
+  let inside = false
+  for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index++) {
+    const current = polygon[index]!
+    const prior = polygon[previous]!
+    if (current[1] > point[1] === prior[1] > point[1]) continue
+    const intersection =
+      ((prior[0] - current[0]) * (point[1] - current[1])) / (prior[1] - current[1]) + current[0]
+    if (point[0] < intersection) inside = !inside
+  }
+  return inside
+}
+
+function seedCountInsideLoop(
+  loop: BoundaryLoop,
+  topology: ToothGraphTopology,
+  seedFaces: Set<number>,
+) {
+  const projection = loopProjection(loop, topology)
+  if (!projection) {
+    return loop.foregroundFaces.filter((face) => seedFaces.has(face)).length
+  }
+  let count = 0
+  seedFaces.forEach((face) => {
+    const offset = face * 3
+    const center = new THREE.Vector3(
+      topology.faceCenters[offset] ?? 0,
+      topology.faceCenters[offset + 1] ?? 0,
+      topology.faceCenters[offset + 2] ?? 0,
+    )
+    if (pointInPolygon(projection.project(center), projection.polygon)) count += 1
+  })
+  return count
 }
 
 function simplifyOpen(points: THREE.Vector3[], tolerance: number): THREE.Vector3[] {
@@ -260,7 +356,31 @@ function simplifyOpen(points: THREE.Vector3[], tolerance: number): THREE.Vector3
   ]
 }
 
+function removeNearCollinearClosedPoints(points: THREE.Vector3[], tolerance: number) {
+  const result = points.map((point) => point.clone())
+  let changed = true
+  while (changed && result.length > 3) {
+    changed = false
+    for (let index = 0; index < result.length && result.length > 3; index += 1) {
+      const previous = result[(index - 1 + result.length) % result.length]!
+      const point = result[index]!
+      const next = result[(index + 1) % result.length]!
+      const segment = next.clone().sub(previous)
+      const denominator = segment.lengthSq()
+      const ratio = denominator
+        ? THREE.MathUtils.clamp(point.clone().sub(previous).dot(segment) / denominator, 0, 1)
+        : 0
+      if (point.distanceTo(previous.clone().addScaledVector(segment, ratio)) > tolerance) continue
+      result.splice(index, 1)
+      changed = true
+      index -= 1
+    }
+  }
+  return result
+}
+
 function simplifyClosedLoop(points: THREE.Vector3[], tolerance: number) {
+  points = removeNearCollinearClosedPoints(points, tolerance)
   let firstIndex = 0
   let secondIndex = 1
   let maximumDistance = -1
@@ -331,12 +451,18 @@ export function extractToothBoundary(
   const triangleIndices = selectedForegroundFaces(topology, roi, foregroundMask)
   const raw = boundaryEdges(geometry, roi, triangleIndices)
   const minimumLoopLength = 0.15 * roi.seedDiameter
-  const loops = extractLoops(raw.edges, raw.points, topology).filter(
+  const seedFaces = new Set<number>(
+    Array.from(roi.faceIndices, (face, local) => (roi.foregroundMask[local] ? face : -1)).filter(
+      (face) => face >= 0,
+    ),
+  )
+  const loops = extractLoops(raw.edges, raw.points, topology, seedFaces).filter(
     (loop) => loop.length >= minimumLoopLength,
   )
   if (!loops.length) throw new Error('没有足够长的闭合边界环')
   loops.sort(
     (first, second) =>
+      second.seedCount - first.seedCount ||
       second.foregroundArea - first.foregroundArea ||
       second.length - first.length ||
       first.stableKey.localeCompare(second.stableKey),
