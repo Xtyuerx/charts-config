@@ -124,10 +124,12 @@ import { STLLoader } from 'three-stdlib'
 import {
   buildSurfaceGraph,
   createClosedSurfacePath,
+  createSurfaceLineGeometry,
   createSurfaceSegmentPoints,
   extractLabelBoundary,
   moveClosedSurfacePathAnchor,
   moveLabelBoundaryControl,
+  updateSurfaceLineGeometry,
   type ClosedSurfacePath,
   type SurfaceGraph,
 } from './utils/surfaceBoundaryUtils'
@@ -194,6 +196,7 @@ type BoundaryControlKind = 'automatic' | 'drawn'
 
 type BoundaryPointPick = {
   kind: BoundaryControlKind
+  jaw: JawType
   mesh: THREE.Mesh
   points: THREE.Points
   pointIndex: number
@@ -201,6 +204,7 @@ type BoundaryPointPick = {
 
 type BoundaryDragState = BoundaryPointPick & {
   hasMoved: boolean
+  pendingBoundary?: ToothBoundary
 }
 
 const jawConfigs: JawConfig[] = [
@@ -477,10 +481,16 @@ function createAutomaticBoundaryGroup(mesh: THREE.Mesh) {
   const labels = mesh.userData.labels as number[] | undefined
   if (!labels) throw new Error(`${mesh.name} 缺少牙位标签，无法生成边界`)
   const boundary = extractLabelBoundary(mesh.geometry, labels)
+  const graph = surfaceGraphs.get(mesh)
+  if (!graph) throw new Error(`${mesh.name} 的 STL 表面拓扑尚未建立`)
   const group = new THREE.Group()
   group.name = 'automatic-tooth-boundary'
 
-  const lineGeometry = new THREE.BufferGeometry().setFromPoints(boundary.linePoints)
+  const segmentPoints = Array.from({ length: boundary.linePoints.length / 2 }, (_, segmentIndex) => [
+    boundary.linePoints[segmentIndex * 2]!.clone(),
+    boundary.linePoints[segmentIndex * 2 + 1]!.clone(),
+  ])
+  const lineGeometry = createSurfaceLineGeometry(segmentPoints, graph.vertices.size * 2)
   const lines = new THREE.LineSegments(
     lineGeometry,
     new THREE.LineBasicMaterial({ color: 0x303942, depthTest: false }),
@@ -511,13 +521,7 @@ function createAutomaticBoundaryGroup(mesh: THREE.Mesh) {
   points.userData.linePoints = boundary.linePoints
   points.userData.controlPoints = boundary.pointPositions
   points.userData.boundaryLines = lines
-  points.userData.segmentPoints = Array.from(
-    { length: boundary.linePoints.length / 2 },
-    (_, segmentIndex) => [
-      boundary.linePoints[segmentIndex * 2]!.clone(),
-      boundary.linePoints[segmentIndex * 2 + 1]!.clone(),
-    ],
-  )
+  points.userData.segmentPoints = segmentPoints
   group.add(points)
   group.userData.segmentCount = boundary.linePoints.length / 2
   group.userData.pointCount = boundary.pointPositions.length
@@ -723,8 +727,9 @@ function pickBoundaryPoint(event: PointerEvent): BoundaryPointPick | null {
   if (!hit || !(hit.object instanceof THREE.Points) || hit.index == null) return null
   const mesh = hit.object.userData.mesh as THREE.Mesh | undefined
   const kind = hit.object.userData.controlKind as BoundaryControlKind | undefined
-  if (!mesh || !kind) return null
-  return { kind, mesh, points: hit.object, pointIndex: hit.index }
+  const jaw = mesh?.userData.jaw as JawType | undefined
+  if (!mesh || !kind || !jaw) return null
+  return { kind, jaw, mesh, points: hit.object, pointIndex: hit.index }
 }
 
 function setPointHighlight(pick: BoundaryPointPick | null, color = 0x00e676) {
@@ -757,7 +762,10 @@ function setPointHighlight(pick: BoundaryPointPick | null, color = 0x00e676) {
     pointHighlight.name = 'boundary-point-highlight'
     pointHighlight.renderOrder = 50
   } else {
-    pointHighlight.geometry.setFromPoints([point])
+    const highlightPosition = pointHighlight.geometry.getAttribute('position') as THREE.BufferAttribute
+    highlightPosition.setXYZ(0, point.x, point.y, point.z)
+    highlightPosition.needsUpdate = true
+    pointHighlight.geometry.computeBoundingSphere()
     ;(pointHighlight.material as THREE.PointsMaterial).color.set(color)
   }
   if (pointHighlight.parent !== pick.mesh) {
@@ -785,21 +793,13 @@ function startBoundaryPointDrag(pick: BoundaryPointPick, event: PointerEvent) {
   event.preventDefault()
 }
 
-function raycastMeshSurface(event: PointerEvent, mesh: THREE.Mesh) {
+function raycastMeshSurface(event: PointerEvent, jaw: JawType) {
   if (!updateRaycasterFromEvent(event)) return null
+  const mesh = jawMeshes[jaw]
+  if (!mesh) return null
   const hit = raycaster.intersectObject(mesh, false)[0]
   if (!hit) return null
-  return mesh.worldToLocal(hit.point.clone())
-}
-
-function surfaceSegmentsToLinePoints(segmentPoints: THREE.Vector3[][]) {
-  return segmentPoints.flatMap((segment) => {
-    const linePoints: THREE.Vector3[] = []
-    for (let index = 0; index + 1 < segment.length; index += 1) {
-      linePoints.push(segment[index]!, segment[index + 1]!)
-    }
-    return linePoints
-  })
+  return hit.point.clone()
 }
 
 function updateAutomaticBoundaryPoint(state: BoundaryDragState, nextPoint: THREE.Vector3) {
@@ -824,7 +824,8 @@ function updateAutomaticBoundaryPoint(state: BoundaryDragState, nextPoint: THREE
   pointPosition.needsUpdate = true
   state.points.geometry.computeBoundingSphere()
 
-  const graph = surfaceGraphs.get(state.mesh)
+  const mesh = jawMeshes[state.jaw]
+  const graph = mesh ? surfaceGraphs.get(mesh) : undefined
   if (!graph) throw new Error(`${state.mesh.name} 的 STL 表面拓扑尚未建立`)
   const segmentPoints = state.points.userData.segmentPoints as THREE.Vector3[][]
   const changedSegments = new Set(changedIndices.map((lineIndex) => Math.floor(lineIndex / 2)))
@@ -836,21 +837,14 @@ function updateAutomaticBoundaryPoint(state: BoundaryDragState, nextPoint: THREE
     )
   })
   const boundaryLines = state.points.userData.boundaryLines as THREE.LineSegments
-  const previousLineGeometry = boundaryLines.geometry
-  const nextLineGeometry = new THREE.BufferGeometry().setFromPoints(
-    surfaceSegmentsToLinePoints(segmentPoints),
-  )
-  nextLineGeometry.computeBoundingSphere()
-  boundaryLines.geometry = nextLineGeometry
-  state.points.userData.lineGeometry = nextLineGeometry
-  previousLineGeometry.dispose()
+  updateSurfaceLineGeometry(boundaryLines.geometry, segmentPoints)
 }
 
 function updateDrawnBoundaryPoint(state: BoundaryDragState, nextPoint: THREE.Vector3) {
   const toothId = Number(state.points.userData.toothId)
   const segmentation = toothSegmentations.value.get(toothId)
   if (!segmentation?.boundary) throw new Error(`未找到牙号 ${toothId} 的边界`)
-  const editableBoundary: ToothBoundary = {
+  const editableBoundary: ToothBoundary = state.pendingBoundary ?? {
     toothId,
     boundary: segmentation.boundary.boundary.map((point) => ({
       type: 'control',
@@ -858,7 +852,8 @@ function updateDrawnBoundaryPoint(state: BoundaryDragState, nextPoint: THREE.Vec
     })),
   }
   const nextBoundaries = new Map([[toothId, editableBoundary]])
-  const graph = surfaceGraphs.get(state.mesh)
+  const mesh = jawMeshes[state.jaw]
+  const graph = mesh ? surfaceGraphs.get(mesh) : undefined
   const currentSurfacePath = state.points.userData.surfacePath as
     | ClosedSurfacePath
     | undefined
@@ -877,26 +872,15 @@ function updateDrawnBoundaryPoint(state: BoundaryDragState, nextPoint: THREE.Vec
     state.pointIndex,
     nextPoint,
   )
-  const controlPoints = boundaryControlVectors(boundary)
   const curve = state.points.userData.boundaryCurve as THREE.LineSegments
-  const nextPointGeometry = new THREE.BufferGeometry().setFromPoints(controlPoints)
-  const nextCurveGeometry = new THREE.BufferGeometry().setFromPoints(
-    surfaceSegmentsToLinePoints(nextSurfacePath.segmentPoints),
-  )
-  nextPointGeometry.computeBoundingSphere()
-  nextCurveGeometry.computeBoundingSphere()
-  const previousPointGeometry = state.points.geometry
-  const previousCurveGeometry = curve.geometry
-
-  state.points.geometry = nextPointGeometry
-  curve.geometry = nextCurveGeometry
+  const pointPosition = state.points.geometry.getAttribute('position') as THREE.BufferAttribute
+  pointPosition.setXYZ(state.pointIndex, nextPoint.x, nextPoint.y, nextPoint.z)
+  pointPosition.needsUpdate = true
+  state.points.geometry.computeBoundingSphere()
+  updateSurfaceLineGeometry(curve.geometry, nextSurfacePath.segmentPoints)
   state.points.userData.surfacePath = nextSurfacePath
-  const nextStates = new Map(toothSegmentations.value)
-  nextStates.set(toothId, markBoundaryEdited(segmentation, boundary))
-  toothSegmentations.value = nextStates
+  state.pendingBoundary = boundary
   state.hasMoved = true
-  previousPointGeometry.dispose()
-  previousCurveGeometry.dispose()
 }
 
 function flushBoundaryPointDrag() {
@@ -916,11 +900,22 @@ function flushBoundaryPointDrag() {
 
 function updateBoundaryPointDrag(event: PointerEvent) {
   if (!boundaryDragState) return
-  const surfacePoint = raycastMeshSurface(event, boundaryDragState.mesh)
+  const surfacePoint = raycastMeshSurface(event, boundaryDragState.jaw)
   if (!surfacePoint) return
   pendingDragPoint = surfacePoint
   if (!dragUpdateFrameId) dragUpdateFrameId = requestAnimationFrame(flushBoundaryPointDrag)
   event.preventDefault()
+}
+
+function commitDrawnBoundaryEdit(state: BoundaryDragState) {
+  if (!state.hasMoved || !state.pendingBoundary) return false
+  const toothId = Number(state.points.userData.toothId)
+  const segmentation = toothSegmentations.value.get(toothId)
+  if (!segmentation?.boundary) return false
+  const nextStates = new Map(toothSegmentations.value)
+  nextStates.set(toothId, markBoundaryEdited(segmentation, state.pendingBoundary))
+  toothSegmentations.value = nextStates
+  return invalidateConfirmedTooth(toothId)
 }
 
 function finishBoundaryPointDrag(event?: PointerEvent) {
@@ -935,10 +930,7 @@ function finishBoundaryPointDrag(event?: PointerEvent) {
   }
   const finishedState = boundaryDragState
   const kind = finishedState.kind
-  const invalidated =
-    kind === 'drawn' && finishedState.hasMoved
-      ? invalidateConfirmedTooth(Number(finishedState.points.userData.toothId))
-      : false
+  const invalidated = kind === 'drawn' ? commitDrawnBoundaryEdit(finishedState) : false
   boundaryDragState = null
   pendingDragPoint = null
   setPointHighlight(null)
@@ -1405,8 +1397,9 @@ function createToothBoundaryGroup(mesh: THREE.Mesh, boundary: ToothBoundary) {
   points.userData.surfacePath = surfacePath
   group.add(points)
 
-  const curveGeometry = new THREE.BufferGeometry().setFromPoints(
-    surfaceSegmentsToLinePoints(surfacePath.segmentPoints),
+  const curveGeometry = createSurfaceLineGeometry(
+    surfacePath.segmentPoints,
+    graph.vertices.size * 2,
   )
   const curve = new THREE.LineSegments(
     curveGeometry,

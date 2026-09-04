@@ -9,6 +9,7 @@ import {
   extractLabelBoundary,
   moveClosedSurfacePathAnchor,
   moveLabelBoundaryControl,
+  updateSurfaceLineGeometry,
 } from '../src/page/toothSegmentationTest/utils/surfaceBoundaryUtils'
 
 test('builds and preserves one shortest-surface segment for every closed control edge', () => {
@@ -189,6 +190,63 @@ test('keeps the exact STL intersection and only rebuilds adjacent surface segmen
   expect(moved.anchorPoints[1]?.toArray()).toEqual([0.75, 0.25, 0])
   expect(moved.segmentPoints[2]).toBe(oppositeSegment)
   expect(moved.curvePoints.some((point) => point.equals(moved.anchorPoints[1]!))).toBe(true)
+})
+
+test('replaces exactly the two neighboring cached segments without translating the full path', () => {
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute(
+    'position',
+    new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0], 3),
+  )
+  const graph = buildSurfaceGraph(geometry)
+  const original = createClosedSurfacePath(graph, [
+    new THREE.Vector3(0, 0, 0),
+    new THREE.Vector3(1, 0, 0),
+    new THREE.Vector3(1, 1, 0),
+    new THREE.Vector3(0, 1, 0),
+  ])
+  const originalSegments = [...original.segmentPoints]
+  const originalAnchors = original.anchorPoints.map((point) => point.clone())
+
+  const intersectionPoint = new THREE.Vector3(0.75, 0.25, 0)
+  const moved = moveClosedSurfacePathAnchor(graph, original, 1, intersectionPoint)
+
+  expect(moved.anchorPoints[1]).not.toBe(intersectionPoint)
+  expect(moved.anchorPoints[1]?.toArray()).toEqual(intersectionPoint.toArray())
+  expect(moved.segmentPoints[0]).not.toBe(originalSegments[0])
+  expect(moved.segmentPoints[1]).not.toBe(originalSegments[1])
+  expect(moved.segmentPoints[2]).toBe(originalSegments[2])
+  expect(moved.segmentPoints[3]).toBe(originalSegments[3])
+  expect(moved.anchorPoints[0]?.toArray()).toEqual(originalAnchors[0]?.toArray())
+  expect(moved.anchorPoints[2]?.toArray()).toEqual(originalAnchors[2]?.toArray())
+  expect(moved.anchorPoints[3]?.toArray()).toEqual(originalAnchors[3]?.toArray())
+})
+
+test('updates a cached boundary line position attribute in place after a local anchor move', () => {
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute(
+    'position',
+    new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 1, 0], 3),
+  )
+  const position = geometry.getAttribute('position') as THREE.BufferAttribute
+  const initialVersion = position.version
+  const originalSetAttribute = geometry.setAttribute.bind(geometry)
+  let setAttributeCalls = 0
+  geometry.setAttribute = ((...args) => {
+    setAttributeCalls += 1
+    return originalSetAttribute(...args)
+  }) as typeof geometry.setAttribute
+  const segmentPoints = [
+    [new THREE.Vector3(0, 0, 0), new THREE.Vector3(0.75, 0.25, 0)],
+    [new THREE.Vector3(0.75, 0.25, 0), new THREE.Vector3(1, 1, 0)],
+  ]
+
+  updateSurfaceLineGeometry(geometry, segmentPoints)
+
+  expect(geometry.getAttribute('position')).toBe(position)
+  expect(Array.from(position.array)).toEqual([0, 0, 0, 0.75, 0.25, 0, 0.75, 0.25, 0, 1, 1, 0])
+  expect(position.version).toBeGreaterThan(initialVersion)
+  expect(setAttributeCalls).toBe(0)
 })
 
 test('sets linked white endpoints to the STL hit instead of applying a delta translation', () => {

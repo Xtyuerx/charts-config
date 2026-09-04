@@ -1,6 +1,44 @@
 import { expect, test } from '@playwright/test'
+import { readFile } from 'node:fs/promises'
 
 const baseUrl = process.env.TOOTH_SEGMENTATION_TEST_BASE_URL ?? 'http://127.0.0.1:4176'
+
+test('keeps pointermove on the original jaw mesh and defers confirmation invalidation to pointerup', async () => {
+  const source = await readFile(
+    new URL('../src/page/toothSegmentationTest/index.vue', import.meta.url),
+    'utf8',
+  )
+  const raycastStart = source.indexOf('function raycastMeshSurface')
+  const automaticUpdateStart = source.indexOf('function updateAutomaticBoundaryPoint')
+  const drawnUpdateStart = source.indexOf('function updateDrawnBoundaryPoint')
+  const flushStart = source.indexOf('function flushBoundaryPointDrag')
+  const commitStart = source.indexOf('function commitDrawnBoundaryEdit')
+  const finishStart = source.indexOf('function finishBoundaryPointDrag')
+  const nextFunction = (start: number) => source.indexOf('\nfunction ', start + 1)
+  const raycast = source.slice(raycastStart, automaticUpdateStart)
+  const automaticUpdate = source.slice(automaticUpdateStart, drawnUpdateStart)
+  const drawnUpdate = source.slice(drawnUpdateStart, flushStart)
+  const commit = source.slice(commitStart, finishStart)
+
+  expect(raycast).toContain('const mesh = jawMeshes[jaw]')
+  expect(raycast).toContain('return hit.point.clone()')
+  expect(drawnUpdate).toContain('moveClosedSurfacePathAnchor')
+  expect(drawnUpdate).toContain('updateSurfaceLineGeometry')
+  expect(automaticUpdate).toContain('updateSurfaceLineGeometry')
+  ;[automaticUpdate, drawnUpdate].forEach((pointerMove) => {
+    expect(pointerMove).not.toContain('buildGraphCutProblem')
+    expect(pointerMove).not.toContain('buildToothGraphTopology')
+    expect(pointerMove).not.toContain('classifyToothRegion')
+    expect(pointerMove).not.toContain('markBoundaryEdited')
+    expect(pointerMove).not.toContain('invalidateConfirmedTooth')
+    expect(pointerMove).not.toContain('new THREE.BufferGeometry')
+    expect(pointerMove).not.toContain('.geometry =')
+    expect(pointerMove).not.toContain('.setAttribute(')
+  })
+  expect(commit).toContain('markBoundaryEdited')
+  expect(commit).toContain('invalidateConfirmedTooth')
+  expect(source.slice(finishStart, nextFunction(finishStart))).toContain('commitDrawnBoundaryEdit')
+})
 
 function createGridStl(z: number, cells: number, spacing: number) {
   const facets: string[] = []

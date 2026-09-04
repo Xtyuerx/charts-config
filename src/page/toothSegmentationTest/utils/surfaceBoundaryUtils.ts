@@ -18,6 +18,55 @@ export type LabelBoundary = {
   pointLineIndices: number[][]
 }
 
+function surfaceSegmentsToLinePoints(segmentPoints: THREE.Vector3[][]) {
+  return segmentPoints.flatMap((segment) => {
+    const linePoints: THREE.Vector3[] = []
+    for (let index = 0; index + 1 < segment.length; index += 1) {
+      linePoints.push(segment[index]!, segment[index + 1]!)
+    }
+    return linePoints
+  })
+}
+
+/**
+ * Creates a line geometry whose position attribute can be reused while a boundary is dragged.
+ * `minimumPointCapacity` can reserve room for a long surface route. Pointer moves only change
+ * this overlay attribute and never the source STL geometry.
+ */
+export function createSurfaceLineGeometry(
+  segmentPoints: THREE.Vector3[][],
+  minimumPointCapacity = 0,
+) {
+  const linePoints = surfaceSegmentsToLinePoints(segmentPoints)
+  const geometry = new THREE.BufferGeometry()
+  const position = new THREE.Float32BufferAttribute(
+    new Float32Array(Math.max(linePoints.length, minimumPointCapacity) * 3),
+    3,
+  )
+  position.setUsage(THREE.DynamicDrawUsage)
+  geometry.setAttribute('position', position)
+  updateSurfaceLineGeometry(geometry, segmentPoints)
+  return geometry
+}
+
+/** Updates only the existing boundary overlay position attribute. */
+export function updateSurfaceLineGeometry(
+  geometry: THREE.BufferGeometry,
+  segmentPoints: THREE.Vector3[][],
+) {
+  const position = geometry.getAttribute('position') as THREE.BufferAttribute | undefined
+  if (!position) throw new Error('边界线缺少 position 属性')
+  const linePoints = surfaceSegmentsToLinePoints(segmentPoints)
+  if (position.count < linePoints.length) {
+    position.array = new Float32Array(linePoints.length * 3)
+    ;(position as unknown as { count: number }).count = linePoints.length
+  }
+  linePoints.forEach((point, index) => position.setXYZ(index, point.x, point.y, point.z))
+  geometry.setDrawRange(0, linePoints.length)
+  position.needsUpdate = true
+  geometry.computeBoundingSphere()
+}
+
 type QueueItem = {
   key: string
   distance: number
