@@ -20,7 +20,8 @@ export function enableMeshBvh(mesh: THREE.Mesh) {
   const geometry = mesh.geometry as BvhBufferGeometry
   geometry.computeBoundsTree ??= computeBoundsTree
   geometry.disposeBoundsTree ??= disposeBoundsTree
-  geometry.computeBoundsTree()
+  // 保留原始 STL 三角面编号，不能让 BVH 重排标签/拓扑所依赖的索引。
+  if (!geometry.boundsTree) geometry.computeBoundsTree({ indirect: true })
   mesh.raycast = acceleratedRaycast
   return geometry.boundsTree
 }

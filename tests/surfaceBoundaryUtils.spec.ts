@@ -36,7 +36,7 @@ test('builds and preserves one shortest-surface segment for every closed control
   expect(segments[2]?.at(-1)?.toArray()).toEqual([0, 0, 0])
 })
 
-test('rejects closed surface segments with duplicate snapped anchors', () => {
+test('rejects closed surface segments with genuinely duplicate anchors', () => {
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute(
     'position',
@@ -47,7 +47,7 @@ test('rejects closed surface segments with duplicate snapped anchors', () => {
   expect(() =>
     createClosedSurfaceSegments(graph, [
       new THREE.Vector3(0.01, 0, 0),
-      new THREE.Vector3(0.02, 0, 0),
+      new THREE.Vector3(0.01, 0, 0),
       new THREE.Vector3(1, 0, 0),
     ]),
   ).toThrow('至少需要 3 个不同的 Boundary Points')
@@ -72,7 +72,7 @@ test('routes a changed boundary segment through STL surface edges', () => {
   expect(points.length).toBeGreaterThanOrEqual(3)
 })
 
-test('connects boundary anchors along mesh edges and closes the path', () => {
+test('densely connects boundary anchors on the surface and closes the path', () => {
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute(
     'position',
@@ -88,16 +88,15 @@ test('connects boundary anchors along mesh edges and closes the path', () => {
   ])
 
   expect(path.anchorPoints).toHaveLength(4)
-  expect(path.curvePoints.map((point) => point.toArray())).toEqual([
-    [0, 0, 0],
-    [1, 0, 0],
-    [1, 1, 0],
-    [0, 1, 0],
-    [0, 0, 0],
-  ])
+  expect(path.curvePoints.length).toBeGreaterThan(5)
+  expect(path.curvePoints.every((point) => Math.abs(point.z) < 1e-10)).toBe(true)
+  path.anchorPoints.forEach((anchor) => {
+    expect(path.curvePoints.some((point) => point.equals(anchor))).toBe(true)
+  })
+  expect(path.curvePoints.at(-1)?.equals(path.curvePoints[0]!)).toBe(true)
 })
 
-test('drops repeated anchors after snapping them to the mesh', () => {
+test('keeps distinct anchors even when they share the nearest mesh vertex', () => {
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute(
     'position',
@@ -112,7 +111,7 @@ test('drops repeated anchors after snapping them to the mesh', () => {
     new THREE.Vector3(0, 1, 0),
   ])
 
-  expect(path.anchorPoints).toHaveLength(3)
+  expect(path.anchorPoints).toHaveLength(4)
   expect(path.curvePoints.at(-1)?.equals(path.curvePoints[0]!)).toBe(true)
 })
 
@@ -308,7 +307,12 @@ test('runs a drawn drag frame against only its original jaw mesh without mutatin
     controlIndex: 1,
     raycastSurface: (mesh) => {
       raycastTargets.push(mesh)
-      return { point: hitPoint } as THREE.Intersection
+      return {
+        point: hitPoint,
+        position: [0.75, 0.25, 0],
+        faceIndex: 0,
+        barycentric: [0, 0.75, 0.25],
+      }
     },
     updateControlPoint: (point) => control.copy(point),
     updateOverlay: (segmentPoints) => updateSurfaceLineGeometry(overlayGeometry, segmentPoints),

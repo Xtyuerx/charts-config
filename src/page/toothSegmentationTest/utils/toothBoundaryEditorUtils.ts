@@ -1,13 +1,22 @@
 import * as THREE from 'three'
+import type { SurfaceAnchor } from './surfaceAnchorUtils'
 
 export type ToothBoundaryPoint = {
   position: [number, number, number]
   type: 'control'
+  // 兼容旧 JSON；进入页面编辑前由当前 STL 补齐这两个字段。
+  faceIndex?: number
+  barycentric?: [number, number, number]
 }
 
 export type ToothBoundary = {
   toothId: number
   boundary: ToothBoundaryPoint[]
+  /** JSON 恢复缓存；运行时编辑仍以 surfacePath 为准。 */
+  surfaceSegments?: [number, number, number][][]
+  seedFaceIndices?: number[]
+  controlReduction?: 3
+  source?: 'original'
 }
 
 function assertToothId(toothId: number) {
@@ -70,11 +79,20 @@ export function updateBoundaryControlPoint(
   toothId: number,
   pointIndex: number,
   point: THREE.Vector3,
+  anchor?: SurfaceAnchor,
 ) {
   const boundary = boundaries.get(toothId)
   const control = boundary?.boundary[pointIndex]
   if (!boundary || !control) throw new Error('Boundary Point 不存在')
   control.position = [point.x, point.y, point.z]
+  if (anchor) {
+    control.faceIndex = anchor.faceIndex
+    control.barycentric = [...anchor.barycentric]
+  } else {
+    // 旧调用没有表面命中信息时，不保留已经过期的锚点。
+    delete control.faceIndex
+    delete control.barycentric
+  }
   return boundary
 }
 

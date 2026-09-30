@@ -4,6 +4,18 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
+      path: '/msgpackTeeth',
+      name: 'msgpackTeeth',
+      component: () => import('@/page/msgpackTeeth/index.vue'),
+      meta: { title: 'Msgpack 牙齿模型' },
+    },
+    {
+      path: '/jawLabelStl',
+      name: 'jawLabelStl',
+      component: () => import('@/page/jawLabelStl/index.vue'),
+      meta: { title: '上下颌牙号着色' },
+    },
+    {
       path: '/modelAnalysis',
       name: 'modelAnalysis',
       component: () => import('@/page/modelAnalysis/index.vue'),
@@ -94,10 +106,28 @@ const router = createRouter({
       meta: { title: 'STL联合编辑' },
     },
     {
+      path: '/toothSegmentationTest',
+      name: 'toothSegmentationTest',
+      component: () => import('@/page/toothSegmentationTest/index.vue'),
+      meta: { title: '牙齿分割技术测试' },
+    },
+    {
+      path: '/modelRepair',
+      name: 'modelRepair',
+      component: () => import('@/page/modelRepair/index.vue'),
+      meta: { title: '模型修复' },
+    },
+    {
       path: '/directionStl',
       name: 'directionStl',
       component: () => import('@/page/directionStl/index.vue'),
       meta: { title: 'STL direction' },
+    },
+    {
+      path: '/toothAxisSlice',
+      name: 'toothAxisSlice',
+      component: () => import('@/page/toothAxisSlice/index.vue'),
+      meta: { title: '牙轴调整' },
     },
   ],
 })

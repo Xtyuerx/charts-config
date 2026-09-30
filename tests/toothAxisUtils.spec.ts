@@ -12,6 +12,7 @@ import {
 } from '../src/page/directionStl/utils/toothAxisUtils'
 import {
   createToothTargetTransform,
+  defaultQuickTargetPreferences,
   serializeToothTargetTransforms,
   targetKey,
   upsertToothTargetTransform,
@@ -47,8 +48,6 @@ test('direction STL page keeps only single tooth selection and display workflow'
   expect(pageSource).toContain('selectedFdi')
   expect(pageSource).toContain('refreshSelectedTooth')
   expect(pageSource).toContain('extractToothMeshGeometry')
-  expect(pageSource).toContain('createCenteredGlobalAxisObject')
-  expect(pageSource).toContain('toothAxisObject')
   expect(pageSource).toContain("labelsUrl: '/models/upper.json'")
   expect(pageSource).toContain("labelsUrl: '/models/lower.json'")
   expect(pageSource).not.toContain("labelsUrl: '/points/upper.json'")
@@ -72,13 +71,22 @@ test('direction STL page keeps only single tooth selection and display workflow'
 test('direction STL page exposes first-stage target position editing workflow', () => {
   const pageSource = readFileSync(resolve('src/page/directionStl/index.vue'), 'utf-8')
 
-  expect(pageSource).toContain('TransformControls')
   expect(pageSource).toContain('toothTargetGroup')
   expect(pageSource).toContain('targetTransforms')
-  expect(pageSource).toContain('setTransformMode')
   expect(pageSource).toContain('saveTargetTransform')
-  expect(pageSource).toContain('exportTargetTransforms')
+  expect(pageSource).toContain('exportModifiedJson')
   expect(pageSource).toContain('targetPayloadText')
+})
+
+test('direction STL page hides tooth axis helper in quick target workflow', () => {
+  const pageSource = readFileSync(resolve('src/page/directionStl/index.vue'), 'utf-8')
+
+  expect(pageSource).not.toContain('TransformControls')
+  expect(pageSource).not.toContain('GridHelper')
+  expect(pageSource).not.toContain('showGrid')
+  expect(pageSource).not.toContain('createCenteredGlobalAxisObject')
+  expect(pageSource).not.toContain('toothAxisObject')
+  expect(pageSource).not.toContain('current-tooth-axis')
 })
 
 test('serializes saved target transforms by tooth key', () => {
@@ -98,6 +106,46 @@ test('serializes saved target transforms by tooth key', () => {
   expect(target.position).toEqual([1, 2, 3])
   expect(target.scale).toEqual([1, 1.1, 0.95])
   expect(target.quaternion[3]).toBeCloseTo(0.92338, 5)
+})
+
+test('serializes quick target preferences with target transforms', () => {
+  const payload = serializeToothTargetTransforms(
+    {},
+    {
+      ...defaultQuickTargetPreferences,
+      upperIpr: 'allowed',
+      lowerIpr: 'notAllowed',
+      extraction: 'required',
+      spacing: 'reserved',
+    },
+  )
+
+  expect(payload.version).toBe(1)
+  expect(payload.targets).toEqual([])
+  expect(payload.preferences).toEqual({
+    upperIpr: 'allowed',
+    lowerIpr: 'notAllowed',
+    extraction: 'required',
+    spacing: 'reserved',
+  })
+})
+
+test('direction STL page exposes an explicit save action for quick target preferences', () => {
+  const pageSource = readFileSync(resolve('src/page/directionStl/index.vue'), 'utf-8')
+
+  expect(pageSource).toContain('保存偏好设置')
+  expect(pageSource).toContain('saveQuickTargetPreferences')
+  expect(pageSource).toContain('quickTargetFeedback')
+  expect(pageSource).toContain('快速目标位偏好已保存')
+})
+
+test('direction STL page downloads the modified JSON on export', () => {
+  const pageSource = readFileSync(resolve('src/page/directionStl/index.vue'), 'utf-8')
+
+  expect(pageSource).toContain('downloadModifiedJson')
+  expect(pageSource).toContain('quick-target-modified.json')
+  expect(pageSource).toContain('URL.createObjectURL')
+  expect(pageSource).toContain('修改后的 JSON 已导出')
 })
 
 test('extracts a single tooth mesh from expanded STL triangles and labels', () => {

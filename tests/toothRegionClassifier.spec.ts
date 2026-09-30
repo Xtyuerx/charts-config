@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 import * as THREE from 'three'
 
 import { createToothBoundary } from '../src/page/toothSegmentationTest/utils/toothBoundaryEditorUtils'
+import { createClosedSurfacePath } from '../src/page/toothSegmentationTest/utils/surfaceBoundaryUtils'
 import {
   buildConfirmedToothGeometry,
   buildSegmentationExportPayload,
@@ -81,7 +82,8 @@ test('classifies the closed surface-boundary interior without original tooth lab
 
   expect(region.toothId).toBe(11)
   expect(region.triangleIndices).toEqual([0])
-  expect(region.blockedEdgeCount).toBe(3)
+  // 只统计被显示路径截断的面邻接；开放外边不属于区域生长连接。
+  expect(region.blockedEdgeCount).toBe(1)
 })
 
 test('chooses only a boundary-adjacent side instead of an unrelated smaller STL component', () => {
@@ -90,6 +92,21 @@ test('chooses only a boundary-adjacent side instead of an unrelated smaller STL 
   const region = classifyToothRegion(buildToothRegionTopology(geometry), boundary)
 
   expect(region.triangleIndices).toEqual([0, 1])
+})
+
+test('confirmation rejects a displayed path whose endpoints no longer match the edited controls', () => {
+  const { geometry, boundary } = createBoundarySplitGeometryWithUnrelatedIsland()
+  const topology = buildToothRegionTopology(geometry)
+  const path = createClosedSurfacePath(topology.graph, boundary.boundary.map((point) => new THREE.Vector3(...point.position)))
+  boundary.boundary[0]!.position = [0.1, 0.1, 0]
+  expect(() => classifyToothRegion(topology, boundary, { surfacePath: path })).toThrow('显示边界已过期')
+})
+
+test('confirmation uses the seed side and rejects seeds spanning both sides', () => {
+  const { geometry, boundary } = createBoundarySplitGeometryWithUnrelatedIsland()
+  const topology = buildToothRegionTopology(geometry)
+  expect(classifyToothRegion(topology, boundary, { seedFaceIndices: [2] }).triangleIndices).toEqual([2, 3, 4, 5, 6, 7, 8, 9])
+  expect(() => classifyToothRegion(topology, boundary, { seedFaceIndices: [0, 2] })).toThrow('种子区域跨越')
 })
 
 test('rejects a boundary that does not split its source surface component', () => {

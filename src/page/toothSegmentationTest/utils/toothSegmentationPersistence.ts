@@ -37,10 +37,19 @@ function parseBoundaryPoint(value: unknown, toothId: number, pointIndex: number)
   ) {
     throw new Error(`牙号 ${toothId} 的第 ${pointIndex + 1} 个 Boundary Point 三维坐标无效`)
   }
-  return {
+  const point: ToothBoundaryPoint = {
     position: [...value.position] as [number, number, number],
     type: 'control',
-  } satisfies ToothBoundaryPoint
+  }
+  if (value.faceIndex !== undefined || value.barycentric !== undefined) {
+    const weights = value.barycentric
+    if (!Number.isInteger(value.faceIndex) || Number(value.faceIndex) < 0 || !Array.isArray(weights) || weights.length !== 3 ||
+      !weights.every((weight) => typeof weight === 'number' && Number.isFinite(weight) && weight >= -1e-6 && weight <= 1 + 1e-6) ||
+      Math.abs(weights.reduce((a: number, b: number) => a + b, 0) - 1) > 1e-6) throw new Error('Boundary 表面锚点无效')
+    point.faceIndex = Number(value.faceIndex)
+    point.barycentric = [...weights] as [number, number, number]
+  }
+  return point
 }
 
 function parseBoundaries(value: unknown) {
@@ -55,12 +64,32 @@ function parseBoundaries(value: unknown) {
     if (!Array.isArray(entry.boundary) || entry.boundary.length < 3) {
       throw new Error(`牙号 ${toothId} 至少需要 3 个 Boundary Points`)
     }
-    boundaries.set(toothId, {
+    const boundary: ToothBoundary = {
       toothId,
       boundary: entry.boundary.map((point, pointIndex) =>
         parseBoundaryPoint(point, toothId, pointIndex),
       ),
-    })
+    }
+    if (entry.controlReduction !== undefined) {
+      if (entry.controlReduction !== 3) throw new Error('Boundary 控制点减量标记无效')
+      boundary.controlReduction = 3
+    }
+    if (entry.source !== undefined) {
+      if (entry.source !== 'original') throw new Error('Boundary 来源无效')
+      boundary.source = 'original'
+    }
+    if (entry.surfaceSegments !== undefined) {
+      if (!Array.isArray(entry.surfaceSegments) || entry.surfaceSegments.length !== boundary.boundary.length) throw new Error('保存的表面路径段数无效')
+      boundary.surfaceSegments = entry.surfaceSegments.map((segment) => {
+        if (!Array.isArray(segment) || segment.length < 2 || segment.length > 16384) throw new Error('保存的表面路径采样数无效')
+        return segment.map((position) => parseBoundaryPoint({ type: 'control', position }, toothId, 0).position)
+      })
+    }
+    if (entry.seedFaceIndices !== undefined) {
+      if (!Array.isArray(entry.seedFaceIndices) || !entry.seedFaceIndices.every((face) => Number.isInteger(face) && face >= 0)) throw new Error('保存的种子面编号无效')
+      boundary.seedFaceIndices = [...entry.seedFaceIndices]
+    }
+    boundaries.set(toothId, boundary)
   })
   return boundaries
 }

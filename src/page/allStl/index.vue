@@ -139,6 +139,14 @@
       >
         Boundary
       </button>
+      <button
+        class="tool-button primary"
+        :disabled="isSaving || !hasLoadedJaw"
+        type="button"
+        @click="continueToModelRepair"
+      >
+        {{ isSaving ? '正在保存…' : '保存并下一步' }}
+      </button>
       <span class="status">{{ statusText }}</span>
     </div>
     <input
@@ -159,6 +167,9 @@ import { computed, markRaw, onMounted, onUnmounted, ref, shallowRef } from 'vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { STLLoader } from 'three-stdlib'
+import { useRouter } from 'vue-router'
+import { useModelRepairStore } from '@/stores/modelRepair'
+import { orderedBoundaryVertices, relabelBoundaryStrip } from './utils/localBoundaryUtils'
 import {
   buildGeometryPayloadFromMesh,
   createGeometryFromPayload,
@@ -167,6 +178,12 @@ import {
   type ScreenPoint,
   type MeshGeometryPayload,
 } from './utils/geometryPayloadUtils'
+import {
+  createModelRepairTransfer,
+  getRepairContinuationError,
+  normalizeRepairFaceMetadata,
+  type ModelRepairTransfer,
+} from '../modelRepair/utils/modelTransferUtils'
 
 type JawType = 'upper' | 'lower'
 type ToolMode = 'paint' | 'boundary'
@@ -190,6 +207,8 @@ const containerRef = ref<HTMLDivElement | null>(null)
 const selectionCanvasRef = ref<HTMLCanvasElement | null>(null)
 const jsonInputRef = ref<HTMLInputElement | null>(null)
 const statusText = ref('正在准备 3D 场景...')
+const isSaving = ref(false)
+const loadedJawCount = ref(0)
 const showUpper = ref(true)
 const showLower = ref(true)
 const showBoundaries = ref(true)
@@ -269,6 +288,8 @@ const dragPlaneNormal = new THREE.Vector3()
 const movablePointColor = new THREE.Color(0x00ff66)
 const hoverPointColor = new THREE.Color(0xfff000)
 const pointHitRadiusPx = 9
+const router = useRouter()
+const modelRepairStore = useModelRepairStore()
 
 type BoundaryDragState = {
   points: THREE.Points
@@ -281,6 +302,10 @@ type BoundaryDragState = {
   mesh: THREE.Mesh
   topology: MeshFaceTopology
   toothId: number
+  originalEdgeKey: string
+  originalLoops: BoundaryLoopData[]
+  oldArc: string[]
+  newArc: string[]
 }
 
 type BoundaryPickResult = {
@@ -373,6 +398,7 @@ let deleteSelectionPoints: ScreenPoint[] = []
 let deleteSelectionMesh: THREE.Mesh | null = null
 const deletePreviewState = shallowRef<DeletePreviewItem[]>([])
 const hasDeletePreview = computed(() => deletePreviewState.value.length > 0)
+const hasLoadedJaw = computed(() => loadedJawCount.value > 0)
 const pendingBoundaryRefreshMeshes = new Set<THREE.Mesh>()
 let rafId = 0
 
@@ -706,7 +732,10 @@ function shortestEdgePath(
   topology: MeshFaceTopology,
   startVertexKey: string,
   endVertexKey: string,
+  blockedVertices = new Set<string>(),
+  maxDistance = Infinity,
 ) {
+  if (blockedVertices.has(startVertexKey) || blockedVertices.has(endVertexKey)) return []
   if (startVertexKey === endVertexKey) return [] as string[]
 
   const distances = new Map<string, number>([[startVertexKey, 0]])
@@ -726,8 +755,9 @@ function shortestEdgePath(
     visited.add(currentKey)
 
     for (const neighbor of topology.vertexGraph.get(currentKey) ?? []) {
-      if (visited.has(neighbor.vertexKey)) continue
+      if (visited.has(neighbor.vertexKey) || blockedVertices.has(neighbor.vertexKey)) continue
       const nextDistance = currentDistance + neighbor.weight
+      if (nextDistance > maxDistance) continue
       if (nextDistance >= (distances.get(neighbor.vertexKey) ?? Number.POSITIVE_INFINITY)) continue
       distances.set(neighbor.vertexKey, nextDistance)
       previous.set(neighbor.vertexKey, { vertexKey: currentKey, edgeKey: neighbor.edgeKey })
@@ -746,39 +776,6 @@ function shortestEdgePath(
   }
 
   return path.reverse()
-}
-
-function shortestPathBetweenEdges(
-  topology: MeshFaceTopology,
-  fromEdgeKey: string,
-  toEdgeKey: string,
-) {
-  const fromEdge = topology.edgeByKey.get(fromEdgeKey)
-  const toEdge = topology.edgeByKey.get(toEdgeKey)
-  if (!fromEdge || !toEdge) return [] as string[]
-
-  const endpointPairs: Array<[string, string]> = [
-    [fromEdge.fromKey, toEdge.fromKey],
-    [fromEdge.fromKey, toEdge.toKey],
-    [fromEdge.toKey, toEdge.fromKey],
-    [fromEdge.toKey, toEdge.toKey],
-  ]
-
-  let bestPath: string[] = []
-  let bestLength = Number.POSITIVE_INFINITY
-  endpointPairs.forEach(([start, end]) => {
-    const path = shortestEdgePath(topology, start, end)
-    if (!path.length && start !== end) return
-    const length = path.reduce((sum, edgeKey) => {
-      const edge = topology.edgeByKey.get(edgeKey)
-      return sum + (edge ? edge.from.distanceTo(edge.to) : 0)
-    }, 0)
-    if (length >= bestLength) return
-    bestLength = length
-    bestPath = path
-  })
-
-  return Array.from(new Set([fromEdgeKey, ...bestPath, toEdgeKey]))
 }
 
 function updateBoundaryLinesFromLoops(
@@ -811,58 +808,135 @@ function updateBoundaryLinesFromLoops(
   lines.userData.boundaryEdgeKeys = boundaryEdgeKeys
 }
 
-function rebuildBoundaryLoopsFromControlPoints(points: THREE.Points, topology: MeshFaceTopology) {
-  const controls = points.userData.boundaryControlPoints as BoundaryControlPointData[] | undefined
-  const lines = points.userData.boundaryLines as THREE.LineSegments | undefined
-  if (!controls?.length) return [] as BoundaryLoopData[]
-
-  const loopsById = new Map<number, BoundaryLoopData>()
-  controls.forEach((control, pointIndex) => {
-    let loop = loopsById.get(control.loopId)
-    if (!loop) {
-      loop = { toothId: control.toothId, edgeKeys: [], controlPointIndices: [] }
-      loopsById.set(control.loopId, loop)
-    }
-    loop.controlPointIndices.push(pointIndex)
-  })
-
-  const loops = Array.from(loopsById.entries())
-    .sort(([a], [b]) => a - b)
-    .map(([, loop]) => {
-      const edgeKeys: string[] = []
-      const pointIndices = loop.controlPointIndices
-      pointIndices.forEach((pointIndex, index) => {
-        const current = controls[pointIndex]
-        const nextPointIndex = pointIndices[(index + 1) % pointIndices.length]
-        if (nextPointIndex == null) return
-        const next = controls[nextPointIndex]
-        if (!current || !next) return
-        if (pointIndices.length === 1) {
-          edgeKeys.push(current.edgeKey)
-          return
-        }
-        edgeKeys.push(...shortestPathBetweenEdges(topology, current.edgeKey, next.edgeKey))
+function previewLocalBoundaryMove(state: BoundaryDragState, nextEdge: MeshEdgeRecord) {
+  const controls = state.points.userData.boundaryControlPoints as BoundaryControlPointData[]
+  const control = controls[state.pointIndex]
+  const loop = state.originalLoops.find((item) =>
+    item.controlPointIndices.includes(state.pointIndex),
+  )
+  if (!control || !loop || loop.controlPointIndices.length < 3) return false
+  const vertices = orderedBoundaryVertices(loop.edgeKeys, state.topology.edgeByKey, true)
+  if (!vertices) return false
+  const closed = vertices[0] === vertices[vertices.length - 1]
+  const index = loop.controlPointIndices.indexOf(state.pointIndex)
+  const count = loop.controlPointIndices.length
+  if (!closed && (index === 0 || index === count - 1)) return false
+  const previous = controls[loop.controlPointIndices[(index + count - 1) % count]!]
+  const next = controls[loop.controlPointIndices[(index + 1) % count]!]
+  if (!previous || !next) return false
+  const start = loop.edgeKeys.indexOf(previous.edgeKey)
+  const end = loop.edgeKeys.indexOf(next.edgeKey)
+  if (start < 0 || end < 0) return false
+  const arcIndices: number[] = []
+  for (let i = start; i !== end; i = (i + 1) % loop.edgeKeys.length) {
+    arcIndices.push(i)
+    if (arcIndices.length >= loop.edgeKeys.length) return false
+  }
+  arcIndices.push(end)
+  const oldArc = arcIndices.map((i) => loop.edgeKeys[i]!)
+  const from = vertices[start + 1]!
+  const to = vertices[end]!
+  const lengthOf = (keys: string[]) =>
+    keys.reduce((sum, key) => {
+      const edge = state.topology.edgeByKey.get(key)!
+      return sum + edge.from.distanceTo(edge.to)
+    }, 0)
+  const oldLength = lengthOf(oldArc)
+  if (nextEdge.midpoint.distanceTo(state.originalLocalPosition) > oldLength) return false
+  let newArc: string[] | null = null
+  let bestLength = Infinity
+  if (nextEdge.edgeKey === state.originalEdgeKey) newArc = oldArc
+  else {
+    // Preserve the untouched arc, but do not reject junctions elsewhere in the original loop.
+    const arcSet = new Set(oldArc)
+    const blocked = new Set<string>()
+    loop.edgeKeys
+      .filter((key) => !arcSet.has(key))
+      .forEach((key) => {
+        const edge = state.topology.edgeByKey.get(key)!
+        blocked.add(edge.fromKey)
+        blocked.add(edge.toKey)
       })
-
-      return {
-        ...loop,
-        edgeKeys: Array.from(new Set(edgeKeys)),
+    blocked.add(vertices[start]!)
+    blocked.add(vertices[end + 1]!)
+    blocked.delete(from)
+    blocked.delete(to)
+    for (const [a, b] of [
+      [nextEdge.fromKey, nextEdge.toKey],
+      [nextEdge.toKey, nextEdge.fromKey],
+    ] as Array<[string, string]>) {
+      // Route one side first and keep its vertices out of the other side's search.
+      // Try both orders because a shortest first leg can otherwise trap the second leg.
+      for (const rightFirst of [false, true]) {
+        const firstFrom = rightFirst ? to : from
+        const firstTo = rightFirst ? b : a
+        const secondFrom = rightFirst ? from : to
+        const secondTo = rightFirst ? a : b
+        const firstBlocked = new Set([...blocked, secondTo])
+        if (secondFrom !== firstFrom) firstBlocked.add(secondFrom)
+        const first = shortestEdgePath(
+          state.topology,
+          firstFrom,
+          firstTo,
+          firstBlocked,
+          oldLength * 2,
+        )
+        if (!first.length && firstFrom !== firstTo) continue
+        const secondBlocked = new Set([...blocked, firstFrom, firstTo])
+        first.forEach((key) => {
+          const edge = state.topology.edgeByKey.get(key)!
+          secondBlocked.add(edge.fromKey)
+          secondBlocked.add(edge.toKey)
+        })
+        const second = shortestEdgePath(
+          state.topology,
+          secondFrom,
+          secondTo,
+          secondBlocked,
+          oldLength * 2,
+        )
+        if (!second.length && secondFrom !== secondTo) continue
+        const left = rightFirst ? second : first
+        const right = (rightFirst ? first : second).slice().reverse()
+        const candidate = [previous.edgeKey, ...left, nextEdge.edgeKey, ...right, next.edgeKey]
+        const pathVertices = orderedBoundaryVertices(candidate, state.topology.edgeByKey)
+        if (
+          !pathVertices ||
+          pathVertices[0] !== vertices[start] ||
+          pathVertices[pathVertices.length - 1] !== vertices[end + 1]
+        )
+          continue
+        const length = lengthOf(candidate)
+        if (length <= oldLength * 2 && length < bestLength) {
+          bestLength = length
+          newArc = candidate
+        }
       }
-    })
-
-  const position = points.geometry.getAttribute('position') as THREE.BufferAttribute
-  controls.forEach((control, pointIndex) => {
-    const edge = topology.edgeByKey.get(control.edgeKey)
-    if (!edge) return
-    position.setXYZ(pointIndex, edge.midpoint.x, edge.midpoint.y, edge.midpoint.z)
-  })
-  position.needsUpdate = true
-  points.geometry.computeBoundingSphere()
-
-  points.userData.boundaryLoops = loops
-  if (points.parent) points.parent.userData.boundaryLoops = loops
-  updateBoundaryLinesFromLoops(lines, loops, topology)
-  return loops
+    }
+  }
+  if (!newArc) return false
+  const replacement =
+    start <= end
+      ? [...loop.edgeKeys.slice(0, start), ...newArc, ...loop.edgeKeys.slice(end + 1)]
+      : [...newArc, ...loop.edgeKeys.slice(end + 1, start)]
+  const nextVertices = orderedBoundaryVertices(replacement, state.topology.edgeByKey, true)
+  if (!nextVertices || (closed && nextVertices[0] !== nextVertices[nextVertices.length - 1]))
+    return false
+  const loops = state.originalLoops.map((item) =>
+    item === loop ? { ...item, edgeKeys: replacement } : item,
+  )
+  state.oldArc = oldArc
+  state.newArc = newArc
+  control.edgeKey = nextEdge.edgeKey
+  state.points.userData.boundaryLoops = loops
+  if (state.points.parent) state.points.parent.userData.boundaryLoops = loops
+  setPointLocalPosition(
+    state.points,
+    state.pointIndex,
+    state.mesh.localToWorld(nextEdge.midpoint.clone()),
+  )
+  updateBoundaryLinesFromLoops(state.lines, loops, state.topology)
+  return true
 }
 
 function buildBoundaryGroup(geometry: THREE.BufferGeometry, labels: number[]) {
@@ -1331,6 +1405,54 @@ function exportJawJson(jaw: JawType) {
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
   statusText.value = `Exported ${jaw} JSON.`
+}
+
+async function continueToModelRepair() {
+  if (isSaving.value) return
+
+  const jawCount = (meshes.upper ? 1 : 0) + (meshes.lower ? 1 : 0)
+  const validationError = getRepairContinuationError(hasDeletePreview.value, jawCount)
+  if (validationError) {
+    statusText.value = validationError
+    return
+  }
+
+  isSaving.value = true
+  statusText.value = '正在保存模型修复任务…'
+
+  try {
+    const jaws: ModelRepairTransfer['jaws'] = {}
+    for (const jaw of ['upper', 'lower'] as const) {
+      const mesh = meshes[jaw]
+      if (!mesh) continue
+
+      const labels = meshLabelMap.get(mesh)
+      if (!labels?.length) throw new Error(`${jaw === 'upper' ? '上颌' : '下颌'} labels 未准备好。`)
+
+      const position = mesh.geometry.getAttribute('position') as THREE.BufferAttribute | undefined
+      const faceMetadata = normalizeRepairFaceMetadata(
+        (position?.count ?? 0) / 3,
+        mesh.userData.sourceFaceCount,
+        mesh.userData.removedFaceCount,
+      )
+      jaws[jaw] = buildGeometryPayloadFromMesh(mesh.geometry, labels, faceMetadata)
+    }
+
+    const transfer = createModelRepairTransfer(jaws)
+    await modelRepairStore.setTransfer(transfer)
+    const navigationFailure = await router
+      .push({ name: 'modelRepair', query: { task: transfer.id } })
+      .catch((error: unknown) => {
+        throw new Error(
+          `进入模型修复页面失败：${error instanceof Error ? error.message : String(error)}`,
+        )
+      })
+    if (navigationFailure) throw new Error('进入模型修复页面失败，请重试。')
+  } catch (error) {
+    statusText.value = `保存模型修复任务失败：${error instanceof Error ? error.message : String(error)}`
+  } finally {
+    isSaving.value = false
+  }
 }
 
 function replaceBoundaryGroup(mesh: THREE.Mesh, jaw: JawType, nextGroup: THREE.Group) {
@@ -1866,118 +1988,42 @@ function getBoundaryLoopsFromMesh(mesh: THREE.Mesh) {
   return (boundaryGroups[jaw]?.userData.boundaryLoops as BoundaryLoopData[] | undefined) ?? []
 }
 
-function getBlockedEdgesFromBoundaryLoops(mesh: THREE.Mesh) {
-  const loops = getBoundaryLoopsFromMesh(mesh)
-  const blockedEdges = new Set<string>()
-  loops.forEach((loop) => loop.edgeKeys.forEach((edgeKey) => blockedEdges.add(edgeKey)))
-  return { loops, blockedEdges }
-}
-
-function getToothSeedFaces(geometry: THREE.BufferGeometry, faceLabels: number[]) {
-  const sums = new Map<number, { center: THREE.Vector3; count: number }>()
-  const center = new THREE.Vector3()
-
-  faceLabels.forEach((label, faceIndex) => {
-    if (label < 0) return
-    let sum = sums.get(label)
-    if (!sum) {
-      sum = { center: new THREE.Vector3(), count: 0 }
-      sums.set(label, sum)
-    }
-    getTriangleCenter(geometry, faceIndex, center)
-    sum.center.add(center)
-    sum.count += 1
-  })
-
-  const seeds = new Map<number, number>()
-  sums.forEach((sum, toothId) => {
-    const targetCenter = sum.center.multiplyScalar(1 / Math.max(sum.count, 1))
-    let bestFaceIndex = -1
-    let bestDistanceSq = Number.POSITIVE_INFINITY
-    faceLabels.forEach((label, faceIndex) => {
-      if (label !== toothId) return
-      getTriangleCenter(geometry, faceIndex, center)
-      const distanceSq = center.distanceToSquared(targetCenter)
-      if (distanceSq < bestDistanceSq) {
-        bestDistanceSq = distanceSq
-        bestFaceIndex = faceIndex
-      }
-    })
-    if (bestFaceIndex >= 0) seeds.set(toothId, bestFaceIndex)
-  })
-
-  return seeds
-}
-
-function recomputeAllToothLabels(mesh: THREE.Mesh) {
-  const labels = meshLabelMap.get(mesh)
-  const position = mesh.geometry.getAttribute('position') as THREE.BufferAttribute | undefined
-  if (!labels || !position) return false
-
-  const topology = buildMeshFaceTopology(mesh.geometry)
-  const { loops: boundaryLoops, blockedEdges } = getBlockedEdgesFromBoundaryLoops(mesh)
-  const previousFaceLabels = vertexLabelsToFaceLabels(labels)
-  const nextFaceLabels = new Array<number>(previousFaceLabels.length).fill(-1)
-  const seeds = getToothSeedFaces(mesh.geometry, previousFaceLabels)
-  const queue: Array<{ faceIndex: number; toothId: number }> = []
-  const floodFillCounts = new Map<number, number>()
-
-  Array.from(seeds.entries())
-    .sort(([a], [b]) => (a === 0 ? 1 : b === 0 ? -1 : a - b))
-    .forEach(([toothId, seedFaceIndex]) => {
-      nextFaceLabels[seedFaceIndex] = toothId
-      queue.push({ faceIndex: seedFaceIndex, toothId })
-      floodFillCounts.set(toothId, 1)
-    })
-
-  for (let cursor = 0; cursor < queue.length; cursor++) {
-    const current = queue[cursor]
-    if (!current) continue
-
-    for (const edgeRef of topology.faceEdges[current.faceIndex] ?? []) {
-      if (blockedEdges.has(edgeRef.edgeKey)) continue
-      const neighbor = edgeRef.neighbor
-      if (neighbor == null || nextFaceLabels[neighbor] !== -1) continue
-      nextFaceLabels[neighbor] = current.toothId
-      floodFillCounts.set(current.toothId, (floodFillCounts.get(current.toothId) ?? 0) + 1)
-      queue.push({ faceIndex: neighbor, toothId: current.toothId })
-    }
+function commitLocalBoundaryMove(state: BoundaryDragState, cancelled = false) {
+  const labels = meshLabelMap.get(state.mesh)
+  const controlPoints = state.points.userData.boundaryControlPoints as BoundaryControlPointData[]
+  if (!labels || controlPoints[state.pointIndex]?.edgeKey === state.originalEdgeKey) return
+  const faceLabels = vertexLabelsToFaceLabels(labels)
+  const toothFaces = faceLabels.filter((label) => label === state.toothId).length
+  const changes = cancelled
+    ? null
+    : relabelBoundaryStrip(
+        faceLabels,
+        state.topology.faceEdges,
+        state.topology.edgeByKey,
+        state.oldArc,
+        state.newArc,
+        state.toothId,
+        Math.min(2000, Math.max(32, Math.ceil(toothFaces * 0.05))),
+      )
+  if (changes?.size) {
+    changes.forEach((label, face) => setFaceLabel(labels, face, label))
+    refreshMeshLabels(state.mesh)
+    // Re-extract exact label interfaces, also synchronizing any shared tooth boundary.
+    const jaw = state.mesh.userData.jaw as JawType
+    replaceBoundaryGroup(state.mesh, jaw, buildBoundaryGroup(state.mesh.geometry, labels))
+    statusText.value = '边界已局部更新。'
+  } else {
+    controlPoints[state.pointIndex]!.edgeKey = state.originalEdgeKey
+    state.points.userData.boundaryLoops = state.originalLoops
+    if (state.points.parent) state.points.parent.userData.boundaryLoops = state.originalLoops
+    setPointLocalPosition(
+      state.points,
+      state.pointIndex,
+      state.mesh.localToWorld(state.originalLocalPosition.clone()),
+    )
+    updateBoundaryLinesFromLoops(state.lines, state.originalLoops, state.topology)
+    statusText.value = '边界未形成可确认的局部区域或移动范围过大，已保留原分区。请缩小移动范围。'
   }
-
-  nextFaceLabels.forEach((label, faceIndex) => {
-    if (label !== -1) return
-    nextFaceLabels[faceIndex] = 0
-  })
-
-  const nextVertexLabels = faceLabelsToVertexLabels(nextFaceLabels)
-  let changed = false
-  for (let index = 0; index < Math.min(labels.length, nextVertexLabels.length); index++) {
-    const nextLabel = nextVertexLabels[index] ?? 0
-    if (labels[index] === nextLabel) continue
-    labels[index] = nextLabel
-    changed = true
-  }
-
-  const toothFaceCounts = new Map<number, number>()
-  nextFaceLabels.forEach((label) => {
-    if (!label || label < 0) return
-    toothFaceCounts.set(label, (toothFaceCounts.get(label) ?? 0) + 1)
-  })
-
-  console.info('[editStl] recomputeAllToothLabels', {
-    boundaryLoopCount: boundaryLoops.length,
-    boundaryEdgeCount: boundaryLoops.reduce((sum, loop) => sum + loop.edgeKeys.length, 0),
-    blockedEdgeCount: blockedEdges.size,
-    floodFillFaceCount: Array.from(floodFillCounts.entries()).reduce(
-      (sum, [, count]) => sum + count,
-      0,
-    ),
-    floodFillCounts: Object.fromEntries(floodFillCounts),
-    toothFaceCount: Object.fromEntries(toothFaceCounts),
-  })
-
-  if (changed) refreshMeshLabels(mesh)
-  return changed
 }
 
 function getDominantReplacementLabel(labels: number[], toothId: number, faceIndices: number[]) {
@@ -2595,6 +2641,16 @@ function onPointerDown(event: PointerEvent) {
     mesh,
     topology,
     toothId,
+    originalEdgeKey: (points.userData.boundaryControlPoints as BoundaryControlPointData[])[
+      pointIndex
+    ]!.edgeKey,
+    originalLoops: getBoundaryLoopsFromMesh(mesh).map((loop) => ({
+      ...loop,
+      edgeKeys: [...loop.edgeKeys],
+      controlPointIndices: [...loop.controlPointIndices],
+    })),
+    oldArc: [],
+    newArc: [],
   }
 
   setBoundaryPointColor(points, pointIndex, movablePointColor)
@@ -2643,21 +2699,14 @@ function onPointerMove(event: PointerEvent) {
   const nextLocalOnMesh = boundaryDragState.mesh.worldToLocal(nextWorldPosition.clone())
   const nearestEdge = findNearestMeshEdge(boundaryDragState.topology, nextLocalOnMesh)
   if (!nearestEdge) return
+  const currentControl = (
+    boundaryDragState.points.userData.boundaryControlPoints as BoundaryControlPointData[]
+  )[boundaryDragState.pointIndex]
+  if (currentControl?.edgeKey === nearestEdge.edgeKey) return
 
-  const controls = boundaryDragState.points.userData.boundaryControlPoints as
-    | BoundaryControlPointData[]
-    | undefined
-  const controlPoint = controls?.[boundaryDragState.pointIndex]
-  if (!controlPoint) return
-
-  controlPoint.edgeKey = nearestEdge.edgeKey
-  const snappedWorldPosition = boundaryDragState.mesh.localToWorld(nearestEdge.midpoint.clone())
-  setPointLocalPosition(
-    boundaryDragState.points,
-    boundaryDragState.pointIndex,
-    snappedWorldPosition,
-  )
-  rebuildBoundaryLoopsFromControlPoints(boundaryDragState.points, boundaryDragState.topology)
+  if (!previewLocalBoundaryMove(boundaryDragState, nearestEdge)) {
+    statusText.value = '该位置无法保持局部边界连续，请缩小移动范围或先用涂色修正。'
+  }
   event.preventDefault()
 }
 
@@ -2701,8 +2750,8 @@ function endBoundaryDrag(event?: PointerEvent) {
       renderer.domElement.releasePointerCapture(event.pointerId)
     }
   }
-  recomputeAllToothLabels(dragState.mesh)
   boundaryDragState = null
+  commitLocalBoundaryMove(dragState, event?.type === 'pointercancel')
   if (event) setBoundaryHover(pickNearestBoundaryPoint(event))
 }
 
@@ -2779,6 +2828,7 @@ async function init() {
     meshes[mesh.name.startsWith('upper') ? 'upper' : 'lower'] = mesh
     scene?.add(mesh)
   })
+  loadedJawCount.value = loadedMeshes.length
 
   syncVisibility()
   fitCameraToMeshes()
@@ -2809,7 +2859,7 @@ function disposeObject(object: THREE.Object3D | undefined) {
 onMounted(() => {
   void init().catch((error) => {
     console.error(error)
-    statusText.value = error instanceof Error ? error.message : String(error)
+    statusText.value = `模型加载失败：${error instanceof Error ? error.message : String(error)}`
   })
 })
 

@@ -1,9 +1,12 @@
 import * as THREE from 'three'
+import type { SurfaceAnchor, SurfaceIntersection } from './surfaceAnchorUtils'
+import { bindFacePathPoint, buildSurfaceFaceTopology, createFaceConstrainedSegment, type SurfaceFaceTopology } from './surfaceFacePathUtils'
 
 export type SurfaceGraph = {
   vertices: Map<string, THREE.Vector3>
   neighbors: Map<string, Map<string, number>>
   precision: number
+  surface: SurfaceFaceTopology
 }
 
 export type ClosedSurfacePath = {
@@ -17,7 +20,7 @@ export type SurfaceBoundaryDragFrame = {
   graph: SurfaceGraph
   currentPath: ClosedSurfacePath
   controlIndex: number
-  raycastSurface: (mesh: THREE.Mesh) => Pick<THREE.Intersection, 'point'> | null
+  raycastSurface: (mesh: THREE.Mesh) => SurfaceIntersection | null
   updateControlPoint: (point: THREE.Vector3) => void
   updateOverlay: (segmentPoints: THREE.Vector3[][]) => void
 }
@@ -94,10 +97,10 @@ export function applySurfaceBoundaryDragFrame({
   const intersection = raycastSurface(sourceMesh)
   if (!intersection) return null
   const point = intersection.point.clone()
-  const path = moveClosedSurfacePathAnchor(graph, currentPath, controlIndex, point)
+  const path = moveClosedSurfacePathAnchor(graph, currentPath, controlIndex, point, intersection)
   updateControlPoint(point)
   updateOverlay(path.segmentPoints)
-  return { point, path }
+  return { point, path, anchor: intersection }
 }
 
 type QueueItem = {
@@ -264,6 +267,7 @@ export function buildSurfaceGraph(geometry: THREE.BufferGeometry, precision = 10
     vertices: new Map(),
     neighbors: new Map(),
     precision,
+    surface: buildSurfaceFaceTopology(geometry),
   }
   const keys = new Array<string>(position.count)
 
@@ -278,10 +282,12 @@ export function buildSurfaceGraph(geometry: THREE.BufferGeometry, precision = 10
     graph.neighbors.set(key, new Map())
   }
 
-  for (let index = 0; index + 2 < position.count; index += 3) {
-    const a = keys[index]!
-    const b = keys[index + 1]!
-    const c = keys[index + 2]!
+  const indices = geometry.getIndex()
+  const count = indices ? indices.count : position.count
+  for (let index = 0; index + 2 < count; index += 3) {
+    const a = keys[indices ? indices.getX(index) : index]!
+    const b = keys[indices ? indices.getX(index + 1) : index + 1]!
+    const c = keys[indices ? indices.getX(index + 2) : index + 2]!
     addEdge(graph, a, b)
     addEdge(graph, b, c)
     addEdge(graph, c, a)
@@ -339,21 +345,19 @@ export function createSurfaceSegmentPoints(
   graph: SurfaceGraph,
   fromPoint: THREE.Vector3,
   toPoint: THREE.Vector3,
+  fromAnchor?: SurfaceAnchor,
+  toAnchor?: SurfaceAnchor,
 ) {
-  const fromKey = findNearestSurfaceVertexKey(graph, fromPoint)
-  const toKey = findNearestSurfaceVertexKey(graph, toPoint)
-  if (!fromKey || !toKey) throw new Error('边界点无法吸附到 STL 表面')
-  if (fromKey === toKey) return [fromPoint.clone(), toPoint.clone()]
-  const points = findShortestSurfacePathKeys(graph, fromKey, toKey).map((key) =>
-    graph.vertices.get(key)!.clone(),
-  )
-  points[0] = fromPoint.clone()
-  points[points.length - 1] = toPoint.clone()
-  return points
+  return createFaceConstrainedSegment(graph.surface, fromPoint, toPoint, fromAnchor, toAnchor)
+}
+
+function controlPositionKey(graph: SurfaceGraph, point: THREE.Vector3) {
+  const epsilon = graph.surface.epsilon
+  return `${Math.round(point.x / epsilon)}:${Math.round(point.y / epsilon)}:${Math.round(point.z / epsilon)}`
 }
 
 export function createClosedSurfaceSegments(graph: SurfaceGraph, anchorPoints: THREE.Vector3[]) {
-  const anchorKeys = anchorPoints.map((point) => findNearestSurfaceVertexKey(graph, point))
+  const anchorKeys = anchorPoints.map((point) => controlPositionKey(graph, point))
   if (new Set(anchorKeys).size < 3) throw new Error('至少需要 3 个不同的 Boundary Points')
   return anchorPoints.map((point, index) =>
     createSurfaceSegmentPoints(graph, point, anchorPoints[(index + 1) % anchorPoints.length]!),
@@ -368,11 +372,12 @@ export function createClosedSurfacePath(
   const anchorKeys: string[] = []
   const anchorPoints: THREE.Vector3[] = []
   sampledPoints.forEach((point) => {
-    const key = findNearestSurfaceVertexKey(graph, point)
+    const surfacePoint = bindFacePathPoint(graph.surface, point).point
+    const key = controlPositionKey(graph, surfacePoint)
     if (!key || seen.has(key)) return
     seen.add(key)
     anchorKeys.push(key)
-    anchorPoints.push(point.clone())
+    anchorPoints.push(surfacePoint)
   })
 
   if (anchorKeys.length < 3) throw new Error('至少需要 3 个不同的 Boundary Points')
@@ -386,33 +391,57 @@ export function createClosedSurfacePath(
   }
 }
 
+/** 恢复实际保存的显示路径，不用控制点重新求路而改变用户已编辑的曲线。 */
+export function restoreClosedSurfacePath(graph: SurfaceGraph, anchors: THREE.Vector3[], saved: [number, number, number][][]): ClosedSurfacePath {
+  const { tree, faces, epsilon } = graph.surface
+  if (saved.length !== anchors.length) throw new Error('保存路径与控制点数量不一致')
+  const segments = saved.map((segment, index) => {
+    const points = segment.map((point) => new THREE.Vector3(...point))
+    if (points.length < 2 || points[0]!.distanceTo(anchors[index]!) > epsilon || points[points.length - 1]!.distanceTo(anchors[(index + 1) % anchors.length]!) > epsilon) throw new Error('保存路径端点与 Boundary 不一致')
+    for (let i = 1; i < points.length; i++) {
+      const a = points[i - 1]!, b = points[i]!
+      const hit = tree.closestPointToPoint(a.clone().lerp(b, 0.5))
+      if (!hit || hit.distance > epsilon) throw new Error('保存的路径不在当前 STL 表面上')
+      const face = faces[hit.faceIndex]!
+      if ([a, b].some((point) => face.triangle.closestPointToPoint(point, new THREE.Vector3()).distanceTo(point) > epsilon)) throw new Error('保存路径跨越三角面，不能直接恢复')
+    }
+    return points
+  })
+  return { anchorPoints: anchors.map((point) => point.clone()), segmentPoints: segments, curvePoints: segments.flatMap((segment, index) => index ? segment.slice(1) : segment) }
+}
+
 export function moveClosedSurfacePathAnchor(
   graph: SurfaceGraph,
   currentPath: ClosedSurfacePath,
   anchorIndex: number,
   nextPoint: THREE.Vector3,
+  nextAnchor?: SurfaceAnchor,
 ) {
   const anchorPoints = currentPath.anchorPoints.map((point) => point.clone())
   if (!anchorPoints[anchorIndex]) throw new Error('Boundary Point 索引无效')
-  const anchorKeys = anchorPoints.map((point) => findNearestSurfaceVertexKey(graph, point))
-  const nextKey = findNearestSurfaceVertexKey(graph, nextPoint)
+  const anchorKeys = anchorPoints.map((point) => controlPositionKey(graph, point))
+  const surfacePoint = bindFacePathPoint(graph.surface, nextPoint, nextAnchor).point
+  const nextKey = controlPositionKey(graph, surfacePoint)
   if (anchorKeys.some((key, index) => index !== anchorIndex && key === nextKey)) {
     throw new Error('Boundary Point 不能与其他控制点重合')
   }
 
   anchorKeys[anchorIndex] = nextKey
-  anchorPoints[anchorIndex] = nextPoint.clone()
+  anchorPoints[anchorIndex] = surfacePoint
   const previousIndex = (anchorIndex - 1 + anchorKeys.length) % anchorKeys.length
   const segmentPoints = currentPath.segmentPoints.slice()
   segmentPoints[previousIndex] = createSurfaceSegmentPoints(
     graph,
     anchorPoints[previousIndex]!,
     anchorPoints[anchorIndex]!,
+    undefined,
+    nextAnchor,
   )
   segmentPoints[anchorIndex] = createSurfaceSegmentPoints(
     graph,
     anchorPoints[anchorIndex]!,
     anchorPoints[(anchorIndex + 1) % anchorPoints.length]!,
+    nextAnchor,
   )
 
   return {

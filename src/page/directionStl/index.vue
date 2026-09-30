@@ -16,40 +16,71 @@
         <label class="toggle"
           ><input v-model="showToothMesh" type="checkbox" @change="syncVisibility" />Tooth</label
         >
-        <label class="toggle"
-          ><input v-model="showGrid" type="checkbox" @change="syncVisibility" />Grid</label
-        >
-        <button :class="{ active: transformMode === 'translate' }" @click="setTransformMode('translate')">
-          Move
-        </button>
-        <button :class="{ active: transformMode === 'rotate' }" @click="setTransformMode('rotate')">
-          Rotate
-        </button>
         <button @click="resetTargetTransform">Reset Target</button>
         <button @click="saveTargetTransform">Save Target</button>
-        <button @click="exportTargetTransforms">Export Targets</button>
+        <button @click="exportModifiedJson">导出修改后的 JSON</button>
         <span class="status">{{ statusText }}</span>
       </div>
     </div>
     <div class="viewer-shell">
       <div ref="viewerRef" class="viewer"></div>
+      <section class="quick-target-panel" aria-label="Quick target preferences">
+        <h2>快速目标位偏好设置</h2>
+        <div class="preference-group">
+          <div class="preference-title">上颌去釉</div>
+          <label><input v-model="quickTargetPreferences.upperIpr" type="radio" value="allowed" />允许去釉</label>
+          <label
+            ><input v-model="quickTargetPreferences.upperIpr" type="radio" value="notAllowed" />不可去釉</label
+          >
+        </div>
+        <div class="preference-group">
+          <div class="preference-title">下颌去釉</div>
+          <label><input v-model="quickTargetPreferences.lowerIpr" type="radio" value="allowed" />允许去釉</label>
+          <label
+            ><input v-model="quickTargetPreferences.lowerIpr" type="radio" value="notAllowed" />不可去釉</label
+          >
+        </div>
+        <div class="preference-group">
+          <div class="preference-title">拔牙</div>
+          <label
+            ><input v-model="quickTargetPreferences.extraction" type="radio" value="notRequired" />暂不需要</label
+          >
+          <label><input v-model="quickTargetPreferences.extraction" type="radio" value="required" />拔牙</label>
+        </div>
+        <div class="preference-group">
+          <div class="preference-title">预留</div>
+          <label
+            ><input v-model="quickTargetPreferences.spacing" type="radio" value="notRequired" />暂不需要</label
+          >
+          <label
+            ><input v-model="quickTargetPreferences.spacing" type="radio" value="reserved" />预留间隙</label
+          >
+        </div>
+        <button class="preference-save-button" @click="saveQuickTargetPreferences">
+          保存偏好设置
+        </button>
+        <div v-if="quickTargetFeedback" class="preference-feedback">
+          {{ quickTargetFeedback }}
+        </div>
+      </section>
       <pre class="target-panel">{{ targetPayloadText }}</pre>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import { TransformControls } from 'three/addons/controls/TransformControls.js'
 import { STLLoader } from 'three-stdlib'
 import { extractToothMeshGeometry } from './utils/toothAxisUtils'
 import {
   createToothTargetTransform,
+  defaultQuickTargetPreferences,
   serializeToothTargetTransforms,
   targetKey,
   upsertToothTargetTransform,
+  type QuickTargetPreferences,
   type ToothTargetTransform,
 } from './utils/toothTargetUtils'
 
@@ -79,8 +110,8 @@ const availableFdis = ref<number[]>([])
 const statusText = ref('Ready')
 const showJaw = ref(true)
 const showToothMesh = ref(true)
-const showGrid = ref(true)
-const transformMode = ref<'translate' | 'rotate'>('translate')
+const quickTargetPreferences = ref<QuickTargetPreferences>({ ...defaultQuickTargetPreferences })
+const quickTargetFeedback = ref('')
 const targetTransforms = ref<Record<string, ToothTargetTransform>>({})
 const targetPayloadText = ref('No saved target transforms.')
 
@@ -88,16 +119,12 @@ let scene: THREE.Scene | null = null
 let camera: THREE.PerspectiveCamera | null = null
 let renderer: THREE.WebGLRenderer | null = null
 let controls: OrbitControls | null = null
-let transformControls: TransformControls | null = null
-let transformControlsHelper: THREE.Object3D | null = null
 let resizeObserver: ResizeObserver | null = null
 let raf = 0
 let loadToken = 0
 let jawMesh: THREE.Mesh | null = null
 let toothTargetGroup: THREE.Group | null = null
 let toothMesh: THREE.Mesh | null = null
-let toothAxisObject: THREE.Group | null = null
-let gridHelper: THREE.GridHelper | null = null
 let currentGeometry: THREE.BufferGeometry | null = null
 let currentLabels: number[] = []
 
@@ -116,32 +143,16 @@ function clearObject(object: THREE.Object3D | null) {
   disposeObject(object)
 }
 
-function detachTransformControls() {
-  if (transformControls) {
-    transformControls.detach()
-    transformControls.dispose()
-    transformControls = null
-  }
-  if (scene && transformControlsHelper) {
-    scene.remove(transformControlsHelper)
-  }
-  transformControlsHelper = null
-}
-
 function clearTargetObjects() {
-  detachTransformControls()
   clearObject(toothTargetGroup)
   toothTargetGroup = null
   toothMesh = null
-  toothAxisObject = null
 }
 
 function clearSceneObjects() {
   clearObject(jawMesh)
   clearTargetObjects()
-  clearObject(gridHelper)
   jawMesh = null
-  gridHelper = null
   currentGeometry = null
   currentLabels = []
 }
@@ -149,8 +160,6 @@ function clearSceneObjects() {
 function syncVisibility() {
   if (jawMesh) jawMesh.visible = showJaw.value
   if (toothTargetGroup) toothTargetGroup.visible = showToothMesh.value
-  if (transformControlsHelper) transformControlsHelper.visible = showToothMesh.value
-  if (gridHelper) gridHelper.visible = showGrid.value
 }
 
 function createToothMesh(geometry: THREE.BufferGeometry) {
@@ -166,68 +175,6 @@ function createToothMesh(geometry: THREE.BufferGeometry) {
   return mesh
 }
 
-function createAxisLabel(text: string, color: string) {
-  const canvas = document.createElement('canvas')
-  canvas.width = 128
-  canvas.height = 128
-  const context = canvas.getContext('2d')
-  if (!context) return null
-
-  context.font = '700 72px Arial'
-  context.textAlign = 'center'
-  context.textBaseline = 'middle'
-  context.fillStyle = color
-  context.fillText(text, 64, 64)
-
-  const texture = new THREE.CanvasTexture(canvas)
-  const sprite = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false }),
-  )
-  sprite.renderOrder = 10
-  return sprite
-}
-
-function createAxisLine(
-  origin: THREE.Vector3,
-  direction: THREE.Vector3,
-  length: number,
-  color: number,
-) {
-  return new THREE.Line(
-    new THREE.BufferGeometry().setFromPoints([
-      origin,
-      origin.clone().add(direction.clone().normalize().multiplyScalar(length)),
-    ]),
-    new THREE.LineBasicMaterial({ color, depthTest: false }),
-  )
-}
-
-function createCenteredGlobalAxisObject(box: THREE.Box3) {
-  const center = box.getCenter(new THREE.Vector3())
-  const size = box.getSize(new THREE.Vector3())
-  const axisLength = Math.max(Math.max(size.x, size.y, size.z) * 0.45, 2)
-  const group = new THREE.Group()
-  group.name = 'current-tooth-axis'
-
-  const defs = [
-    ['x', 'X', new THREE.Vector3(1, 0, 0), 0xff4d4f],
-    ['y', 'Y', new THREE.Vector3(0, 1, 0), 0x52c41a],
-    ['z', 'Z', new THREE.Vector3(0, 0, 1), 0x4096ff],
-  ] as const
-
-  for (const [name, label, direction, color] of defs) {
-    group.add(createAxisLine(center, direction, axisLength, color))
-    const sprite = createAxisLabel(label, `#${color.toString(16).padStart(6, '0')}`)
-    if (!sprite) continue
-    sprite.name = `${name}-axis-label`
-    sprite.position.copy(center).add(direction.clone().multiplyScalar(axisLength * 1.12))
-    sprite.scale.setScalar(Math.max(axisLength * 0.18, 1))
-    group.add(sprite)
-  }
-
-  return group
-}
-
 function applyTargetTransform(group: THREE.Group, transform: ToothTargetTransform) {
   group.position.fromArray(transform.position)
   group.quaternion.fromArray(transform.quaternion)
@@ -235,27 +182,16 @@ function applyTargetTransform(group: THREE.Group, transform: ToothTargetTransfor
 }
 
 function updateTargetPayloadText() {
-  const payload = serializeToothTargetTransforms(targetTransforms.value)
-  targetPayloadText.value = payload.targets.length ? JSON.stringify(payload, null, 2) : 'No saved target transforms.'
+  const payload = serializeToothTargetTransforms(targetTransforms.value, quickTargetPreferences.value)
+  targetPayloadText.value = JSON.stringify(payload, null, 2)
 }
 
-function attachTargetControls() {
-  if (!scene || !camera || !renderer || !controls || !toothTargetGroup) return
-  detachTransformControls()
-  transformControls = new TransformControls(camera, renderer.domElement)
-  transformControls.setMode(transformMode.value)
-  transformControls.attach(toothTargetGroup)
-  transformControls.addEventListener('dragging-changed', (event) => {
-    if (controls) controls.enabled = !event.value
-  })
-  transformControlsHelper = transformControls.getHelper()
-  transformControlsHelper.visible = showToothMesh.value
-  scene.add(transformControlsHelper)
-}
+watch(quickTargetPreferences, updateTargetPayloadText, { deep: true })
 
-function setTransformMode(mode: 'translate' | 'rotate') {
-  transformMode.value = mode
-  transformControls?.setMode(mode)
+function saveQuickTargetPreferences() {
+  updateTargetPayloadText()
+  quickTargetFeedback.value = '快速目标位偏好已保存'
+  statusText.value = '快速目标位偏好已保存'
 }
 
 function saveTargetTransform() {
@@ -278,11 +214,29 @@ function resetTargetTransform() {
   statusText.value = `Reset target for FDI ${selectedFdi.value}`
 }
 
-async function exportTargetTransforms() {
-  const payloadText = JSON.stringify(serializeToothTargetTransforms(targetTransforms.value), null, 2)
+async function exportModifiedJson() {
+  const payloadText = JSON.stringify(
+    serializeToothTargetTransforms(targetTransforms.value, quickTargetPreferences.value),
+    null,
+    2,
+  )
   targetPayloadText.value = payloadText
-  await navigator.clipboard?.writeText(payloadText)
-  statusText.value = 'Exported target transforms'
+  downloadModifiedJson(payloadText)
+  await navigator.clipboard?.writeText(payloadText).catch(() => undefined)
+  quickTargetFeedback.value = '修改后的 JSON 已导出'
+  statusText.value = '修改后的 JSON 已导出'
+}
+
+function downloadModifiedJson(payloadText: string) {
+  const blob = new Blob([payloadText], { type: 'application/json;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = 'quick-target-modified.json'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
 }
 
 function fitCameraToBox(box: THREE.Box3) {
@@ -306,17 +260,6 @@ function fitCameraToBox(box: THREE.Box3) {
   controls.update()
 }
 
-function addGridForBox(box: THREE.Box3) {
-  if (!scene) return
-  clearObject(gridHelper)
-  const center = box.getCenter(new THREE.Vector3())
-  const size = box.getSize(new THREE.Vector3())
-  gridHelper = new THREE.GridHelper(Math.max(size.x, size.y, 20) * 1.4, 20, 0x8a8f98, 0x2f333a)
-  gridHelper.position.set(center.x, center.y, box.min.z)
-  gridHelper.visible = showGrid.value
-  scene.add(gridHelper)
-}
-
 function refreshSelectedTooth() {
   if (!scene || !currentGeometry) return
   clearTargetObjects()
@@ -334,13 +277,9 @@ function refreshSelectedTooth() {
   toothTargetGroup.visible = showToothMesh.value
   toothMesh = createToothMesh(geometry)
   toothTargetGroup.add(toothMesh)
-  const box = geometry.boundingBox?.clone() ?? new THREE.Box3().setFromObject(toothMesh)
-  toothAxisObject = createCenteredGlobalAxisObject(box)
-  toothTargetGroup.add(toothAxisObject)
   const savedTransform = targetTransforms.value[targetKey(selectedJaw.value, selectedFdi.value)]
   if (savedTransform) applyTargetTransform(toothTargetGroup, savedTransform)
   scene.add(toothTargetGroup)
-  attachTargetControls()
   statusText.value = `FDI ${selectedFdi.value}: ${Math.floor(position.count / 3)} faces`
 }
 
@@ -408,7 +347,6 @@ async function loadSelectedJaw() {
     scene.add(jawMesh)
 
     const box = geometry.boundingBox?.clone() ?? new THREE.Box3().setFromObject(jawMesh)
-    addGridForBox(box)
     fitCameraToBox(box)
     refreshSelectedTooth()
   } catch (error) {
@@ -462,6 +400,7 @@ function initScene() {
 onMounted(async () => {
   await nextTick()
   initScene()
+  updateTargetPayloadText()
   await loadSelectedJaw()
 })
 
@@ -469,7 +408,6 @@ onUnmounted(() => {
   window.cancelAnimationFrame(raf)
   resizeObserver?.disconnect()
   controls?.dispose()
-  detachTransformControls()
   clearSceneObjects()
   renderer?.dispose()
   renderer?.domElement.remove()
@@ -567,6 +505,75 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
 }
+.quick-target-panel {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  width: min(360px, calc(100% - 32px));
+  padding: 18px 24px 22px;
+  color: #101828;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(16, 24, 40, 0.08);
+  border-radius: 8px;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.18);
+}
+.quick-target-panel h2 {
+  margin: 0 0 18px;
+  padding-bottom: 18px;
+  font-size: 16px;
+  font-weight: 700;
+  border-bottom: 1px solid #edf0f5;
+}
+.preference-group {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 18px;
+  margin-top: 22px;
+}
+.preference-title {
+  grid-column: 1 / -1;
+  font-size: 14px;
+  font-weight: 700;
+}
+.preference-group label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: #101828;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.preference-group input {
+  flex: 0 0 auto;
+  margin: 0;
+}
+.preference-save-button {
+  width: 100%;
+  height: 36px;
+  margin-top: 24px;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  background: #1677ff;
+  border: 1px solid #1677ff;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.preference-save-button:hover {
+  background: #0958d9;
+  border-color: #0958d9;
+}
+.preference-feedback {
+  margin-top: 12px;
+  padding: 8px 10px;
+  color: #0958d9;
+  font-size: 13px;
+  font-weight: 700;
+  background: #e6f4ff;
+  border: 1px solid #91caff;
+  border-radius: 6px;
+}
 .target-panel {
   position: absolute;
   right: 16px;
@@ -596,6 +603,11 @@ onUnmounted(() => {
     width: 100%;
     min-width: 0;
     text-align: left;
+  }
+  .quick-target-panel {
+    position: static;
+    width: auto;
+    margin: 12px;
   }
 }
 </style>

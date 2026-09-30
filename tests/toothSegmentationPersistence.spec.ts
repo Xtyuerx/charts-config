@@ -7,6 +7,26 @@ import {
 
 const faceCounts = { upper: 3, lower: 2 }
 
+test('keeps saved surface samples, anchors, and seeds without re-routing them', () => {
+  const boundary = {
+    toothId: 11,
+    boundary: [
+      { type: 'control', position: [0, 0, 0], faceIndex: 0, barycentric: [1, 0, 0] },
+      { type: 'control', position: [1, 0, 0], faceIndex: 0, barycentric: [0, 1, 0] },
+      { type: 'control', position: [0, 1, 0], faceIndex: 0, barycentric: [0, 0, 1] },
+    ],
+    seedFaceIndices: [0],
+    surfaceSegments: [
+      [[0, 0, 0], [0.5, 0, 0], [1, 0, 0]],
+      [[1, 0, 0], [0, 1, 0]],
+      [[0, 1, 0], [0, 0, 0]],
+    ],
+  }
+  expect(parseSegmentationImportPayload(JSON.stringify([boundary]), faceCounts).boundaries.get(11)).toEqual(boundary)
+  boundary.boundary[0]!.barycentric = [1, 1, 1]
+  expect(() => parseSegmentationImportPayload([boundary], faceCounts)).toThrow('表面锚点无效')
+})
+
 test('locates the jaw from the STL original tooth labels', () => {
   const labels = { upper: [11, 11, 0], lower: [0, 31, 31] }
 

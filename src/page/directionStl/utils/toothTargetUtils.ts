@@ -8,9 +8,24 @@ export type ToothTargetTransform = {
   scale: [number, number, number]
 }
 
+export type QuickTargetPreferences = {
+  upperIpr: 'allowed' | 'notAllowed'
+  lowerIpr: 'allowed' | 'notAllowed'
+  extraction: 'notRequired' | 'required'
+  spacing: 'notRequired' | 'reserved'
+}
+
 export type ToothTargetPayload = {
   version: 1
+  preferences: QuickTargetPreferences
   targets: ToothTargetTransform[]
+}
+
+export const defaultQuickTargetPreferences: QuickTargetPreferences = {
+  upperIpr: 'notAllowed',
+  lowerIpr: 'notAllowed',
+  extraction: 'notRequired',
+  spacing: 'notRequired',
 }
 
 export function targetKey(jaw: string, fdi: number) {
@@ -43,9 +58,11 @@ export function upsertToothTargetTransform(
 
 export function serializeToothTargetTransforms(
   records: Record<string, ToothTargetTransform>,
+  preferences: QuickTargetPreferences = defaultQuickTargetPreferences,
 ): ToothTargetPayload {
   return {
     version: 1,
+    preferences: { ...preferences },
     targets: Object.values(records).sort((a, b) =>
       a.jaw === b.jaw ? a.fdi - b.fdi : a.jaw.localeCompare(b.jaw),
     ),
