@@ -61,7 +61,7 @@ export function readDraco(value: unknown, meshField: string) {
     rawMesh &&
     typeof rawMesh === 'object' &&
     'type' in rawMesh &&
-    (rawMesh.type === 'drcp' || rawMesh.type === 'drc') &&
+    (rawMesh.type === 'drcp' || rawMesh.type === 'dcrp' || rawMesh.type === 'drc') &&
     'data' in rawMesh
       ? rawMesh.data
       : rawMesh

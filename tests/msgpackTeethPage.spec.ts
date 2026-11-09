@@ -42,7 +42,7 @@ test('fetches a real msgpack, decodes Draco, renders tooth meshes and recovers f
   await page.route('**/models/jaw.msgpack', (route) =>
     route.fulfill({ contentType: 'application/octet-stream', body: buffer }),
   )
-  await page.goto('http://127.0.0.1:4175/msgpackTeeth')
+  await page.goto(`${process.env.MSGPACK_TEST_URL ?? 'http://127.0.0.1:4175'}/msgpackTeeth`)
   await page.getByRole('button', { name: '加载 URL' }).click()
   await expect(page.getByRole('status')).toContainText('已加载 2 个分区', { timeout: 30000 })
   await expect(page.getByText('牙号 11', { exact: true })).toBeVisible()

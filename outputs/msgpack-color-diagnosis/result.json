@@ -1,0 +1,38 @@
+{
+  "sameNormals": {
+    "recoloredTooth": [
+      222,
+      104,
+      130
+    ],
+    "originalGum": [
+      222,
+      104,
+      130
+    ]
+  },
+  "differentNormals": {
+    "recoloredTooth": [
+      144,
+      63,
+      79
+    ],
+    "originalGum": [
+      222,
+      104,
+      130
+    ]
+  },
+  "ambientOnly": {
+    "recoloredTooth": [
+      159,
+      69,
+      86
+    ],
+    "originalGum": [
+      159,
+      69,
+      86
+    ]
+  }
+}

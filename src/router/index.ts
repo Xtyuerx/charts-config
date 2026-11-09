@@ -4,6 +4,12 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
+      path: '/toothRoots',
+      name: 'toothRoots',
+      component: () => import('@/page/toothRoots/index.vue'),
+      meta: { title: '模拟牙根与独立牙齿编辑' },
+    },
+    {
       path: '/msgpackTeeth',
       name: 'msgpackTeeth',
       component: () => import('@/page/msgpackTeeth/index.vue'),

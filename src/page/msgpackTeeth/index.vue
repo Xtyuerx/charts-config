@@ -14,6 +14,8 @@
       <button :disabled="selectedBoundary === null" @click="editor?.resetSelected()">
         重置选中边界
       </button>
+      <button :disabled="loading || !hasPayload" @click="saveModel(false)">保存完整 msgpack</button>
+      <button :disabled="loading || !hasPayload" @click="saveModel(true)">保存完整 hex</button>
       <label v-if="availableJaws.length"
         >查看颌位
         <select v-model="selectedJaw" :disabled="loading" @change="switchJaw">
@@ -43,7 +45,7 @@
       <button :disabled="loading || !ready">加载 URL</button>
       <button
         type="button"
-        :disabled="loading || !ready || !hasPayload"
+        :disabled="loading || !ready || (!hasPayload && !pendingPayload)"
         @click="loadModel(undefined, true)"
       >
         应用字段路径
@@ -52,7 +54,7 @@
         >选择本地 msgpack
         <input
           type="file"
-          accept=".msgpack,.mpk,.msg,.bin"
+          accept=".msgpack,.mpk,.msg,.bin,.hex,.txt"
           :disabled="loading || !ready"
           @change="loadFile"
         />
@@ -62,8 +64,8 @@
     <p v-if="legend.length">
       {{
         selectedBoundary === null
-          ? '点击边界线或控制点选中牙齿，再拖动白色控制点调整边界。'
-          : `已选中牙号 ${selectedBoundary}：拖动白色控制点调整边界`
+          ? '按住 Ctrl 点击牙齿切换选中边界，拖动控制点调整绿线；松手后更新局部顶点标签。'
+          : `已选中牙号 ${selectedBoundary}：拖动白色控制点，松手后提交局部标签`
       }}{{ boundaryNotice }}
     </p>
     <details v-if="payloadStructure" :open="hasError" class="payload-structure">
@@ -95,11 +97,21 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
 import * as THREE from 'three'
-import * as msgpack from '@msgpack/msgpack'
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { BoundaryEditor, ToothBoundary, boundaryPoints } from './boundaryEditor'
+import { prepareBoundaryEdit, readBoundaryEdit } from './boundaryPersistence'
 import { BoundaryRegionColors, renderBoundaryOverlay } from './boundaryRegionColors'
+import { modelMaterial } from './modelMaterial'
+import { createPreviewSurfaceFit, type SurfacePreview, type PreviewFit } from './previewSurface'
+import {
+  SegmentationSession,
+  decodeModelBytes,
+  encodeFullModel,
+  sampleClosedLoop,
+  writeLabels,
+} from './segmentation'
+import type { ClosedSurfacePath } from '../toothSegmentationTest/utils/surfaceBoundaryUtils'
 import {
   describePayload,
   jawPaths,
@@ -119,6 +131,8 @@ const loading = ref(false)
 const ready = ref(false)
 const hasError = ref(false)
 const cachedPayload = shallowRef<unknown>()
+const pendingPayload = shallowRef<unknown>()
+const inspectedPayload = computed(() => pendingPayload.value ?? cachedPayload.value)
 const hasPayload = ref(false)
 const selectedJaw = ref<'lower' | 'upper'>('lower')
 const availableJaws = computed(() =>
@@ -126,16 +140,16 @@ const availableJaws = computed(() =>
 )
 const structureKey = ref('')
 const payloadKeys = computed(() =>
-  cachedPayload.value && typeof cachedPayload.value === 'object'
-    ? Object.keys(cachedPayload.value)
+  inspectedPayload.value && typeof inspectedPayload.value === 'object'
+    ? Object.keys(inspectedPayload.value)
     : [],
 )
 const payloadStructure = computed(() => {
-  if (!hasPayload.value) return ''
+  if (!inspectedPayload.value) return ''
   const value =
-    structureKey.value && cachedPayload.value && typeof cachedPayload.value === 'object'
-      ? (cachedPayload.value as Record<string, unknown>)[structureKey.value]
-      : cachedPayload.value
+    structureKey.value && inspectedPayload.value && typeof inspectedPayload.value === 'object'
+      ? (inspectedPayload.value as Record<string, unknown>)[structureKey.value]
+      : inspectedPayload.value
   return `${structureKey.value ? `选中对象：${structureKey.value}\n` : ''}${describePayload(value)}`
 })
 const status = ref('输入资源 URL 或选择本地 msgpack 文件，自动识别整颌分割数据或独立单牙模型。')
@@ -145,7 +159,16 @@ const selectedBoundary = ref<number | null>(null)
 const boundaryNotice = ref('')
 let editor: BoundaryEditor | undefined
 let regionColors: BoundaryRegionColors | undefined
-const pendingRegions = new Map<number, THREE.Vector3[]>()
+let previewReference: PreviewFit | undefined
+let segmentation: SegmentationSession | undefined
+let activeLabelsPath = ''
+let fittedPaths = new Map<number, ClosedSurfacePath>()
+const sessions = new Map<string, SegmentationSession>()
+const savedControls = new Map<string, Map<number, THREE.Vector3[]>>()
+let activeSessionKey = ''
+let activeBoundaryScope = ''
+let baseBoundaryPoints = new Map<number, THREE.Vector3[]>()
+let downloadName = 'teeth'
 type ToothMesh = THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>
 const meshes = new Map<number, ToothMesh>()
 const scene = new THREE.Scene()
@@ -164,8 +187,12 @@ let disposed = false
 function clearModel() {
   regionColors?.dispose()
   regionColors = undefined
-  pendingRegions.clear()
+  segmentation = undefined
+  activeLabelsPath = ''
+  fittedPaths.clear()
   editor?.clear()
+  previewReference?.dispose()
+  previewReference = undefined
   boundaryNotice.value = ''
   for (const mesh of meshes.values()) {
     mesh.geometry.dispose()
@@ -173,6 +200,120 @@ function clearModel() {
   }
   meshes.clear()
   group.clear()
+}
+
+function disposeSessions() {
+  for (const session of sessions.values()) session.geometry.dispose()
+  sessions.clear()
+  savedControls.clear()
+}
+
+function reportEditError(error: unknown) {
+  hasError.value = true
+  status.value = error instanceof Error ? error.message : String(error)
+}
+
+function replaceParts(parts: ReturnType<typeof splitByLabels>['parts']) {
+  const style = new Map(legend.value.map((item) => [item.label, item]))
+  for (const mesh of meshes.values()) {
+    mesh.geometry.dispose()
+    mesh.material.dispose()
+  }
+  meshes.clear()
+  group.clear()
+  legend.value = parts.map(({ label, geometry }, i) => {
+    const previous = style.get(label)
+    const color = previous
+      ? new THREE.Color(previous.color)
+      : label === 0
+        ? new THREE.Color('#d391a0')
+        : new THREE.Color().setHSL((i * 0.61803398875) % 1, 0.62, 0.58)
+    const mesh = new THREE.Mesh(geometry, modelMaterial(color, label))
+    mesh.name = `tooth-${label}`
+    mesh.userData.segLabel = label
+    mesh.visible = previous?.visible ?? true
+    meshes.set(label, mesh)
+    group.add(mesh)
+    return { label, color: `#${color.getHexString()}`, visible: mesh.visible }
+  })
+  for (const label of editor?.boundaries.keys() ?? []) editor?.syncVisibility(label)
+}
+
+function commitBoundary(boundary: ToothBoundary, reset: boolean) {
+  const persist = prepareBoundaryEdit(
+    cachedPayload.value,
+    activeBoundaryScope,
+    boundary.label,
+    reset
+      ? undefined
+      : {
+          kind: segmentation ? 'vertex' : 'preview',
+          points: baseBoundaryPoints.get(boundary.label)!,
+          controls: boundary.handles.map((h) => h.position.clone()),
+        },
+  )
+  if (!segmentation) {
+    persist()
+    hasError.value = false
+    status.value = `${reset ? '已重置' : '已保存'}牙号 ${boundary.label} 的边界点位；重新加载可恢复；此模型无顶点标签，未修改 seg_labels`
+    return
+  }
+  const result = reset
+    ? { labels: segmentation.resetLabels(boundary.label), changed: [] as number[] }
+    : segmentation.rasterize(boundary.label, boundary.points(), fittedPaths.get(boundary.label))
+  const changed = result.labels.reduce(
+    (sum, n, i) => sum + Number(n !== segmentation!.labels[i]),
+    0,
+  )
+  // Prepare display geometry before committing the payload; failed classification is atomic.
+  const parts = splitByLabels(segmentation.geometry, result.labels, 'vertex').parts
+  try {
+    writeLabels(cachedPayload.value, activeLabelsPath, result.labels)
+  } catch (error) {
+    parts.forEach((p) => p.geometry.dispose())
+    throw error
+  }
+  segmentation.commit(result.labels, boundary.label, reset)
+  persist()
+  const state = savedControls.get(activeSessionKey) ?? new Map<number, THREE.Vector3[]>()
+  state.set(
+    boundary.label,
+    boundary.handles.map((h) => h.position.clone()),
+  )
+  savedControls.set(activeSessionKey, state)
+  replaceParts(parts)
+  hasError.value = false
+  status.value = `${reset ? '已重置' : '已更新'}牙号 ${boundary.label}；${changed} 个局部顶点标签变化；mesh.data 未修改`
+}
+
+function saveModel(hex: boolean) {
+  try {
+    const bytes = encodeFullModel(cachedPayload.value)
+    const content = hex
+      ? Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+      : new Uint8Array(bytes).buffer
+    const blob = new Blob([content], {
+      type: hex ? 'text/plain;charset=utf-8' : 'application/msgpack',
+    })
+    const link = document.createElement('a'),
+      objectUrl = URL.createObjectURL(blob)
+    link.href = objectUrl
+    link.download = `${downloadName}-edited.${hex ? 'hex' : 'msgpack'}`
+    link.click()
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
+    const changed = [...sessions.values()].reduce(
+      (total, session) => total + session.changedVertexCount,
+      0,
+    )
+    hasError.value = false
+    status.value = `已导出完整数据包；${changed} 个顶点标签与加载时不同；mesh.data 保留原始字节${
+      segmentation
+        ? '；重新渲染请读取 seg_labels，独立单牙网格未重新生成'
+        : '；边界点位已包含在文件中，可在本页恢复；此模型无可编辑顶点标签'
+    }`
+  } catch (error) {
+    reportEditError(error)
+  }
 }
 
 function setVisibility(label: number, visible: boolean) {
@@ -226,42 +367,53 @@ async function loadModel(source?: string, manual = false) {
   request = new AbortController()
   let decoded: THREE.BufferGeometry | undefined
   let parts: ReturnType<typeof splitByLabels>['parts'] | undefined
+  let nextSegmentation: SegmentationSession | undefined
+  let workingPayload = manual ? (pendingPayload.value ?? cachedPayload.value) : cachedPayload.value
+  const preparedBoundaries: ToothBoundary[] = []
+  const preparedPaths = new Map<number, ClosedSurfacePath>()
+  let reusedSession = false
+  let installed = false
+  let nextPreviewReference: PreviewFit | undefined
+  let nextRegionColors: BoundaryRegionColors | undefined
+  const preparedMeshes = new Map<number, ToothMesh>()
   try {
     if (source !== undefined) {
-      hasPayload.value = false
-      cachedPayload.value = undefined
-      structureKey.value = ''
-      meshField.value = ''
-      labelsField.value = ''
-      labelMode.value = 'auto'
       status.value = '正在 fetch 下载 msgpack…'
       const response = await fetch(source.trim(), { signal: request.signal })
       if (!response.ok) throw new Error(`文件下载失败：HTTP ${response.status}`)
       const bytes = new Uint8Array(await response.arrayBuffer())
       if (disposed) return
-      cachedPayload.value = msgpack.decode(bytes)
-      hasPayload.value = true
-      if (availableJaws.value.length) {
-        if (!availableJaws.value.includes(selectedJaw.value))
-          selectedJaw.value = availableJaws.value[0]!
-        selectJawPaths()
+      const nextPayload = decodeModelBytes(bytes)
+      workingPayload = nextPayload
+      pendingPayload.value = nextPayload
+      structureKey.value = ''
+      meshField.value = ''
+      labelsField.value = ''
+      labelMode.value = 'auto'
+      const jaws = (['lower', 'upper'] as const).filter((jaw) => jawSource(workingPayload, jaw))
+      if (jaws.length) {
+        if (!jaws.includes(selectedJaw.value)) selectedJaw.value = jaws[0]!
+        const paths = jawPaths(workingPayload, selectedJaw.value)
+        meshField.value = paths?.mesh ?? ''
+        labelsField.value = paths?.labels ?? ''
+        structureKey.value = `${selectedJaw.value}_${paths ? 'seg' : 'teeth'}`
       } else if (
-        cachedPayload.value &&
-        typeof cachedPayload.value === 'object' &&
-        Object.prototype.hasOwnProperty.call(cachedPayload.value, 'mesh') &&
-        Object.prototype.hasOwnProperty.call(cachedPayload.value, 'seg_labels')
+        workingPayload &&
+        typeof workingPayload === 'object' &&
+        Object.prototype.hasOwnProperty.call(workingPayload, 'mesh') &&
+        Object.prototype.hasOwnProperty.call(workingPayload, 'seg_labels')
       ) {
         meshField.value = 'mesh'
         labelsField.value = 'seg_labels'
       }
     }
-    if (!hasPayload.value) throw new Error('请先加载 msgpack 文件')
+    if (!workingPayload) throw new Error('请先加载 msgpack 文件')
     status.value = '正在 msgpack.decode 解析和 Draco 解压…'
     let faceCount = 0
     let boundaryFaces = 0
-    const individualTeeth = !manual && jawSource(cachedPayload.value, selectedJaw.value) === 'teeth'
+    const individualTeeth = !manual && jawSource(workingPayload, selectedJaw.value) === 'teeth'
     if (individualTeeth) {
-      const inputs = readJawParts(cachedPayload.value, selectedJaw.value)
+      const inputs = readJawParts(workingPayload, selectedJaw.value)
       parts = []
       for (const input of inputs) {
         decoded = await new Promise<THREE.BufferGeometry>((resolve, reject) =>
@@ -282,78 +434,162 @@ async function loadModel(source?: string, manual = false) {
         throw new Error(
           '此文件未包含可识别的整颌分割数据或单牙模型。请查看文件结构；附件/填充数据包不能作为牙颌模型加载。',
         )
-      const payload = readPayload(
-        cachedPayload.value,
-        meshField.value.trim(),
-        labelsField.value.trim(),
-      )
-      decoded = await new Promise<THREE.BufferGeometry>((resolve, reject) => {
-        draco.parse(payload.buffer, resolve, reject)
-      })
+      const payload = readPayload(workingPayload, meshField.value.trim(), labelsField.value.trim())
+      const key = `${meshField.value.trim()}|${labelsField.value.trim()}`
+      nextSegmentation =
+        workingPayload === cachedPayload.value && labelMode.value !== 'face'
+          ? sessions.get(key)
+          : undefined
+      reusedSession = !!nextSegmentation
+      decoded =
+        nextSegmentation?.geometry ??
+        (await new Promise<THREE.BufferGeometry>((resolve, reject) => {
+          draco.parse(payload.buffer, resolve, reject)
+        }))
       if (disposed) return
-      const result = splitByLabels(decoded, payload.labels, labelMode.value)
+      const result = splitByLabels(
+        decoded,
+        nextSegmentation?.labels ?? payload.labels,
+        labelMode.value,
+      )
       parts = result.parts
       faceCount = result.faceCount
       boundaryFaces = result.boundaryFaces
+      if (
+        labelMode.value !== 'face' &&
+        payload.labels.length === decoded.getAttribute('position').count
+      ) {
+        nextSegmentation ??= new SegmentationSession(decoded, payload.labels)
+        decoded = undefined // Retained in original Draco vertex order for label writes.
+      }
     }
-    clearModel()
-    legend.value = parts.map(({ label, geometry }, i) => {
+    const key = `${meshField.value.trim()}|${labelsField.value.trim()}`
+    const candidate = nextSegmentation
+    const bounds = new THREE.Box3()
+    parts.forEach((p) => {
+      p.geometry.computeBoundingBox()
+      bounds.union(p.geometry.boundingBox!)
+    })
+    const size = bounds.getSize(new THREE.Vector3()).length()
+    const missing: number[] = []
+    const scope = `${selectedJaw.value}:${key}`
+    const preparedBasePoints = new Map<number, THREE.Vector3[]>()
+    if (!candidate)
+      nextPreviewReference = createPreviewSurfaceFit([
+        ...parts.filter((p) => p.label !== 0).map((p) => p.geometry),
+        ...parts.filter((p) => p.label === 0).map((p) => p.geometry),
+      ])
+    // Prepare all curves before releasing the current model or its editing history.
+    for (const { label, geometry } of parts) {
+      if (label <= 0) continue
+      const saved = readBoundaryEdit(workingPayload, scope, label)
+      const points =
+        candidate?.boundaries.get(label) ??
+        (candidate
+          ? []
+          : saved?.kind === 'preview'
+            ? saved.points
+            : boundaryPoints(manual ? null : workingPayload, selectedJaw.value, label, geometry))
+      if (points.length < 3) {
+        missing.push(label)
+        continue
+      }
+      preparedBasePoints.set(
+        label,
+        points.map((p) => p.clone()),
+      )
+      const fitCurve = candidate?.createCurveFitter()
+      const boundary = new ToothBoundary(
+        label,
+        points,
+        Math.max(size * 0.003, 0.01),
+        (_updated, preview) => {
+          if (!candidate && installed && preview) regionColors?.update(label, preview)
+        },
+        candidate
+          ? {
+              controls:
+                !reusedSession && saved?.kind === 'vertex'
+                  ? saved.controls
+                  : sampleClosedLoop(points, Math.min(20, points.length)),
+              fit: (controls) => {
+                const path = fitCurve!(controls)
+                preparedPaths.set(label, path)
+                return path.curvePoints.slice(0, -1)
+              },
+            }
+          : undefined,
+        candidate
+          ? undefined
+          : createPreviewSurfaceFit(
+              [geometry, ...parts.filter((p) => p.label === 0).map((p) => p.geometry)],
+              nextPreviewReference?.surface,
+            ),
+      )
+      if (!candidate) preparedBasePoints.set(label, boundary.points())
+      preparedBoundaries.push(boundary)
+      const controls = reusedSession
+        ? savedControls.get(key)?.get(label)
+        : saved?.kind === 'preview'
+          ? saved.controls
+          : undefined
+      if (controls) boundary.restoreControls(controls)
+    }
+    const preparedLegend = parts.map(({ label, geometry }, i) => {
       const color =
         label === 0
           ? new THREE.Color('#d391a0')
           : new THREE.Color().setHSL((i * 0.61803398875) % 1, 0.62, 0.58)
-      const mesh = new THREE.Mesh(
-        geometry,
-        new THREE.MeshStandardMaterial({
-          color,
-          roughness: 0.55,
-          metalness: 0,
-          side: THREE.DoubleSide,
-          polygonOffset: true,
-          polygonOffsetFactor: 1,
-          polygonOffsetUnits: 1,
-        }),
-      )
+      color.setHex(color.getHex())
+      const mesh = new THREE.Mesh(geometry, modelMaterial(color, label))
       mesh.name = `tooth-${label}`
       mesh.userData.segLabel = label
-      meshes.set(label, mesh)
-      group.add(mesh)
+      preparedMeshes.set(label, mesh)
       return { label, color: `#${color.getHexString()}`, visible: true }
     })
+    if (!candidate) {
+      const previews = new Map<number, SurfacePreview>()
+      for (const boundary of preparedBoundaries) {
+        const preview = boundary.surfacePreview()
+        if (preview) previews.set(boundary.label, preview)
+      }
+      // Validation must succeed before discarding the currently usable model.
+      nextRegionColors = new BoundaryRegionColors(preparedMeshes, preparedBasePoints, previews)
+    }
+    clearModel()
+    previewReference = nextPreviewReference
+    nextPreviewReference = undefined
+    if (workingPayload !== cachedPayload.value) disposeSessions()
+    cachedPayload.value = workingPayload
+    if (workingPayload === pendingPayload.value) pendingPayload.value = undefined
+    hasPayload.value = true
+    segmentation = nextSegmentation
+    if (segmentation) sessions.set(key, segmentation)
+    activeSessionKey = key
+    activeBoundaryScope = scope
+    baseBoundaryPoints = preparedBasePoints
+    fittedPaths = preparedPaths
+    nextSegmentation = undefined
+    activeLabelsPath = labelsField.value.trim()
+    legend.value = preparedLegend
+    for (const [label, mesh] of preparedMeshes) {
+      meshes.set(label, mesh)
+      group.add(mesh)
+    }
+    regionColors = nextRegionColors
+    nextRegionColors = undefined
     parts = undefined // The scene now owns these geometries.
+    installed = true
     if (editor) {
-      const size = new THREE.Box3().setFromObject(group).getSize(new THREE.Vector3()).length()
-      const missing: number[] = []
-      for (const [label, mesh] of meshes) {
-        if (label <= 0) continue
-        // Only use jaw metadata when this is the matching auto-detected jaw.
-        const points = boundaryPoints(
-          manual ? null : cachedPayload.value,
-          selectedJaw.value,
-          label,
-          mesh.geometry,
-        )
-        if (points.length < 3) {
-          missing.push(label)
-          continue
-        }
-        const boundary = new ToothBoundary(
-          label,
-          points,
-          Math.max(size * 0.003, 0.01),
-          (updated) => {
-            pendingRegions.set(label, updated)
-          },
-        )
-        editor.boundaries.set(label, boundary)
+      for (const boundary of preparedBoundaries) {
+        editor.boundaries.set(boundary.label, boundary)
         boundaryScene.add(boundary.group)
       }
       editor.setEnabled(showBoundaries.value)
-      regionColors = new BoundaryRegionColors(
-        meshes,
-        new Map([...editor.boundaries].map(([label, b]) => [label, b.points()])),
-      )
       boundaryNotice.value = missing.length ? `；牙号 ${missing.join('、')} 缺少可用闭合边界` : ''
+      if (!segmentation)
+        boundaryNotice.value += '；此数据无可编辑的原始顶点标签，保存边界点位并恢复预览'
+      else boundaryNotice.value += '；编辑范围为原边界周围 4 圈相邻面片，超出范围会回退'
     }
     fitCamera()
     const boundary = boundaryFaces
@@ -367,6 +603,11 @@ async function loadModel(source?: string, manual = false) {
     }
   } finally {
     decoded?.dispose()
+    if (!reusedSession) nextSegmentation?.geometry.dispose()
+    nextRegionColors?.dispose()
+    if (!installed) for (const mesh of preparedMeshes.values()) mesh.material.dispose()
+    if (!installed) preparedBoundaries.forEach((b) => b.dispose())
+    nextPreviewReference?.dispose()
     parts?.forEach((part) => part.geometry.dispose())
     loading.value = false
     request = undefined
@@ -378,6 +619,7 @@ async function loadFile(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   if (!file) return
+  downloadName = file.name.replace(/\.[^.]+$/, '') || 'teeth'
   // Blob URLs let selected local files use exactly the same fetch pipeline.
   const objectUrl = URL.createObjectURL(file)
   try {
@@ -400,10 +642,18 @@ onMounted(() => {
     scene.add(light)
     camera.position.set(0, -70, 110)
     controls = new OrbitControls(camera, renderer.domElement)
-    controls.enableDamping = true
-    editor = new BoundaryEditor(renderer.domElement, camera, controls, meshes, (label) => {
-      selectedBoundary.value = label
-    })
+    controls.enableDamping = false
+    editor = new BoundaryEditor(
+      renderer.domElement,
+      camera,
+      controls,
+      meshes,
+      (label) => {
+        selectedBoundary.value = label
+      },
+      commitBoundary,
+      reportEditError,
+    )
     observer = new ResizeObserver(() => {
       if (!viewport.value || !renderer) return
       const width = Math.max(viewport.value.clientWidth, 1)
@@ -414,8 +664,7 @@ onMounted(() => {
     })
     observer.observe(viewport.value!)
     renderer.setAnimationLoop(() => {
-      for (const [label, points] of pendingRegions) regionColors?.update(label, points)
-      pendingRegions.clear()
+      editor?.update()
       controls?.update()
       if (renderer) renderBoundaryOverlay(renderer, scene, boundaryScene, camera)
     })
@@ -436,6 +685,7 @@ onBeforeUnmount(() => {
   // Allow an active decode to resolve so its geometry can be disposed in finally.
   if (!loading.value) draco.dispose()
   clearModel()
+  disposeSessions()
   renderer?.dispose()
   renderer?.domElement.remove()
 })

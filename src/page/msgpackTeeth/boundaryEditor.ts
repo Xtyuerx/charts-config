@@ -1,5 +1,11 @@
 import * as THREE from 'three'
 import type { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import type { PreviewFit, SurfacePreview } from './previewSurface'
+
+type CurveOptions = {
+  controls: THREE.Vector3[]
+  fit: (controls: THREE.Vector3[]) => THREE.Vector3[]
+}
 
 export function boundaryPoints(
   data: unknown,
@@ -84,10 +90,12 @@ export class ToothBoundary {
   readonly handles: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>[] = []
   private readonly anchors: number[]
   private readonly original: THREE.Vector3[]
+  private previewPoints: THREE.Vector3[] | undefined
+  private previewPath: SurfacePreview['path'] | undefined
   private readonly sphere: THREE.SphereGeometry
   private readonly pointMaterial = new THREE.MeshBasicMaterial({
     color: 0x28b8ef,
-    depthTest: false,
+    depthTest: true,
     depthWrite: false,
   })
 
@@ -95,73 +103,145 @@ export class ToothBoundary {
     readonly label: number,
     points: THREE.Vector3[],
     radius: number,
-    private readonly edited?: (points: THREE.Vector3[]) => void,
+    private readonly edited?: (points: THREE.Vector3[], preview?: SurfacePreview) => void,
+    private readonly curve?: CurveOptions,
+    private readonly previewFit?: PreviewFit,
   ) {
-    this.original = points.map((p) => p.clone())
-    this.anchors = Array.from({ length: Math.min(points.length, 20) }, (_, i) =>
-      Math.floor((i * points.length) / Math.min(points.length, 20)),
-    )
+    this.original = (curve?.controls ?? points).map((p) => p.clone())
+    this.anchors = curve
+      ? curve.controls.map((_, i) => i)
+      : Array.from({ length: Math.min(points.length, 20) }, (_, i) =>
+          Math.floor((i * points.length) / Math.min(points.length, 20)),
+        )
+    const preview = !curve ? previewFit?.(points) : undefined
+    if (preview) this.original = preview.points.map((p) => p.clone())
+    this.previewPoints = preview?.points
+    this.previewPath = preview?.path
     this.line = new THREE.LineLoop(
-      new THREE.BufferGeometry().setFromPoints(points),
-      new THREE.LineBasicMaterial({ color: 0x52c41a, depthTest: false, depthWrite: false }),
+      new THREE.BufferGeometry().setFromPoints(
+        curve ? curve.fit(this.original) : (preview?.line ?? points),
+      ),
+      new THREE.LineBasicMaterial({ color: 0x52c41a, depthTest: true, depthWrite: false }),
     )
     this.line.userData.boundaryLabel = label
     this.group.add(this.line)
     this.sphere = new THREE.SphereGeometry(radius, 10, 8)
     this.anchors.forEach((anchor, i) => {
       const handle = new THREE.Mesh(this.sphere, this.pointMaterial)
-      handle.position.copy(points[anchor]!)
+      handle.position.copy(this.previewPoints?.[anchor] ?? this.original[anchor]!)
       handle.userData.boundaryLabel = label
       handle.userData.handleIndex = i
+      handle.renderOrder = 1
       this.handles.push(handle)
       this.group.add(handle)
     })
   }
 
   select(selected: boolean) {
-    this.line.material.color.setHex(selected ? 0xffffff : 0x52c41a)
+    this.line.material.color.setHex(selected && !this.curve ? 0xffffff : 0x52c41a)
     this.pointMaterial.color.setHex(selected ? 0xffffff : 0x28b8ef)
-    this.line.material.depthTest = false
+    this.line.material.depthTest = true
     this.line.material.depthWrite = false
-    this.pointMaterial.depthTest = false
+    this.pointMaterial.depthTest = true
     this.pointMaterial.depthWrite = false
     this.group.renderOrder = selected ? 100 : 0
     this.line.renderOrder = selected ? 100 : 0
     this.handles.forEach((handle) => {
-      handle.renderOrder = selected ? 101 : 0
+      handle.renderOrder = selected ? 101 : 1
     })
   }
 
   move(index: number, point: THREE.Vector3) {
-    this.handles[index]!.position.copy(point)
-    const attr = this.line.geometry.getAttribute('position')
+    if (this.curve) {
+      const controls = this.handles.map((h) => h.position.clone())
+      controls[index] = point.clone()
+      this.restoreControls(controls)
+      return
+    }
+    const controls = this.handles.map((h) => h.position.clone())
+    controls[index] = point.clone()
+    this.moveControls(controls)
+  }
+
+  private moveControls(controls: THREE.Vector3[]) {
+    const updated: THREE.Vector3[] = []
     // Preserve the original dense contour; interpolate control-point displacement
     // only between adjacent anchors, including the closing segment.
     this.anchors.forEach((start, i) => {
       const next = (i + 1) % this.anchors.length
       const end = next === 0 ? this.original.length : this.anchors[next]!
-      const a = this.handles[i]!.position.clone().sub(this.original[start]!)
-      const b = this.handles[next]!.position.clone().sub(this.original[end % this.original.length]!)
+      const a = controls[i]!.clone().sub(this.original[start]!)
+      const b = controls[next]!.clone().sub(this.original[end % this.original.length]!)
       for (let j = start; j < end; j++) {
         const p = this.original[j]!.clone().add(a.clone().lerp(b, (j - start) / (end - start)))
-        attr.setXYZ(j, p.x, p.y, p.z)
+        updated.push(p)
       }
     })
-    attr.needsUpdate = true
+    const fitted = this.previewFit?.(updated)
+    if (fitted) {
+      // Validate and prepare colors before publishing either handles or the visible line.
+      this.edited?.(fitted.points, { surface: this.previewFit!.surface, path: fitted.path })
+      this.updateLine(fitted.line)
+      this.previewPoints = fitted.points
+      this.previewPath = fitted.path
+      this.handles.forEach((handle, i) => handle.position.copy(fitted.points[this.anchors[i]!]!))
+    } else {
+      this.handles.forEach((handle, i) => handle.position.copy(controls[i]!))
+      const attr = this.line.geometry.getAttribute('position')
+      updated.forEach((p, i) => attr.setXYZ(i, p.x, p.y, p.z))
+      attr.needsUpdate = true
+    }
     this.line.geometry.computeBoundingSphere()
-    this.edited?.(this.points())
+    if (!fitted) this.edited?.(this.points())
+  }
+
+  restoreControls(points: THREE.Vector3[]) {
+    if (this.curve) {
+      // Compute first: a failed surface fit never leaves partially moved handles.
+      const fitted = this.curve.fit(points)
+      this.handles.forEach((h, i) => h.position.copy(points[i]!))
+      this.updateLine(fitted)
+      this.edited?.(this.points())
+    } else {
+      this.moveControls(points)
+    }
+  }
+
+  private updateLine(points: THREE.Vector3[]) {
+    const geometry = this.line.geometry
+    const position = geometry.getAttribute('position')
+    if (position.count === points.length) {
+      points.forEach((point, i) => position.setXYZ(i, point.x, point.y, point.z))
+      position.needsUpdate = true
+      // Raycasting also uses the bounding sphere after a point moves.
+      geometry.computeBoundingSphere()
+    } else {
+      this.line.geometry = new THREE.BufferGeometry().setFromPoints(points)
+      this.line.geometry.computeBoundingSphere()
+      geometry.dispose()
+    }
   }
 
   points() {
+    if (this.previewPoints) return this.previewPoints.map((p) => p.clone())
     const attr = this.line.geometry.getAttribute('position')
     return Array.from({ length: attr.count }, (_, i) =>
       new THREE.Vector3().fromBufferAttribute(attr, i),
     )
   }
 
+  surfacePreview(): SurfacePreview | undefined {
+    return this.previewPath && this.previewFit
+      ? { surface: this.previewFit.surface, path: this.previewPath }
+      : undefined
+  }
+
   reset() {
-    this.anchors.forEach((anchor, i) => this.handles[i]!.position.copy(this.original[anchor]!))
-    this.move(0, this.original[0]!)
+    if (this.curve) {
+      this.restoreControls(this.original)
+      return
+    }
+    this.moveControls(this.anchors.map((anchor) => this.original[anchor]!.clone()))
   }
 
   dispose() {
@@ -170,6 +250,7 @@ export class ToothBoundary {
     this.line.material.dispose()
     this.sphere.dispose()
     this.pointMaterial.dispose()
+    this.previewFit?.dispose?.()
   }
 }
 
@@ -183,10 +264,15 @@ export class BoundaryEditor {
         pointer: number
         plane: THREE.Plane
         controlsEnabled: boolean
+        originalControls: THREE.Vector3[]
+        moved: boolean
+        lastX: number
+        lastY: number
       }
     | undefined
   private ray = new THREE.Raycaster()
   private enabled = true
+  private pendingMove: Pick<PointerEvent, 'clientX' | 'clientY'> | undefined
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -194,6 +280,8 @@ export class BoundaryEditor {
     private controls: OrbitControls,
     private models: Map<number, THREE.Mesh>,
     private changed: (label: number | null) => void,
+    private committed?: (boundary: ToothBoundary, reset: boolean) => void,
+    private failed?: (error: unknown) => void,
   ) {
     canvas.addEventListener('pointerdown', this.down, true)
     canvas.addEventListener('pointermove', this.move, true)
@@ -224,9 +312,17 @@ export class BoundaryEditor {
     this.changed(this.selected?.label ?? null)
   }
   resetSelected() {
-    this.selected?.reset()
+    if (!this.selected) return
+    const before = this.selected.handles.map((h) => h.position.clone())
+    try {
+      this.selected.reset()
+      this.committed?.(this.selected, true)
+    } catch (error) {
+      this.selected.restoreControls(before)
+      this.failed?.(error)
+    }
   }
-  private setRay(event: PointerEvent) {
+  private setRay(event: Pick<PointerEvent, 'clientX' | 'clientY'>) {
     const rect = this.canvas.getBoundingClientRect()
     this.ray.setFromCamera(
       new THREE.Vector2(
@@ -242,21 +338,44 @@ export class BoundaryEditor {
   private down = (event: PointerEvent) => {
     if (!this.enabled || event.button !== 0 || !event.isPrimary) return
     this.setRay(event)
-    const visible = [...this.boundaries.values()].filter((b) => b.group.visible)
-    const hit =
-      this.ray.intersectObjects(
-        visible.flatMap((b) => b.handles),
-        false,
-      )[0] ??
-      this.ray.intersectObjects(
-        visible.map((b) => b.line),
+    if (event.ctrlKey) {
+      const hit = this.ray.intersectObjects(
+        [...this.models.values()].filter((m) => m.visible),
         false,
       )[0]
+      const label = hit?.object.userData.segLabel as number | undefined
+      if (label !== undefined && this.boundaries.has(label)) {
+        event.stopImmediatePropagation()
+        event.preventDefault()
+        this.select(this.selected?.label === label ? null : label)
+      }
+      return
+    }
+    const visible = [...this.boundaries.values()].filter((b) => b.group.visible)
+    const surface = this.ray.intersectObjects(
+      [...this.models.values()].filter((m) => m.visible),
+      false,
+    )[0]
+    const unoccluded = (hit: THREE.Intersection) =>
+      !surface || hit.distance <= surface.distance + Math.max(1e-6, surface.distance * 1e-6)
+    const hit =
+      this.ray
+        .intersectObjects(
+          visible.flatMap((b) => b.handles),
+          false,
+        )
+        .find(unoccluded) ??
+      this.ray
+        .intersectObjects(
+          visible.map((b) => b.line),
+          false,
+        )
+        .find(unoccluded)
     if (!hit) {
       this.select(null)
       return
     }
-    // Contours are rendered in an overlay, so their visible handles remain pickable.
+    // Only pick contours that pass the same model occlusion used for rendering.
     event.stopImmediatePropagation()
     event.preventDefault()
     const label = hit.object.userData.boundaryLabel as number
@@ -271,6 +390,10 @@ export class BoundaryEditor {
       pointer: event.pointerId,
       plane: new THREE.Plane().setFromNormalAndCoplanarPoint(normal, point),
       controlsEnabled: this.controls.enabled,
+      originalControls: this.selected.handles.map((h) => h.position.clone()),
+      moved: false,
+      lastX: event.clientX,
+      lastY: event.clientY,
     }
     this.controls.enabled = false
     this.canvas.setPointerCapture(event.pointerId)
@@ -280,26 +403,55 @@ export class BoundaryEditor {
     if (!this.drag || this.drag.pointer !== event.pointerId) return
     event.stopImmediatePropagation()
     event.preventDefault()
+    this.pendingMove = { clientX: event.clientX, clientY: event.clientY }
+  }
+  /** Called once by the page's render loop, before rendering and color updates. */
+  update() {
+    const event = this.pendingMove
+    this.pendingMove = undefined
+    if (!this.drag || !event) return
+    if (event.clientX === this.drag.lastX && event.clientY === this.drag.lastY) return
     this.setRay(event)
-    const surfaces = [this.models.get(this.drag.boundary.label), this.models.get(0)].filter(
-      (m): m is THREE.Mesh => !!m && m.visible,
-    )
+    const surfaces = [...this.models.values()].filter((m): m is THREE.Mesh => !!m && m.visible)
     const hit = this.ray.intersectObjects(surfaces, false)[0]
     const point = hit?.point ?? this.ray.ray.intersectPlane(this.drag.plane, new THREE.Vector3())
-    if (point) this.drag.boundary.move(this.drag.index, point)
+    if (point) {
+      try {
+        this.drag.boundary.move(this.drag.index, point)
+        this.drag.moved = true
+        this.drag.lastX = event.clientX
+        this.drag.lastY = event.clientY
+      } catch (error) {
+        this.failed?.(error)
+      }
+    }
   }
   private up = (event: PointerEvent) => {
     if (!this.drag || this.drag.pointer !== event.pointerId) return
     event.stopImmediatePropagation()
-    this.finishDrag()
+    if (event.type === 'pointerup' && (this.pendingMove || this.drag.moved)) {
+      this.pendingMove = { clientX: event.clientX, clientY: event.clientY }
+      this.update()
+    }
+    this.finishDrag(event.type === 'pointerup')
   }
-  private finishDrag() {
+  private finishDrag(commit = false) {
+    this.pendingMove = undefined
     if (!this.drag) return
-    const { pointer, controlsEnabled } = this.drag
+    const { pointer, controlsEnabled, boundary, originalControls, moved } = this.drag
     this.drag = undefined
     this.controls.enabled = controlsEnabled
     this.canvas.style.cursor = ''
     if (this.canvas.hasPointerCapture(pointer)) this.canvas.releasePointerCapture(pointer)
+    if (this.committed && moved) {
+      try {
+        if (commit) this.committed(boundary, false)
+        else boundary.restoreControls(originalControls)
+      } catch (error) {
+        boundary.restoreControls(originalControls)
+        this.failed?.(error)
+      }
+    }
   }
   clear() {
     this.finishDrag()
